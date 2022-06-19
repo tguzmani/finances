@@ -1,0 +1,50 @@
+{
+  "name": "fullstack-backend",
+  "version": "1.0.0",
+  "description": "KPI Managers Backend",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "server": "nodemon app",
+    "client": "npm start --prefix client",
+    "clientinstall": "npm install --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "heroku-postbuild": "NPM_CONFIG_PRODUCTION=false npm install --prefix client && npm run build --prefix client",
+    "new-model": "node ./framework/newModel",
+    "new-controller": "node ./framework/newController",
+    "new-routes": "node ./framework/newRoutes",
+    "new-redux-files": "node ./framework/newReduxFiles",
+    "connect-redux": "node ./framework/connectRedux"
+  },
+  "author": "Tomás Guzmán <tomasg92@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.24.0",
+    "bcrypt": "^5.0.1",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.4",
+    "cors": "^2.8.5",
+    "dayjs": "^1.10.7",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "express-jwt": "^5.3.1",
+    "express-session": "^1.17.2",
+    "express-validator": "^6.4.0",
+    "filereader": "^0.10.3",
+    "formidable": "^1.2.2",
+    "image-size": "^1.0.1",
+    "image-to-base64": "^2.2.0",
+    "jsonwebtoken": "^8.5.1",
+    "lodash": "^4.17.15",
+    "mongoose": "^5.9.4",
+    "morgan": "^1.9.1",
+    "multer": "^1.4.4",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.3.3",
+    "nodemon": "^2.0.2",
+    "redis": "^4.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^5.1.0"
+  }
+}
