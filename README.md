@@ -1,4 +1,6 @@
-# Tom Fullstack Template
+# Finances
+
+A personal finances app
 
 ## Usage
 
