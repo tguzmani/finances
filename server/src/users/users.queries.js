@@ -1,16 +1,16 @@
 exports.READ_USER_BY_NAME = `
-select id_user, username, password
+select userId, username, password
 from user
 where username = ?
 `
 
 exports.READ_USER_BY_ID = `
-select id_user, username, email, birth_date, first_name firstName, last_name lastName
+select *
 from user
-where id_user = ?
+where userId = ?
 `
 
 exports.CREATE_USER = `
-insert into user (username, email, password, birth_date, first_name, last_name)
-values (?, ?, ?, ?, ?, ?)
+insert into user (username, password, first_name, last_name)
+values (?, ?, ?, ?)
 `

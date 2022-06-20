@@ -16,16 +16,4 @@ morgan.format(
   '[:date] :remote-addr ":method :url HTTP/:http-version" :status - :response-time ms'
 )
 
-const stream = fs.createWriteStream(path.join(__dirname, 'access.log'), {
-  flags: 'a',
-})
-
-morgan.format(
-  'csv',
-  ':date, :remote-addr, :method, :url, HTTP/:http-version, :status, :response-time'
-)
-
-module.exports = {
-  monitor: morgan('monitor'),
-  csv: morgan('csv', { stream }),
-}
+module.exports = morgan('monitor')

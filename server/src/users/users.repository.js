@@ -5,23 +5,14 @@ exports.readUserById = async userId => {
   return await queryOne(usersQueries.READ_USER_BY_ID, [userId])
 }
 
-exports.readUserByName = async userName => {
-  return await queryOne(usersQueries.READ_USER_BY_NAME, [userName])
+exports.readUserByUsername = async username => {
+  return await queryOne(usersQueries.READ_USER_BY_NAME, [username])
 }
 
-exports.createUser = async (
-  username,
-  email,
-  password,
-  birthDate,
-  firstName,
-  lastName
-) => {
+exports.createUser = async (username, email, password, firstName, lastName) => {
   await command(usersQueries.CREATE_USER, [
     username,
-    email,
     password,
-    birthDate,
     firstName,
     lastName,
   ])

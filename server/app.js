@@ -2,7 +2,7 @@ const express = require('express')
 const morgan = require('morgan')
 const cookieParser = require('cookie-parser')
 const cors = require('cors')
-const { monitor, csv } = require('./logger')
+const monitor = require('./logger')
 
 require('dotenv').config()
 

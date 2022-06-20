@@ -19,17 +19,10 @@ exports.signIn = async (req, res) => {
 }
 
 exports.signUp = async (req, res) => {
-  const { username, password, email, birthDate, firstName, lastName } = req.body
+  const { username, password, firstName, lastName } = req.body
 
   try {
-    await usersAuthServices.signUp(
-      username,
-      email,
-      password,
-      birthDate,
-      firstName,
-      lastName
-    )
+    await usersAuthServices.signUp(username, password, firstName, lastName)
 
     res.send({ message: 'Usuario creado con éxito' })
   } catch (error) {

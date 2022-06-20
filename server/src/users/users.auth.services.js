@@ -3,7 +3,7 @@ const encrypt = require('../common/encrypt')
 const UsersException = require('./users.exception')
 
 exports.signIn = async (username, password) => {
-  const user = await usersRepository.readUserByName(username)
+  const user = await usersRepository.readUserByUsername(username)
 
   if (!user) throw new UsersException('El usuario no existe')
 
@@ -14,15 +14,8 @@ exports.signIn = async (username, password) => {
   return user.id_user
 }
 
-exports.signUp = async (
-  username,
-  email,
-  password,
-  birthDate,
-  firstName,
-  lastName
-) => {
-  const user = await usersRepository.readUserByName(username)
+exports.signUp = async (username, password, firstName, lastName) => {
+  const user = await usersRepository.readUserByUsername(username)
 
   if (user)
     throw new UsersException(
@@ -33,9 +26,7 @@ exports.signUp = async (
 
   await usersRepository.createUser(
     username,
-    email,
     hashedPassword,
-    birthDate,
     firstName,
     lastName
   )
