@@ -25,7 +25,7 @@ app.use(
 )
 
 // Routes Middleware
-routes = ['users']
+routes = ['users', 'accounts']
 
 routes.forEach(route => useRoute(route))
 
