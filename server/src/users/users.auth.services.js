@@ -11,7 +11,7 @@ exports.signIn = async (username, password) => {
 
   if (!passwordsMatch) throw new UsersException('Contraseña no válida')
 
-  return user.id_user
+  return user.userId
 }
 
 exports.signUp = async (username, password, firstName, lastName) => {

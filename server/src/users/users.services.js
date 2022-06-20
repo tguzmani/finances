@@ -5,5 +5,9 @@ exports.readUserByUsername = async username => {
 }
 
 exports.readUserById = async userId => {
-  return await usersRepository.readUserById(userId)
+  const user = await usersRepository.readUserById(userId)
+
+  user.password = undefined
+
+  return user
 }

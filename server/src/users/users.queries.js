@@ -11,6 +11,6 @@ where userId = ?
 `
 
 exports.CREATE_USER = `
-insert into user (username, password, first_name, last_name)
+insert into user (username, password, firstName, lastName)
 values (?, ?, ?, ?)
 `
