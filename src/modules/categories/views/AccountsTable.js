@@ -1,7 +1,7 @@
 import { useStoreState } from 'easy-peasy'
 import React from 'react'
 import Spinner from '../../../layout/Spinner'
-import AccountItem from './AccountItem'
+import AccountsTableRow from './AccountsTableRow'
 import {
   TableContainer,
   TableHead,
@@ -12,7 +12,7 @@ import {
   Paper,
 } from '@mui/material'
 
-const Accounts = () => {
+const AccountsTable = () => {
   const { accounts, filteredAccounts, loading } = useStoreState(
     state => state.accounts
   )
@@ -31,15 +31,18 @@ const Accounts = () => {
           <TableRow>
             <TableCell>Name</TableCell>
             <TableCell>Initial Balance</TableCell>
+            <TableCell>Type</TableCell>
+            <TableCell>Classification</TableCell>
             <TableCell>Debits</TableCell>
             <TableCell>Credits</TableCell>
             <TableCell>Balance</TableCell>
+            <TableCell>Actions</TableCell>
           </TableRow>
         </TableHead>
 
         <TableBody>
           {displayAccounts.map(account => (
-            <AccountItem account={account} key={account.id} />
+            <AccountsTableRow account={account} key={account.id} />
           ))}
         </TableBody>
       </Table>
@@ -47,4 +50,4 @@ const Accounts = () => {
   )
 }
 
-export default Accounts
+export default AccountsTable

@@ -20,11 +20,6 @@ const accountsActions = {
     state.accounts = [account, ...state.accounts]
     state.loading = false
   }),
-
-  removeAccount: action((state, accountId) => {
-    state.accounts = state.accounts.filter(account => account.id !== accountId)
-    state.loading = false
-  }),
 }
 
 export default accountsActions

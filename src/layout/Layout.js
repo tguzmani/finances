@@ -1,23 +1,20 @@
 import React from 'react'
 import AppBar from './AppBar'
+import Navigation from './Navigation'
 import { Box, Grid } from '@mui/material'
-import AccountSidePanel from '../modules/accounts/views/AccountSidePanel'
+import SidePanel from './SidePanel'
 
 const Layout = ({ children }) => {
   return (
     <>
       <AppBar />
       <Grid container>
-        <Grid item xs={2}>
-          Navegación
+        <Grid my={3} px={3} item xs={2}>
+          <Navigation />
         </Grid>
 
-        <Grid item xs={8}>
-          <Box m={4}>{children}</Box>
-        </Grid>
-
-        <Grid item xs={2}>
-          <AccountSidePanel />
+        <Grid item xs={10}>
+          <Box>{children}</Box>
         </Grid>
       </Grid>
     </>

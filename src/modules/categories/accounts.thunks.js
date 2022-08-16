@@ -19,14 +19,6 @@ const accountsThunks = {
 
     actions.addAccount(newAccount)
   }),
-
-  deleteAccount: thunk(async (actions, accountId) => {
-    actions.setLoading(true)
-
-    await accountsRepository.deleteAccount(accountId)
-
-    actions.removeAccount(accountId)
-  }),
 }
 
 export default accountsThunks

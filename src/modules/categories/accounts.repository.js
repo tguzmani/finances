@@ -12,8 +12,4 @@ export default class AccountsRepository extends AxiosRepository {
   async createAccount(account) {
     return await super.post('/', account)
   }
-
-  async deleteAccount(accountId) {
-    return await super.delete(`/${accountId}`, accountId)
-  }
 }

@@ -1,15 +1,10 @@
-import { Typography, TextField, Stack } from '@mui/material'
+import { Typography, TextField } from '@mui/material'
 import { useStoreActions } from 'easy-peasy'
 import React from 'react'
-import { useEffect } from 'react'
 
 const FindAccountInput = () => {
   const [lookupValue, setLookupValue] = React.useState('')
   const { filterAccounts } = useStoreActions(state => state.accounts)
-
-  useEffect(() => {
-    filterAccounts('')
-  }, [])
 
   const onChange = e => {
     setLookupValue(e.target.value)
@@ -17,7 +12,7 @@ const FindAccountInput = () => {
   }
 
   return (
-    <Stack spacing={2}>
+    <>
       <Typography variant='h6'>Find Account</Typography>
       <TextField
         fullWidth
@@ -25,7 +20,7 @@ const FindAccountInput = () => {
         value={lookupValue}
         onChange={onChange}
       ></TextField>
-    </Stack>
+    </>
   )
 }
 

@@ -1,14 +1,23 @@
 import React from 'react'
 import { TableCell, TableRow } from '@mui/material'
 import Amount from '../../../layout/Amount'
+import { useNavigate } from 'react-router-dom'
 
-const AccountItem = ({ account }) => {
+const AccountsTableRow = ({ account }) => {
+  const navigate = useNavigate()
+
+  const onClick = () => {
+    navigate(`/accounts/${account.id}`)
+  }
+
   return (
-    <TableRow key={account.id}>
+    <TableRow key={account.id} hover onClick={onClick}>
       <TableCell>{account.name}</TableCell>
       <TableCell>
         <Amount value={account.initialBalance} />
       </TableCell>
+      <TableCell>{account.type}</TableCell>
+      <TableCell>{account.classification}</TableCell>
       <TableCell>
         <Amount value={0} />
       </TableCell>
@@ -22,4 +31,4 @@ const AccountItem = ({ account }) => {
   )
 }
 
-export default AccountItem
+export default AccountsTableRow

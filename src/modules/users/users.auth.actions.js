@@ -16,6 +16,17 @@ const usersAuthActions = {
   setLoading: action((state, loading) => {
     state.loading = loading
   }),
+
+  // TODO: esto va aca?
+  toggleHideAmounts: action(state => {
+    state.user = {
+      ...state.user,
+      settings: {
+        hideAmounts: !state.user.settings.hideAmounts,
+        theme: 'light',
+      },
+    }
+  }),
 }
 
 export default usersAuthActions
