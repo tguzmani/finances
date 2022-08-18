@@ -4,6 +4,9 @@ import React from 'react'
 
 import HomeIcon from '@mui/icons-material/Home'
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance'
+import BookIcon from '@mui/icons-material/Book'
+import CategoryIcon from '@mui/icons-material/Category'
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney'
 
 const Navigation = () => {
   const links = [
@@ -13,9 +16,24 @@ const Navigation = () => {
       icon: HomeIcon,
     },
     {
+      to: '#',
+      label: 'Journal',
+      icon: BookIcon,
+    },
+    {
+      to: '#',
+      label: 'Expenses',
+      icon: AttachMoneyIcon,
+    },
+    {
       to: '/accounts',
       label: 'Accounts',
       icon: AccountBalanceIcon,
+    },
+    {
+      to: '#',
+      label: 'Categories',
+      icon: CategoryIcon,
     },
   ]
 
@@ -23,6 +41,8 @@ const Navigation = () => {
     <List>
       {links.map(link => (
         <ListItemButton
+          key={link.to}
+          disabled={link.to === '#'}
           sx={{ borderRadius: '4px', marginBottom: '0.25rem' }}
           component={Link}
           to={link.to}

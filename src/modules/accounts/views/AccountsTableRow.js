@@ -2,8 +2,12 @@ import React from 'react'
 import { TableCell, TableRow } from '@mui/material'
 import Amount from '../../../layout/Amount'
 import { useNavigate } from 'react-router-dom'
+import useAccountTotals from '../hooks/useAccountTotals'
+import AccountChip from './AccountChip'
 
 const AccountsTableRow = ({ account }) => {
+  const { totalDebit, totalCredit, balance } = useAccountTotals(account)
+
   const navigate = useNavigate()
 
   const onClick = () => {
@@ -16,16 +20,20 @@ const AccountsTableRow = ({ account }) => {
       <TableCell>
         <Amount value={account.initialBalance} />
       </TableCell>
-      <TableCell>{account.type}</TableCell>
-      <TableCell>{account.classification}</TableCell>
       <TableCell>
-        <Amount value={0} />
+        <AccountChip property={account.type} />
       </TableCell>
       <TableCell>
-        <Amount value={0} />
+        <AccountChip property={account.classification} />
       </TableCell>
       <TableCell>
-        <Amount value={0} />
+        <Amount value={totalDebit} />
+      </TableCell>
+      <TableCell>
+        <Amount value={totalCredit} />
+      </TableCell>
+      <TableCell>
+        <Amount value={balance} />
       </TableCell>
     </TableRow>
   )

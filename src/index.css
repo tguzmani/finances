@@ -6,3 +6,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+.cm-editor {
+  border: 1px solid rgba(224, 224, 224, 1);
+}
