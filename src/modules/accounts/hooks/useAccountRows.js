@@ -1,5 +1,5 @@
 import { useStoreState, useStoreActions } from 'easy-peasy'
-import useRead from '../../../layout/hooks/useRead'
+import useRead from 'layout/hooks/useRead'
 
 const useAccountRows = account => {
   const { rows } = useStoreState(state => state.registers)

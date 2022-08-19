@@ -1,13 +1,19 @@
-import Login from '../modules/users/views/Login'
-import Register from '../modules/users/views/Register'
-import HomePage from './../pages/HomePage'
-import AccountsPage from './../pages/AccountsPage'
-import AccountPage from './../pages/AccountPage'
+import Login from 'modules/users/views/Login'
+import Register from 'modules/users/views/Register'
+import HomePage from 'pages/HomePage'
+import AccountsPage from 'pages/AccountsPage'
+import AccountPage from 'pages/AccountPage'
+import JournalPage from 'pages/JournalPage'
 
 const routes = {
   home: {
     path: '/',
     element: HomePage,
+  },
+
+  journal: {
+    path: '/journal',
+    element: JournalPage,
   },
 
   accounts: {

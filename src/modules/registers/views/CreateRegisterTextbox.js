@@ -10,7 +10,7 @@ import {
   Typography,
 } from '@mui/material'
 import HelpIcon from '@mui/icons-material/Help'
-import useToggle from '../../../layout/hooks/useToggle'
+import useToggle from 'layout/hooks/useToggle'
 
 const CreateRegisterTextbox = () => {
   const [script, setScript] = useState('')

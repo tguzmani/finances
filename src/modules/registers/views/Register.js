@@ -4,7 +4,6 @@ import dayjs from 'dayjs'
 import RegisterRows from './RegisterRows'
 
 const Register = ({ register }) => {
-  console.log(dayjs(register.date))
   return (
     <Paper sx={{ margin: '1rem 0' }} variant='outlined'>
       <Grid container alignItems='center'>

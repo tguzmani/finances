@@ -15,7 +15,7 @@ import { useStoreActions, useStoreState } from 'easy-peasy'
 import React from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import useToggle from '../../../layout/hooks/useToggle'
+import useToggle from 'layout/hooks/useToggle'
 
 const AccountSidePanel = ({ account }) => {
   const [showDeleteDialog, toggleShowDeleteDialog] = useToggle()

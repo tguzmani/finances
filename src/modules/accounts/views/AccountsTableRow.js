@@ -1,6 +1,6 @@
 import React from 'react'
 import { TableCell, TableRow } from '@mui/material'
-import Amount from '../../../layout/Amount'
+import Amount from 'layout/Amount'
 import { useNavigate } from 'react-router-dom'
 import useAccountTotals from '../hooks/useAccountTotals'
 import AccountChip from './AccountChip'

@@ -9,8 +9,8 @@ import Typography from '@mui/material/Typography'
 
 import { Link } from 'react-router-dom'
 
-import useForm from './../../../layout/hooks/useForm'
-import useNavigateAfterAction from './../../../layout/hooks/useNavigateAfterAction'
+import useForm from 'layout/hooks/useForm'
+import useNavigateAfterAction from 'layout/hooks/useNavigateAfterAction'
 
 import { useStoreActions, useStoreState } from 'easy-peasy'
 

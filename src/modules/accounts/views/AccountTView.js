@@ -1,22 +1,15 @@
-import {
-  Divider,
-  Grid,
-  List,
-  ListItem,
-  ListItemText,
-  Typography,
-} from '@mui/material'
+import { Divider, Grid, List, Typography } from '@mui/material'
 import React from 'react'
-import Amount from '../../../layout/Amount'
+import Amount from 'layout/Amount'
 import useAccountTotals from '../hooks/useAccountTotals'
-import useReadAccountById from '../hooks/useReadAccountById'
+import useAccountById from '../hooks/useAccountById'
 import AccountTViewRow from './AccountTViewRow'
 
 const AccountTView = ({ account }) => {
   const { debits, credits, totalDebit, totalCredit, balance } =
     useAccountTotals(account)
 
-  const { accountBalanceType } = useReadAccountById(account.id)
+  const { accountBalanceType } = useAccountById(account.id)
 
   if (debits.length === 0 && credits.length === 0)
     return <Typography variant='body1'>No transactions</Typography>
@@ -60,13 +53,13 @@ const AccountTView = ({ account }) => {
       </Grid>
 
       <Grid item xs={6} my={1}>
-        <Typography align='center' variant='h6'>
+        <Typography align='center' variant='body1'>
           <Amount value={totalDebit} />
         </Typography>
       </Grid>
 
       <Grid item xs={6} my={1}>
-        <Typography align='center' variant='h6'>
+        <Typography align='center' variant='body1'>
           <Amount value={totalCredit} />
         </Typography>
       </Grid>
@@ -76,14 +69,14 @@ const AccountTView = ({ account }) => {
       </Grid>
 
       <Grid item xs={6} my={1}>
-        <Typography align='center' variant='h5'>
-          {accountBalanceType() === 'debit' && <Amount value={balance} />}
+        <Typography align='center' variant='body1'>
+          {accountBalanceType === 'debit' && <Amount value={balance} />}
         </Typography>
       </Grid>
 
       <Grid item xs={6} my={1}>
-        <Typography align='center' variant='h5'>
-          {accountBalanceType() === 'credit' && <Amount value={balance} />}
+        <Typography align='center' variant='body1'>
+          {accountBalanceType === 'credit' && <Amount value={balance} />}
         </Typography>
       </Grid>
     </Grid>

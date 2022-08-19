@@ -1,5 +1,5 @@
 import React from 'react'
-import useForm from './../../../layout/hooks/useForm'
+import useForm from 'layout/hooks/useForm'
 import {
   TextField,
   Stack,
@@ -9,7 +9,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useStoreActions } from 'easy-peasy'
-import useToggle from '../../../layout/hooks/useToggle'
+import useToggle from 'layout/hooks/useToggle'
 import AddIcon from '@mui/icons-material/Add'
 import ClearIcon from '@mui/icons-material/Clear'
 

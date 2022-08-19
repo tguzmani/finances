@@ -1,9 +1,10 @@
 import React from 'react'
 import { useStoreActions } from 'easy-peasy'
-import useRead from '../layout/hooks/useRead'
+import useRead from 'layout/hooks/useRead'
 import AccountsTable from '../modules/accounts/views/AccountsTable'
-import { Grid, Typography } from '@mui/material'
+import { Grid } from '@mui/material'
 import AccountsSidePanel from '../modules/accounts/views/AccountsSidePanel'
+import PageHeader from 'layout/PageHeader'
 
 const AccountsPage = () => {
   const { readAccounts } = useStoreActions(state => state.accounts)
@@ -13,7 +14,8 @@ const AccountsPage = () => {
   return (
     <>
       <Grid container spacing={4}>
-        <Grid mt={3} xs={9} item>
+        <Grid xs={9} item>
+          <PageHeader>Accounts</PageHeader>
           <AccountsTable />
         </Grid>
         <Grid mt={3} xs={3} item>

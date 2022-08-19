@@ -1,11 +1,11 @@
 import { TableCell, TableRow } from '@mui/material'
 import React from 'react'
-import Amount from '../../../layout/Amount'
-import useReadAccountById from '../../accounts/hooks/useReadAccountById'
+import Amount from 'layout/Amount'
+import useAccountById from '../../accounts/hooks/useAccountById'
 import { useNavigate } from 'react-router-dom'
 
 const RegisterRowsItem = ({ row }) => {
-  const { account } = useReadAccountById(row?.accountId)
+  const { account } = useAccountById(row?.accountId)
   const navigate = useNavigate()
 
   const handleGoToAccount = () => navigate(`/accounts/${account.id}`)

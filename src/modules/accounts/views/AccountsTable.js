@@ -1,6 +1,6 @@
 import { useStoreState } from 'easy-peasy'
 import React from 'react'
-import Spinner from '../../../layout/Spinner'
+import Spinner from 'layout/Spinner'
 import AccountsTableRow from './AccountsTableRow'
 import {
   TableContainer,

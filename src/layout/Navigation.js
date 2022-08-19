@@ -16,7 +16,7 @@ const Navigation = () => {
       icon: HomeIcon,
     },
     {
-      to: '#',
+      to: '/journal',
       label: 'Journal',
       icon: BookIcon,
     },

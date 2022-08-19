@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { ListItem, ListItemText, Tooltip, Typography } from '@mui/material'
-import Amount from '../../../layout/Amount'
+import Amount from 'layout/Amount'
 import useRegisterById from '../../registers/hooks/useRegisterById'
 import dayjs from 'dayjs'
 
@@ -10,8 +10,8 @@ const AccountTViewRow = ({ row }) => {
 
   const TooltipContent = ({ register }) => (
     <>
-      <Typography variant='body2'>
-        {dayjs(register.date).format('MM/DD')}
+      <Typography gutterBottom variant='body1'>
+        {dayjs(register.date).format('MMMM DD')}
       </Typography>
       {register.description && (
         <Typography variant='body2'>{register.description}</Typography>

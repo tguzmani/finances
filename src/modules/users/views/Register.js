@@ -10,8 +10,8 @@ import { format } from 'date-fns'
 
 import { Link } from 'react-router-dom'
 
-import useForm from '../../../layout/hooks/useForm'
-import useNavigateAfterAction from '../../../layout/hooks/useNavigateAfterAction'
+import useForm from 'layout/hooks/useForm'
+import useNavigateAfterAction from 'layout/hooks/useNavigateAfterAction'
 import DatePicker from '@mui/lab/DatePicker'
 
 import { useStoreActions, useStoreState } from 'easy-peasy'

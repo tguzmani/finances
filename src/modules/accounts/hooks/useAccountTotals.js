@@ -1,9 +1,9 @@
 import useAccountRows from './useAccountRows'
-import useReadAccountById from './useReadAccountById'
+import useAccountById from './useAccountById'
 
 const useAccountTotals = account => {
   const { getRowsByType } = useAccountRows(account)
-  const { accountBalanceType } = useReadAccountById(account?.id)
+  const { accountBalanceType } = useAccountById(account?.id)
 
   const debits = getRowsByType('debit')
   const credits = getRowsByType('credit')
@@ -18,7 +18,7 @@ const useAccountTotals = account => {
   )
 
   const balance =
-    accountBalanceType() === 'debit'
+    accountBalanceType === 'debit'
       ? parseFloat(account?.initialBalance) + totalDebit - totalCredit
       : parseFloat(account?.initialBalance) - totalDebit + totalCredit
 
