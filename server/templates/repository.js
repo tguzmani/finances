@@ -1,7 +1,7 @@
 const { queryOne, query, command, insert } = require('../common/repository')
 const entitiesQueries = require('./entities.queries')
 
-exports.createEntity = async COMMA_CREATE_COLS => {
+exports.createEntity = async ARG_CREATE_COLS => {
   return await insert(entitiesQueries.CREATE_ENTITY, [COMMA_CREATE_COLS])
 }
 

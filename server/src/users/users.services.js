@@ -1,13 +1,9 @@
 const usersRepository = require('./users.repository')
 
-exports.readUserByUsername = async username => {
-  return await usersRepository.readUserByUsername(username)
+exports.readUserByName = async userName => {
+  return await usersRepository.readUserByName(userName)
 }
 
 exports.readUserById = async userId => {
-  const user = await usersRepository.readUserById(userId)
-
-  user.password = undefined
-
-  return user
+  return await usersRepository.readUserById(userId)
 }

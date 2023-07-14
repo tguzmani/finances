@@ -1,0 +1,1 @@
+wt new-tab -d ./server

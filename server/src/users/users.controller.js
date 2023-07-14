@@ -6,6 +6,6 @@ exports.readProfile = async (req, res) => {
 
     res.send(users)
   } catch (error) {
-    return res.status(400).send(error.stack)
+    return res.status(400).send({ message })
   }
 }

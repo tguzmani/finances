@@ -42,7 +42,10 @@
     "mysql": "^2.18.1",
     "mysql2": "^2.3.3",
     "nodemon": "^2.0.2",
-    "redis": "^4.0.1"
+    "pg": "^8.7.3",
+    "pg-hstore": "^2.3.4",
+    "redis": "^4.0.1",
+    "sequelize": "^6.21.3"
   },
   "devDependencies": {
     "concurrently": "^5.1.0"

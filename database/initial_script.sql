@@ -20,10 +20,5 @@ insert into account (name, classification, type, initialBalance, userId, subcate
 values ('Gastos en comida', 'nominal', 'expense', 0, 1, 1);
 
 insert into entry (date, description)
-values ('2022-06-19 23:30:00', 'Pizza Caracas con Bárbara');
 
-insert into entryItem (amount, type, entryId, accountId)
-values (25, 'debit', 1, 6),
-       (25, 'credit', 1, 4);
-
-select * from account;
+insert into entryitem (amount, type, entryId, accountId)

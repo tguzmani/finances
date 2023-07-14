@@ -1,11 +1,11 @@
 const entitiesRepository = require('./entities.repository')
 
-exports.createEntity = async COMMA_CREATE_COLS => {
+exports.createEntity = async ARG_CREATE_COLS => {
   return await entitiesRepository.createEntity(COMMA_CREATE_COLS)
 }
 
 exports.readEntities = async userId => {
-  return await entitiesRepository.readEntities()
+  return await entitiesRepository.readEntities(userId)
 }
 
 exports.readEntity = async entityId => {

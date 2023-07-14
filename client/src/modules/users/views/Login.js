@@ -9,15 +9,14 @@ import Typography from '@mui/material/Typography'
 
 import { Link } from 'react-router-dom'
 
-import useForm from './../../../layout/hooks/useForm'
-import { useSelector, useDispatch } from 'react-redux'
-import { signIn, setLoading } from './../users.auth.actions'
-import useNavigateAfterAction from './../../../layout/hooks/useNavigateAfterAction'
-// import routes from './../../../config/routes'
+import useForm from 'layout/hooks/useForm'
+import useNavigateAfterAction from 'layout/hooks/useNavigateAfterAction'
+
+import { useStoreActions, useStoreState } from 'easy-peasy'
 
 const Login = () => {
-  const dispatch = useDispatch()
-  const { loading } = useSelector(state => state.auth)
+  const { loading } = useStoreState(state => state.auth)
+  const { signIn, setLoading } = useStoreActions(actions => actions.auth)
 
   const [credentials, bindCredentials, areFieldsEmpty] = useForm({
     username: process.env.REACT_APP_USERNAME || '',
@@ -27,11 +26,11 @@ const Login = () => {
   const logginHasBeenHandled = useNavigateAfterAction(loading, '/')
 
   useEffect(() => {
-    dispatch(setLoading(false))
+    setLoading(false)
   }, [])
 
   const handleLogIn = () => {
-    dispatch(signIn(credentials))
+    signIn(credentials)
     logginHasBeenHandled()
   }
 

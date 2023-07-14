@@ -1,5 +1,4 @@
 import AxiosRepository from '../../common/axios.repository'
-import { readUserById } from './users.auth.actions'
 
 export default class UsersAuthRepository extends AxiosRepository {
   constructor() {

@@ -1,65 +1,30 @@
-import UsersAuthRepository from './users.auth.repository'
-import usersAuthTypes from './users.auth.types'
+import { action } from 'easy-peasy'
 
-const usersAuthRepository = new UsersAuthRepository()
+const usersAuthActions = {
+  setUser: action((state, user) => {
+    state.user = { ...user, settings: { hideAmounts: false, theme: 'light' } }
+    state.isAuthenticated = true
+  }),
 
-export const setLoading =
-  (loading = true) =>
-  dispatch =>
-    dispatch({ type: usersAuthTypes.LOADING, payload: loading })
+  unsetUser: action((state, user) => {
+    state.user = undefined
+    state.isAuthenticated = false
+  }),
 
-export const signIn = credentials => async dispatch => {
-  setLoading()(dispatch)
+  setLoading: action((state, loading) => {
+    state.loading = loading
+  }),
 
-  try {
-    const user = await usersAuthRepository.signIn(credentials)
-    dispatch({ type: usersAuthTypes.SIGN_IN, payload: user })
-  } catch (error) {
-    dispatch({
-      type: usersAuthTypes.ERROR,
-      payload: error.response.data.message,
-    })
-  }
+  // TODO: esto va aca?
+  toggleHideAmounts: action(state => {
+    state.user = {
+      ...state.user,
+      settings: {
+        hideAmounts: !state.user.settings.hideAmounts,
+        theme: 'light',
+      },
+    }
+  }),
 }
 
-export const readUserById = () => async dispatch => {
-  setLoading()(dispatch)
-
-  try {
-    const user = await usersAuthRepository.readUserById()
-    dispatch({ type: usersAuthTypes.READ_USER_BY_ID, payload: user })
-  } catch (error) {
-    dispatch({
-      type: usersAuthTypes.ERROR,
-      payload: error.response.data.message,
-    })
-  }
-}
-
-export const signUp = user => async dispatch => {
-  setLoading()(dispatch)
-
-  try {
-    await usersAuthRepository.signUp(user)
-    dispatch({ type: usersAuthTypes.SIGN_UP })
-  } catch (error) {
-    dispatch({
-      type: usersAuthTypes.ERROR,
-      payload: error.response.data.message,
-    })
-  }
-}
-
-export const signOut = () => async dispatch => {
-  setLoading()(dispatch)
-
-  try {
-    const user = await usersAuthRepository.signOut()
-    dispatch({ type: usersAuthTypes.SIGN_OUT, payload: user })
-  } catch (error) {
-    dispatch({
-      type: usersAuthTypes.ERROR,
-      payload: error.response.data.message,
-    })
-  }
-}
+export default usersAuthActions

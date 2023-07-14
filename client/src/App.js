@@ -2,28 +2,30 @@ import './App.scss'
 import React from 'react'
 import Router from './Router'
 
-import { Provider } from 'react-redux'
-import store from './config/redux.store'
+import { StoreProvider } from 'easy-peasy'
+import store from './config/easy-peasy.store'
 
 import { ThemeProvider } from '@mui/material/styles'
 import theme from './config/theme'
 
 import AdapterDateFns from '@mui/lab/AdapterDateFns'
 import LocalizationProvider from '@mui/lab/LocalizationProvider'
+import { CssBaseline } from '@mui/material'
 
 const App = () => {
   React.useEffect(() => {
-    document.title = 'React App'
+    document.title = 'Finances'
   }, [])
 
   return (
-    <Provider store={store}>
+    <StoreProvider store={store}>
       <LocalizationProvider dateAdapter={AdapterDateFns}>
         <ThemeProvider theme={theme}>
+          <CssBaseline />
           <Router />
         </ThemeProvider>
       </LocalizationProvider>
-    </Provider>
+    </StoreProvider>
   )
 }
 

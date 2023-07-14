@@ -4,7 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 // Routing
 import Login from './modules/users/views/Login'
 import Register from './modules/users/views/Register'
-import PrivateRoute from './layout/PrivateRoute'
+import PrivateRoute from 'layout/PrivateRoute'
 import routes from './config/routes'
 
 const Router = () => {

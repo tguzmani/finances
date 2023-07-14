@@ -10,15 +10,15 @@ import { format } from 'date-fns'
 
 import { Link } from 'react-router-dom'
 
-import useForm from '../../../layout/hooks/useForm'
-import { useSelector, useDispatch } from 'react-redux'
-import { signUp, setLoading } from '../users.auth.actions'
-import useNavigateAfterAction from '../../../layout/hooks/useNavigateAfterAction'
+import useForm from 'layout/hooks/useForm'
+import useNavigateAfterAction from 'layout/hooks/useNavigateAfterAction'
 import DatePicker from '@mui/lab/DatePicker'
 
+import { useStoreActions, useStoreState } from 'easy-peasy'
+
 const Login = () => {
-  const dispatch = useDispatch()
-  const { loading } = useSelector(state => state.auth)
+  const { loading } = useStoreState(state => state.auth)
+  const { signUp, setLoading } = useStoreActions(state => state.auth)
 
   const [birthDate, setBirthDate] = React.useState(null)
 
@@ -34,11 +34,11 @@ const Login = () => {
   const signupHasBeenHandled = useNavigateAfterAction(loading, '/login')
 
   useEffect(() => {
-    dispatch(setLoading(false))
+    setLoading(false)
   }, [])
 
   const handleSignup = () => {
-    dispatch(signUp({ ...user, birthDate: format(birthDate, 'yyyy-MM-dd') }))
+    signUp({ ...user, birthDate: format(birthDate, 'yyyy-MM-dd') })
     signupHasBeenHandled()
   }
 

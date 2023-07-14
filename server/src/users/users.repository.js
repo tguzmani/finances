@@ -1,19 +1,15 @@
-const { queryOne, command } = require('../common/repository')
-const usersQueries = require('./users.queries')
+const User = require('./users.model')
 
 exports.readUserById = async userId => {
-  return await queryOne(usersQueries.READ_USER_BY_ID, [userId])
+  return await User.findByPk(userId, { attributes: { exclude: ['password'] } })
 }
 
-exports.readUserByUsername = async username => {
-  return await queryOne(usersQueries.READ_USER_BY_NAME, [username])
+exports.readUserByName = async username => {
+  return await User.findOne({
+    where: { username },
+  })
 }
 
-exports.createUser = async (username, password, firstName, lastName) => {
-  await command(usersQueries.CREATE_USER, [
-    username,
-    password,
-    firstName,
-    lastName,
-  ])
+exports.createUser = async (username, email, password, firstName, lastName) => {
+  return await User.create({ username, email, password, firstName, lastName })
 }
