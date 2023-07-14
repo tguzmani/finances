@@ -22,7 +22,7 @@
   "resolved" "https://registry.npmjs.org/@node-redis/bloom/-/bloom-1.0.1.tgz"
   "version" "1.0.1"
 
-"@node-redis/client@^1.0.0", "@node-redis/client@1.0.4":
+"@node-redis/client@1.0.4":
   "integrity" "sha512-IM/NRAqg7MvNC3bIRQipXGrEarunrdgvrbAzsd3ty93LSHi/M+ybQulOERQi8a3M+P5BL8HenwXjiIoKm6ml2g=="
   "resolved" "https://registry.npmjs.org/@node-redis/client/-/client-1.0.4.tgz"
   "version" "1.0.4"
@@ -1473,7 +1473,7 @@
   "resolved" "https://registry.npmjs.org/mongoose-legacy-pluralize/-/mongoose-legacy-pluralize-1.0.2.tgz"
   "version" "1.0.2"
 
-"mongoose@*", "mongoose@^5.9.4":
+"mongoose@^5.9.4":
   "integrity" "sha512-j+BlQjjxgZg0iWn42kLeZTB91OejcxWpY2Z50bsZTiKJ7HHcEtcY21Godw496GMkBqJMTzmW7G/kZ04mW+Cb7Q=="
   "resolved" "https://registry.npmjs.org/mongoose/-/mongoose-5.13.14.tgz"
   "version" "5.13.14"
@@ -1808,7 +1808,7 @@
     "postgres-date" "~1.0.4"
     "postgres-interval" "^1.1.0"
 
-"pg@^8.7.3", "pg@>=8.0":
+"pg@^8.7.3":
   "integrity" "sha512-HPmH4GH4H3AOprDJOazoIcpI49XFsHCe8xlrjHkWiapdbHK+HLtbm/GQzXYAZwmPju/kzKhjaSfMACG+8cgJcw=="
   "resolved" "https://registry.npmjs.org/pg/-/pg-8.7.3.tgz"
   "version" "8.7.3"
