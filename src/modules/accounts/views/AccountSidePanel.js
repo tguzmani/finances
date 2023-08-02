@@ -16,6 +16,7 @@ import React from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useToggle from 'layout/hooks/useToggle'
+import SidePanel from 'layout/SidePanel'
 
 const AccountSidePanel = ({ account }) => {
   const [showDeleteDialog, toggleShowDeleteDialog] = useToggle()
@@ -38,14 +39,14 @@ const AccountSidePanel = ({ account }) => {
     navigate('/accounts')
   }
 
-  const deleteAccountConfirmationString = `${user.username}/${account.name
+  const deleteAccountConfirmationString = `${user.username}/${account?.name
     .toLowerCase()
     .replace(/\s/g, '-')}`
 
   const stringsMatch = confirmationString === deleteAccountConfirmationString
 
   return (
-    <Paper variant='outlined' sx={{ margin: '1rem', padding: '1rem' }}>
+    <SidePanel>
       <Typography mb={3} variant='body1'>
         Lorem ipsum, dolor sit amet consectetur adipisicing elit. Vel ab
         voluptatibus corporis qui recusandae, quia officiis distinctio alias
@@ -95,7 +96,7 @@ const AccountSidePanel = ({ account }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Paper>
+    </SidePanel>
   )
 }
 

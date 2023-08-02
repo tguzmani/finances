@@ -3,9 +3,9 @@ import useRead from 'layout/hooks/useRead'
 
 const useAccountRows = account => {
   const { rows } = useStoreState(state => state.registers)
-  const { readRegisters } = useStoreActions(state => state.registers)
+  // const { readRegisters } = useStoreActions(state => state.registers)
 
-  useRead(readRegisters)
+  // useRead(readRegisters)
 
   const thisAccountRows = rows.filter(row => row.accountId === account.id)
 

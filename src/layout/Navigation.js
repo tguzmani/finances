@@ -31,7 +31,7 @@ const Navigation = () => {
       icon: AccountBalanceIcon,
     },
     {
-      to: '#',
+      to: '/categories',
       label: 'Categories',
       icon: CategoryIcon,
     },

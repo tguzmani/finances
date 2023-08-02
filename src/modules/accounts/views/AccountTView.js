@@ -18,13 +18,13 @@ const AccountTView = ({ account }) => {
     <Grid container>
       <Grid item xs={6}>
         <Typography mb={1} align='center' variant='h6'>
-          Debit
+          Debits ({debits.length})
         </Typography>
       </Grid>
 
       <Grid item xs={6}>
         <Typography mb={1} align='center' variant='h6'>
-          Credit
+          Credits ({credits.length})
         </Typography>
       </Grid>
 

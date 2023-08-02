@@ -3,18 +3,13 @@ import { createTheme } from '@mui/material'
 const muiTheme = createTheme({})
 
 const theme = createTheme({
-  palette: {},
+  palette: {
+    mode: 'dark',
+  },
 
   typography: {},
 
   components: {
-    // MuiButton: {
-    //   styleOverrides: {
-    //     root: {
-    //       borderRadius: 0,
-    //     },
-    //   },
-    // },
     MuiPaper: {
       styleOverrides: {
         root: {

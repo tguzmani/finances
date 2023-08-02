@@ -1,8 +1,10 @@
 import useAccountRows from './useAccountRows'
 import useAccountById from './useAccountById'
+import useCurrentPeriod from 'modules/periods/hooks/useCurrentPeriod'
 
 const useAccountTotals = account => {
   const { getRowsByType } = useAccountRows(account)
+  const { currentPeriod } = useCurrentPeriod()
   const { accountBalanceType } = useAccountById(account?.id)
 
   const debits = getRowsByType('debit')
@@ -17,12 +19,18 @@ const useAccountTotals = account => {
     0
   )
 
+  let initialBalance = currentPeriod?.accounts?.find(
+    periodAccout => periodAccout.id === account.id
+  )?.accountPeriod?.initialBalance
+
+  if (!initialBalance) initialBalance = 0
+
   const balance =
     accountBalanceType === 'debit'
-      ? parseFloat(account?.initialBalance) + totalDebit - totalCredit
-      : parseFloat(account?.initialBalance) - totalDebit + totalCredit
+      ? parseFloat(initialBalance) + totalDebit - totalCredit
+      : parseFloat(initialBalance) - totalDebit + totalCredit
 
-  return { debits, credits, totalCredit, totalDebit, balance }
+  return { debits, credits, totalCredit, totalDebit, balance, initialBalance }
 }
 
 export default useAccountTotals

@@ -17,8 +17,6 @@ const AccountsTable = () => {
     state => state.accounts
   )
 
-  console.log(filteredAccounts)
-
   if (loading && accounts.length === 0) return <Spinner />
 
   const displayAccounts =

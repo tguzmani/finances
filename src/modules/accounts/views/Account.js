@@ -13,8 +13,9 @@ import AccountHeader from './AccountHeader'
 const Account = () => {
   const { loading } = useStoreState(state => state.accounts)
   const { readAccounts } = useStoreActions(state => state.accounts)
+  const { readRegisters } = useStoreActions(state => state.registers)
 
-  useRead(readAccounts)
+  useRead(readAccounts, readRegisters)
 
   const { accountId } = useParams()
 
@@ -26,7 +27,7 @@ const Account = () => {
 
   return (
     <Grid container spacing={4}>
-      <Grid xs={9} item>
+      <Grid xs={12} item>
         <AccountHeader account={account} />
 
         <Divider />
@@ -46,10 +47,6 @@ const Account = () => {
             <AccountTView account={account} />
           </Grid>
         </Grid>
-      </Grid>
-
-      <Grid mt={3} xs={3} item>
-        <AccountSidePanel account={account} />
       </Grid>
     </Grid>
   )

@@ -5,24 +5,19 @@ import AccountsTable from '../modules/accounts/views/AccountsTable'
 import { Grid } from '@mui/material'
 import AccountsSidePanel from '../modules/accounts/views/AccountsSidePanel'
 import PageHeader from 'layout/PageHeader'
+import PageWithSidePanel from 'layout/pages/PageWithSidePanel'
 
 const AccountsPage = () => {
   const { readAccounts } = useStoreActions(state => state.accounts)
+  const { readRegisters } = useStoreActions(state => state.registers)
 
-  useRead(readAccounts)
+  useRead(readAccounts, readRegisters)
 
   return (
-    <>
-      <Grid container spacing={4}>
-        <Grid xs={9} item>
-          <PageHeader>Accounts</PageHeader>
-          <AccountsTable />
-        </Grid>
-        <Grid mt={3} xs={3} item>
-          <AccountsSidePanel />
-        </Grid>
-      </Grid>
-    </>
+    <PageWithSidePanel SidePanel={AccountsSidePanel}>
+      <PageHeader>Accounts</PageHeader>
+      <AccountsTable />
+    </PageWithSidePanel>
   )
 }
 

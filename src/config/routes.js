@@ -4,6 +4,7 @@ import HomePage from 'pages/HomePage'
 import AccountsPage from 'pages/AccountsPage'
 import AccountPage from 'pages/AccountPage'
 import JournalPage from 'pages/JournalPage'
+import CategoriesPage from 'pages/CategoriesPage'
 
 const routes = {
   home: {
@@ -19,6 +20,11 @@ const routes = {
   accounts: {
     path: '/accounts',
     element: AccountsPage,
+  },
+
+  categories: {
+    path: '/categories',
+    element: CategoriesPage,
   },
 
   accountsById: {

@@ -7,6 +7,7 @@ import CreateRegisterTextbox from '../modules/registers/views/CreateRegisterText
 import HomeSidePanel from 'layout/HomeSidePanel'
 import useRead from 'layout/hooks/useRead'
 import PageHeader from 'layout/PageHeader'
+import PageWithSidePanel from 'layout/pages/PageWithSidePanel'
 
 const Home = () => {
   const { user } = useStoreState(state => state.auth)
@@ -16,22 +17,15 @@ const Home = () => {
   useRead(readAccounts)
 
   return (
-    <>
-      <Grid container spacing={4}>
-        <Grid xs={9} item>
-          <PageHeader>Hello, {user?.firstName}</PageHeader>
-          <CreateRegisterTextbox />
+    <PageWithSidePanel SidePanel={HomeSidePanel}>
+      <PageHeader>Hello, {user?.firstName}</PageHeader>
+      <CreateRegisterTextbox />
 
-          <Typography mt={3} variant='h5'>
-            Last registers
-          </Typography>
-          <Journal preview />
-        </Grid>
-        <Grid mt={3} xs={3} item>
-          <HomeSidePanel />
-        </Grid>
-      </Grid>
-    </>
+      <Typography mt={3} mb={1} variant='h5'>
+        Last registers
+      </Typography>
+      <Journal preview />
+    </PageWithSidePanel>
   )
 }
 

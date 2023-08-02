@@ -1,16 +1,16 @@
 import React from 'react'
+import { Paper, Box } from '@mui/material'
 
-import { useLocation } from 'react-router-dom'
-
-import HomeSidePanel from './HomeSidePanel'
-import AccountsSidePanel from '../modules/accounts/views/AccountsSidePanel'
-
-const SidePanel = () => {
-  const { pathname } = useLocation()
-
-  if (pathname.match(/accounts/)) return <AccountsSidePanel />
-  // if (pathname.match(/accounts\/[0-9]+/)) return <AccountSidePanel />
-  if (pathname.match(/\//)) return <HomeSidePanel />
+const SidePanel = ({ children }) => {
+  return (
+    <Box margin={1} sx={{ position: 'fixed', width: '17.67%' }}>
+      <Paper square variant='outlined' sx={{ width: '100%' }}>
+        <Box padding={2} sx={{ height: '85vh' }}>
+          {children}
+        </Box>
+      </Paper>
+    </Box>
+  )
 }
 
 export default SidePanel

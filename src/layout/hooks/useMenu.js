@@ -11,7 +11,7 @@ const useMenu = which => {
     setAnchorEl(null)
   }
 
-  return [anchorEl, handleOpenMenu, handleCloseMenu]
+  return { anchorEl, handleOpenMenu, handleCloseMenu }
 }
 
 export default useMenu

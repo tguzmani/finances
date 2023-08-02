@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 
 const usePagination = (elements, elementsPerPage) => {
   const [page, setPage] = useState(1)
-  const paginatorEl = useRef()
+  const paginatedEl = useRef()
 
   const totalElements = elements.length
   const totalPages = Math.round(totalElements / elementsPerPage)
@@ -12,7 +12,7 @@ const usePagination = (elements, elementsPerPage) => {
 
   const handlePageChange = (event, value) => {
     setPage(value)
-    paginatorEl.current.scrollTo(0, 0)
+    paginatedEl.current.scrollTo(0, 0)
   }
 
   const pageElements = elements.slice(
@@ -20,7 +20,7 @@ const usePagination = (elements, elementsPerPage) => {
     areMoreElementsInLastPage ? elements.length : elementsPerPage * page
   )
 
-  return { page, totalPages, handlePageChange, pageElements, paginatorEl }
+  return { page, totalPages, handlePageChange, pageElements, paginatedEl }
 }
 
 export default usePagination

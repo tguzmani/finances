@@ -6,7 +6,8 @@ import useAccountTotals from '../hooks/useAccountTotals'
 import AccountChip from './AccountChip'
 
 const AccountsTableRow = ({ account }) => {
-  const { totalDebit, totalCredit, balance } = useAccountTotals(account)
+  const { totalDebit, totalCredit, balance, initialBalance } =
+    useAccountTotals(account)
 
   const navigate = useNavigate()
 
@@ -18,7 +19,9 @@ const AccountsTableRow = ({ account }) => {
     <TableRow key={account.id} hover onClick={onClick}>
       <TableCell>{account.name}</TableCell>
       <TableCell>
-        <Amount value={account.initialBalance} />
+        {account.classification !== 'nominal' && (
+          <Amount greyedZeroes value={initialBalance} />
+        )}
       </TableCell>
       <TableCell>
         <AccountChip property={account.type} />
@@ -27,13 +30,13 @@ const AccountsTableRow = ({ account }) => {
         <AccountChip property={account.classification} />
       </TableCell>
       <TableCell>
-        <Amount value={totalDebit} />
+        <Amount greyedZeroes value={totalDebit} />
       </TableCell>
       <TableCell>
-        <Amount value={totalCredit} />
+        <Amount greyedZeroes value={totalCredit} />
       </TableCell>
       <TableCell>
-        <Amount value={balance} />
+        <Amount greyedZeroes value={balance} />
       </TableCell>
     </TableRow>
   )
