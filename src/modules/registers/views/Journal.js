@@ -38,7 +38,6 @@ const Journal = ({ preview }) => {
       <Box
         ref={paginatedEl}
         mb={3}
-        px={5}
         sx={{ height: '70vh', overflowY: 'auto', textAlign: 'center' }}
       >
         {thisRegisters.map(register => (

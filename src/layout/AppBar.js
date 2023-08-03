@@ -48,8 +48,8 @@ const AppBar = () => {
   }
 
   return (
-    <MuiAppBar position='sticky' elevation={0}>
-      <Toolbar>
+    <MuiAppBar position='sticky' elevation={0} >
+      <Toolbar sx={{ bgcolor: 'grey.900' }}>
         <Typography variant='h6' component='div' sx={{ flexGrow: 1 }}>
           Finances
         </Typography>

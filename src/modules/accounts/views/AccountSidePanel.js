@@ -14,20 +14,24 @@ import {
 import { useStoreActions, useStoreState } from 'easy-peasy'
 import React from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import useToggle from 'layout/hooks/useToggle'
 import SidePanel from 'layout/SidePanel'
 
-const AccountSidePanel = ({ account }) => {
+const AccountSidePanel = () => {
   const [showDeleteDialog, toggleShowDeleteDialog] = useToggle()
 
   const [confirmationString, setConfirmationString] = useState('')
 
   const { user } = useStoreState(state => state.auth)
+  const { accounts } = useStoreState(state => state.accounts)
+  const { accountId } = useParams()
 
   const navigate = useNavigate()
 
   const { deleteAccount } = useStoreActions(state => state.accounts)
+
+  const thisAccount = accounts.find(account => account.id === Number(accountId))
 
   const handleToggleDeleteDialog = () => {
     setConfirmationString('')
@@ -35,23 +39,26 @@ const AccountSidePanel = ({ account }) => {
   }
 
   const handleDeleteAccount = () => {
-    deleteAccount(account.id)
+    deleteAccount(thisAccount?.id)
     navigate('/accounts')
   }
 
-  const deleteAccountConfirmationString = `${user.username}/${account?.name
+  const formattedAccountName = thisAccount?.name
     .toLowerCase()
-    .replace(/\s/g, '-')}`
+    .replace(/\s/g, '-')
+
+  const deleteAccountConfirmationString = `${user.username}/${formattedAccountName}`
 
   const stringsMatch = confirmationString === deleteAccountConfirmationString
 
   return (
     <SidePanel>
+      <Typography mb={2} variant='h6'>
+        Account Information
+      </Typography>
+
       <Typography mb={3} variant='body1'>
-        Lorem ipsum, dolor sit amet consectetur adipisicing elit. Vel ab
-        voluptatibus corporis qui recusandae, quia officiis distinctio alias
-        illo earum accusamus iure labore ducimus laborum nemo doloribus dolorum
-        quos atque?
+        Account ID: {accountId}
       </Typography>
 
       <Divider />

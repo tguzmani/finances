@@ -26,6 +26,19 @@ const registersThunks = {
       fail(error)
     }
   }),
+
+  updateRegisterFromScript: thunk(
+    async (actions, updateRegisterFromScriptDto, { fail }) => {
+      try {
+        const newRegister = await registersRepository.updateRegisterFromScript(
+          updateRegisterFromScriptDto
+        )
+        actions.updateRegisters(newRegister)
+      } catch (error) {
+        fail(error)
+      }
+    }
+  ),
 }
 
 export default registersThunks

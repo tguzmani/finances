@@ -14,6 +14,12 @@ export default class RegistersRepository extends AxiosRepository {
   }
 
   async createRegisterFromScript(script) {
-    return await super.post('/script', { script })
+    return await super.post('/by-script', { script })
+  }
+
+  async updateRegisterFromScript(updateRegisterFromScriptDto) {
+    const { registerId, script, oldRows } = updateRegisterFromScriptDto
+
+    return await super.put(`/by-script/${registerId}`, { script, oldRows })
   }
 }

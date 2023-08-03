@@ -4,7 +4,7 @@ import Amount from 'layout/Amount'
 import useAccountTotals from '../hooks/useAccountTotals'
 
 const AccountBalance = ({ account }) => {
-  const { balance, initialBalance } = useAccountTotals(account)
+  const { balance } = useAccountTotals(account)
 
   return (
     <>
@@ -17,7 +17,7 @@ const AccountBalance = ({ account }) => {
             </Grid>
             <Grid item xs={9}>
               <Typography variant='body1'>
-                <Amount value={initialBalance} />
+                <Amount value={account.initialBalance} />
               </Typography>
             </Grid>
           </>

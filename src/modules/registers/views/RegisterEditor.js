@@ -15,24 +15,17 @@ import useToggle from 'layout/hooks/useToggle'
 import { dracula } from '@uiw/codemirror-theme-dracula'
 import Spinner from 'layout/Spinner'
 
-const CreateRegisterTextbox = () => {
-  const [script, setScript] = useState('')
-
+const RegisterEditor = ({ register, script, setScript, handleEditRegister }) => {
   const { error, loading } = useStoreState(state => state.registers)
-  const { createRegisterFromScript } = useStoreActions(state => state.registers)
 
   const onChange = (value, viewUpdate) => {
     setScript(value)
   }
 
   useEffect(() => {
-    const handleSubmit = e => {
-      if (e.ctrlKey && e.key === 'Enter' && script !== '') createRegisterFromScript(script)
-    }
+    window.addEventListener('keydown', handleEditRegister)
 
-    window.addEventListener('keydown', handleSubmit)
-
-    return () => window.removeEventListener('keydown', handleSubmit)
+    return () => window.removeEventListener('keydown', handleEditRegister)
   }, [script])
 
   const [showHelp, toggleShowHelp] = useToggle()
@@ -45,8 +38,8 @@ const CreateRegisterTextbox = () => {
   ]
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={showHelp ? 8 : 12}>
+    <Grid container spacing={2} p={2}>
+      <Grid item xs={showHelp ? 8 : 12} sx={{ textAlign: 'left' }}>
         <CodeMirror
           height='200px'
           value={script}
@@ -92,7 +85,7 @@ const CreateRegisterTextbox = () => {
             <HelpIcon />
           </IconButton>
           <Button disableElevation variant='contained' disabled={script === ''}>
-            Create Register
+            Update Register
           </Button>
         </Stack>
       </Grid>
@@ -100,4 +93,4 @@ const CreateRegisterTextbox = () => {
   )
 }
 
-export default CreateRegisterTextbox
+export default RegisterEditor

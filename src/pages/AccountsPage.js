@@ -11,7 +11,8 @@ const AccountsPage = () => {
   const { readAccounts } = useStoreActions(state => state.accounts)
   const { readRegisters } = useStoreActions(state => state.registers)
 
-  useRead(readAccounts, readRegisters)
+  // useRead(readAccounts, readRegisters)
+  useRead(readAccounts)
 
   return (
     <PageWithSidePanel SidePanel={AccountsSidePanel}>

@@ -22,6 +22,15 @@ const usersAuthThunks = {
     }
   }),
 
+  
+  signUp: thunk(async (actions, user, { fail }) => {
+    try {
+      await usersAuthRepository.signUp(user)
+    } catch (error) {
+      fail(error)
+    }
+  }),
+
   signOut: thunk(async (actions, credentials) => {
     await usersAuthRepository.signOut()
     actions.unsetUser()

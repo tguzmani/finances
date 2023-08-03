@@ -16,8 +16,14 @@ const AccountsTableRow = ({ account }) => {
   }
 
   return (
-    <TableRow key={account.id} hover onClick={onClick}>
-      <TableCell>{account.name}</TableCell>
+    <TableRow
+      key={account.id}
+      hover
+      sx={{ '& .MuiTableCell-root': { textAlign: 'center' } }}
+    >
+      <TableCell onClick={onClick} sx={{ cursor: 'pointer' }}>
+        {account.name}
+      </TableCell>
       <TableCell>
         {account.classification !== 'nominal' && (
           <Amount greyedZeroes value={initialBalance} />

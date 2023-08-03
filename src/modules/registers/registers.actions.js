@@ -16,6 +16,12 @@ const registersActions = {
     )
   }),
 
+  updateRegisters: action((state, register) => {
+    state.registers = state.registers.map(stateRegister =>
+      stateRegister.id === register.id ? register : stateRegister
+    )
+  }),
+
   addRegister: action((state, register) => {
     state.registers = [register, ...state.registers]
     state.loading = false

@@ -30,6 +30,7 @@ const Amount = ({ value, greyedZeroes }) => {
       }}
     >
       {hideAmounts ? ' ******' : '$ ' + valueString}
+    
     </Box>
   )
 }

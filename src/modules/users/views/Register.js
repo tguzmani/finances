@@ -4,9 +4,9 @@ import TextField from '@mui/material/TextField'
 import Grid from '@mui/material/Grid'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
-import LoadingButton from '@mui/lab/LoadingButton'
+import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
-import { format } from 'date-fns'
+import dayjs from 'dayjs'
 
 import { Link } from 'react-router-dom'
 
@@ -16,7 +16,7 @@ import DatePicker from '@mui/lab/DatePicker'
 
 import { useStoreActions, useStoreState } from 'easy-peasy'
 
-const Login = () => {
+const Register = () => {
   const { loading } = useStoreState(state => state.auth)
   const { signUp, setLoading } = useStoreActions(state => state.auth)
 
@@ -38,8 +38,8 @@ const Login = () => {
   }, [])
 
   const handleSignup = () => {
-    signUp({ ...user, birthDate: format(birthDate, 'yyyy-MM-dd') })
-    signupHasBeenHandled()
+    signUp({ ...user, birthDate: dayjs(birthDate).format('yyyy-MM-dd') })
+    // signupHasBeenHandled()
   }
 
   return (
@@ -101,14 +101,14 @@ const Login = () => {
               {...bindUser('confirmPassword')}
             />
 
-            <LoadingButton
+            <Button
               variant='contained'
               onClick={handleSignup}
-              loading={loading}
+              // loading={loading}
               disabled={areFieldsEmpty}
             >
               Signup
-            </LoadingButton>
+            </Button>
 
             <Typography align='center' variant='body2'>
               Already a member? <Link to='/login'>Login</Link>
@@ -120,4 +120,4 @@ const Login = () => {
   )
 }
 
-export default Login
+export default Register

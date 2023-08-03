@@ -3,8 +3,7 @@ import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Grid from '@mui/material/Grid'
 import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import LoadingButton from '@mui/lab/LoadingButton'
+import { Stack, Button } from '@mui/material'
 import Typography from '@mui/material/Typography'
 
 import { Link } from 'react-router-dom'
@@ -65,14 +64,14 @@ const Login = () => {
               {...bindCredentials('password')}
             />
 
-            <LoadingButton
+            <Button
               variant='contained'
               onClick={handleLogIn}
-              loading={loading}
+              // loading={loading}
               disabled={areFieldsEmpty}
             >
               Login
-            </LoadingButton>
+            </Button>
 
             <Typography align='center' variant='body2'>
               Not a member? <Link to='/register'>Signup</Link>

@@ -7,8 +7,11 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance'
 import BookIcon from '@mui/icons-material/Book'
 import CategoryIcon from '@mui/icons-material/Category'
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney'
+import { useLocation } from 'react-router-dom'
 
 const Navigation = () => {
+  const { pathname } = useLocation()
+
   const links = [
     {
       to: '/',
@@ -37,13 +40,21 @@ const Navigation = () => {
     },
   ]
 
+  const isSelected = link => {
+    return link.to === pathname
+  }
+
   return (
     <List>
       {links.map(link => (
         <ListItemButton
           key={link.to}
           disabled={link.to === '#'}
-          sx={{ borderRadius: '4px', marginBottom: '0.25rem' }}
+          sx={{
+            borderRadius: 1,
+            marginBottom: '0.25rem',
+            bgcolor: isSelected(link) ? 'grey.900' : 'inherit',
+          }}
           component={Link}
           to={link.to}
         >

@@ -7,7 +7,9 @@ const theme = createTheme({
     mode: 'dark',
   },
 
-  typography: {},
+  typography: {
+    fontFamily: 'IBM Plex Sans, Roboto, sans-serif',
+  },
 
   components: {
     MuiPaper: {
