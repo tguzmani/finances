@@ -18,15 +18,75 @@ enum TransactionStatus {
   REGISTERED
 }
 
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum TransactionSource {
+  BANESCO
+  BINANCE
+}
+
+enum ExchangeStatus {
+  COMPLETED
+  PROCESSING
+  PENDING
+  CANCELLED
+  FAILED
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
+
 model Transaction {
-  id            Int               @id @default(autoincrement())
+  id            Int                @id @default(autoincrement())
   date          DateTime
-  amount        Decimal           @db.Decimal(10, 2)
-  currency      String            @db.VarChar(3)
-  transactionId String            @unique @map("transaction_id")
-  status        TransactionStatus @default(NEW)
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
+  amount        Decimal            @db.Decimal(10, 2)
+  currency      String             @db.VarChar(3)
+  transactionId String             @unique @map("transaction_id")
+  type          TransactionType    @default(EXPENSE)
+  status        TransactionStatus  @default(NEW)
+  source        TransactionSource
+  description   String?
+
+  // Relación opcional con Exchange
+  exchangeId    Int?               @map("exchange_id")
+  exchange      Exchange?          @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
   @@map("transactions")
+  @@index([exchangeId])
+}
+
+model Exchange {
+  id                Int             @id @default(autoincrement())
+
+  // Binance metadata
+  orderNumber       String          @unique @map("order_number")
+  asset             String          @db.VarChar(10)
+  amount            Decimal         @db.Decimal(18, 8)
+  amountGross       Decimal         @map("amount_gross") @db.Decimal(18, 8)
+  fiatSymbol        String          @map("fiat_symbol") @db.VarChar(3)
+  fiatAmount        Decimal         @map("fiat_amount") @db.Decimal(18, 2)
+  exchangeRate      Decimal         @map("exchange_rate") @db.Decimal(18, 4)
+  counterparty      String?         @db.VarChar(255)
+  tradeType         TradeType       @map("trade_type")
+  status            ExchangeStatus  @default(COMPLETED)
+
+  // Timestamps
+  binanceCreatedAt  DateTime        @map("binance_created_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relación con transactions
+  transactions      Transaction[]
+
+  @@map("exchanges")
+  @@index([binanceCreatedAt])
+  @@index([status])
 }

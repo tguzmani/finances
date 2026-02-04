@@ -12,7 +12,7 @@ import {
 import { TransactionsService } from './transactions.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { SyncTransactionsDto } from './dto/sync-transactions.dto';
-import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdateTransactionDto } from './dto/update-status.dto';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -37,11 +37,11 @@ export class TransactionsController {
     return this.transactionsService.syncFromEmail(query.limit);
   }
 
-  @Patch(':id/status')
-  updateStatus(
+  @Patch(':id')
+  update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateStatusDto
+    @Body() dto: UpdateTransactionDto
   ) {
-    return this.transactionsService.updateStatus(id, dto.status);
+    return this.transactionsService.update(id, dto);
   }
 }

@@ -1,0 +1,20 @@
+export enum ExchangeStatus {
+  COMPLETED = 'COMPLETED',
+  PROCESSING = 'PROCESSING',
+  PENDING = 'PENDING',
+  CANCELLED = 'CANCELLED',
+  FAILED = 'FAILED',
+}
+
+export enum TradeType {
+  BUY = 'BUY',
+  SELL = 'SELL',
+}
+
+export interface SyncResult {
+  exchangesFetched: number;
+  exchangesCreated: number;
+  exchangesSkipped: number;
+  transactionsCreated: number;
+  errors: string[];
+}

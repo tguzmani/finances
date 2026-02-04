@@ -3,7 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsEmailService } from './transactions-email.service';
 import { BanescoParser } from './banesco.parser';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
-import { TransactionStatus } from './transaction.types';
+import { UpdateTransactionDto } from './dto/update-status.dto';
+import { TransactionStatus, TransactionSource } from './transaction.types';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -46,10 +47,20 @@ export class TransactionsService {
     });
   }
 
-  async updateStatus(id: number, status: TransactionStatus) {
+  async update(id: number, dto: UpdateTransactionDto) {
+    const data: Prisma.TransactionUpdateInput = {};
+
+    if (dto.status !== undefined) {
+      data.status = dto.status;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
+
     return this.prisma.transaction.update({
       where: { id },
-      data: { status },
+      data,
     });
   }
 
@@ -71,6 +82,7 @@ export class TransactionsService {
               amount: tx.amount,
               currency: tx.currency,
               transactionId: tx.transactionId,
+              source: TransactionSource.BANESCO,
             },
           });
           created++;
