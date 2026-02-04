@@ -24,9 +24,14 @@ enum TransactionType {
   INCOME
 }
 
-enum TransactionSource {
+enum TransactionPlatform {
   BANESCO
   BINANCE
+}
+
+enum PaymentMethod {
+  DEBIT_CARD
+  PAGO_MOVIL
 }
 
 enum ExchangeStatus {
@@ -35,6 +40,9 @@ enum ExchangeStatus {
   PENDING
   CANCELLED
   FAILED
+  REVIEWED
+  REJECTED
+  REGISTERED
 }
 
 enum TradeType {
@@ -43,22 +51,23 @@ enum TradeType {
 }
 
 model Transaction {
-  id            Int                @id @default(autoincrement())
+  id            Int                   @id @default(autoincrement())
   date          DateTime
-  amount        Decimal            @db.Decimal(10, 2)
-  currency      String             @db.VarChar(3)
-  transactionId String             @unique @map("transaction_id")
-  type          TransactionType    @default(EXPENSE)
-  status        TransactionStatus  @default(NEW)
-  source        TransactionSource
+  amount        Decimal               @db.Decimal(10, 2)
+  currency      String                @db.VarChar(3)
+  transactionId String                @unique @map("transaction_id")
+  type          TransactionType       @default(EXPENSE)
+  status        TransactionStatus     @default(NEW)
+  platform      TransactionPlatform
+  method        PaymentMethod?
   description   String?
 
   // Relación opcional con Exchange
-  exchangeId    Int?               @map("exchange_id")
-  exchange      Exchange?          @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+  exchangeId    Int?                  @map("exchange_id")
+  exchange      Exchange?             @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
 
   @@map("transactions")
   @@index([exchangeId])
@@ -90,4 +99,13 @@ model Exchange {
   @@map("exchanges")
   @@index([binanceCreatedAt])
   @@index([status])
+}
+
+model ExchangeRate {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  value     Decimal  @db.Decimal(10, 2)
+
+  @@map("exchange_rates")
+  @@index([date])
 }

@@ -4,6 +4,8 @@ import { TransactionsService } from './transactions.service';
 import { TransactionsEmailService } from './transactions-email.service';
 import { BanescoParser } from './banesco.parser';
 import { TransactionsScheduler } from './transactions.scheduler';
+import { PagoMovilOcrService } from './pago-movil-ocr.service';
+import { PagoMovilParser } from './pago-movil.parser';
 
 @Module({
   controllers: [TransactionsController],
@@ -12,7 +14,13 @@ import { TransactionsScheduler } from './transactions.scheduler';
     TransactionsEmailService,
     BanescoParser,
     TransactionsScheduler,
+    PagoMovilOcrService,
+    PagoMovilParser,
   ],
-  exports: [TransactionsService],
+  exports: [
+    TransactionsService,
+    PagoMovilOcrService,
+    PagoMovilParser,
+  ],
 })
 export class TransactionsModule {}

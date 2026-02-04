@@ -4,6 +4,9 @@ export enum ExchangeStatus {
   PENDING = 'PENDING',
   CANCELLED = 'CANCELLED',
   FAILED = 'FAILED',
+  REVIEWED = 'REVIEWED',
+  REJECTED = 'REJECTED',
+  REGISTERED = 'REGISTERED',
 }
 
 export enum TradeType {

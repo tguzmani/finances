@@ -4,7 +4,7 @@ import { TransactionsEmailService } from './transactions-email.service';
 import { BanescoParser } from './banesco.parser';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
-import { TransactionStatus, TransactionSource } from './transaction.types';
+import { TransactionStatus, TransactionPlatform, PaymentMethod, TransactionType } from './transaction.types';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -82,7 +82,8 @@ export class TransactionsService {
               amount: tx.amount,
               currency: tx.currency,
               transactionId: tx.transactionId,
-              source: TransactionSource.BANESCO,
+              platform: TransactionPlatform.BANESCO,
+              method: PaymentMethod.DEBIT_CARD,
             },
           });
           created++;
@@ -108,5 +109,35 @@ export class TransactionsService {
       transactionsCreated: created,
       transactionsSkipped: skipped,
     };
+  }
+
+  async createFromPagoMovil(parsed: {
+    date: Date;
+    amount: number;
+    currency: string;
+    transactionId: string;
+  }): Promise<void> {
+    try {
+      await this.prisma.transaction.create({
+        data: {
+          date: parsed.date,
+          amount: parsed.amount,
+          currency: parsed.currency,
+          transactionId: parsed.transactionId,
+          platform: TransactionPlatform.BANESCO,
+          method: PaymentMethod.PAGO_MOVIL,
+          type: TransactionType.EXPENSE,
+          status: TransactionStatus.NEW,
+        },
+      });
+
+      this.logger.log(`Created Pago Móvil transaction: ${parsed.transactionId}`);
+    } catch (error) {
+      if (error.code === 'P2002') {
+        this.logger.warn(`Duplicate transaction: ${parsed.transactionId}`);
+        throw new Error('Transaction already exists');
+      }
+      throw error;
+    }
   }
 }

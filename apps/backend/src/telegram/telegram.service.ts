@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ExchangesService } from '../exchanges/exchanges.service';
-import { TransactionStatus, TransactionSource, TransactionType } from '../transactions/transaction.types';
+import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { TransactionStatus, TransactionPlatform, TransactionType } from '../transactions/transaction.types';
+import { ExchangeStatus } from '@prisma/client';
 
 @Injectable()
 export class TelegramService {
@@ -10,6 +12,7 @@ export class TelegramService {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly exchangesService: ExchangesService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
   async getStatus(): Promise<string> {
@@ -29,7 +32,7 @@ export class TelegramService {
       // Filter NEW Banesco transactions
       const newBanescoCount = allTransactions.filter(t =>
         t.status === TransactionStatus.NEW &&
-        t.source === TransactionSource.BANESCO
+        t.platform === TransactionPlatform.BANESCO
       ).length;
 
       // Count NEW EXPENSE transactions pending review
@@ -79,6 +82,71 @@ export class TelegramService {
     }
   }
 
+  async getNextReviewExchange() {
+    try {
+      const exchanges = await this.exchangesService.findAll({});
+      return exchanges.find(e =>
+        e.status === ExchangeStatus.COMPLETED ||
+        e.status === ExchangeStatus.PENDING
+      );
+    } catch (error) {
+      this.logger.error(`Failed to get next review exchange: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getPendingExchangesCount(): Promise<number> {
+    try {
+      const exchanges = await this.exchangesService.findAll({});
+      return exchanges.filter(e =>
+        e.status === ExchangeStatus.COMPLETED ||
+        e.status === ExchangeStatus.PENDING
+      ).length;
+    } catch (error) {
+      this.logger.error(`Failed to count pending exchanges: ${error.message}`);
+      return 0;
+    }
+  }
+
+  formatExchangeForReview(exchange: any): string {
+    const exchangeDate = new Date(exchange.binanceCreatedAt);
+
+    const dateString = exchangeDate.toLocaleDateString('es-VE', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'America/Caracas'
+    });
+
+    const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
+
+    const time = exchangeDate.toLocaleTimeString('es-VE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'America/Caracas'
+    });
+
+    const tradeType = exchange.tradeType === 'SELL' ? 'Sell' : 'Buy';
+    const icon = exchange.tradeType === 'SELL' ? '💵' : '🪙';
+
+    // Get last 4 digits of order number
+    const last4Digits = exchange.orderNumber.slice(-4);
+
+    return (
+      `<b>Exchange Review</b>\n` +
+      `\n` +
+      `${icon} <b>${tradeType}: ${exchange.asset} ${exchange.amount}</b>\n` +
+      `→ ${exchange.fiatSymbol} ${exchange.fiatAmount}\n` +
+      `Rate: ${exchange.exchangeRate}\n` +
+      `Order: ...${last4Digits}\n` +
+      `${date}\n` +
+      `Time: ${time}\n` +
+      (exchange.counterparty ? `Counterparty: ${exchange.counterparty}\n` : '')
+    );
+  }
+
   formatTransactionForReview(transaction: any): string {
     const transactionDate = new Date(transaction.date);
 
@@ -123,19 +191,57 @@ export class TelegramService {
       // Take last 10 expenses
       const recent = expenses.slice(0, 10);
 
-      let message = `💸 <b>Last ${recent.length} expenses:</b>\n\n`;
+      let message = `<b>Last ${recent.length} expenses:</b>\n\n`;
 
       recent.forEach((t) => {
-        const statusIcon = t.status === 'NEW' ? '🆕' : t.status === 'REVIEWED' ? '👁' : '✅';
-        const date = new Date(t.date).toLocaleDateString('es-VE', {
+        // Status icon mapping - no icon for reviewed
+        const statusIcon =
+          t.status === 'NEW' ? '🆕' :
+          t.status === 'REJECTED' ? '❌' :
+          t.status === 'REGISTERED' ? '✅' :
+          '';
+
+        // Status label mapping
+        const statusLabel =
+          t.status === 'NEW' ? 'New' :
+          t.status === 'REVIEWED' ? 'Reviewed' :
+          t.status === 'REJECTED' ? 'Rejected' :
+          'Registered';
+
+        // Platform label mapping
+        const platformLabel = t.platform === 'BANESCO' ? 'Banesco' : t.platform;
+
+        // Method label mapping
+        const methodLabel = t.method
+          ? (t.method === 'DEBIT_CARD' ? 'Debit Card' :
+             t.method === 'PAGO_MOVIL' ? 'Pago Móvil' :
+             t.method)
+          : null;
+
+        const transactionDate = new Date(t.date);
+        const date = transactionDate.toLocaleDateString('es-VE', {
+          timeZone: 'America/Caracas'
+        });
+        const time = transactionDate.toLocaleTimeString('es-VE', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
           timeZone: 'America/Caracas'
         });
 
-        message += `💸 <b>${t.currency} ${t.amount}</b>\n`;
-        message += `   ${statusIcon} ${t.status} | ${date}\n`;
-        message += `   Source: ${t.source}\n`;
+        // If has description, show it as title with amount below
         if (t.description) {
-          message += `   📝 ${t.description}\n`;
+          message += `<b>${t.description}</b>\n`;
+          message += `   ${t.currency} ${t.amount}\n`;
+          message += `   ${date} ${time}\n`;
+          message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
+          message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
+        } else {
+          // No description, show amount as title
+          message += `<b>${t.currency} ${t.amount}</b>\n`;
+          message += `   ${date} ${time}\n`;
+          message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
+          message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
         }
         message += '\n';
       });
@@ -158,10 +264,26 @@ export class TelegramService {
       // Take last 10 exchanges
       const recent = exchanges.slice(0, 10);
 
-      let message = `💱 <b>Last ${recent.length} exchanges:</b>\n\n`;
+      let message = `<b>Last ${recent.length} exchanges:</b>\n\n`;
 
       recent.forEach((e) => {
         const icon = e.tradeType === 'SELL' ? '💵' : '🪙';
+
+        // Trade type label mapping
+        const tradeTypeLabel = e.tradeType === 'SELL' ? 'Sell' : 'Buy';
+
+        // Status label mapping
+        const statusLabel =
+          e.status === 'COMPLETED' ? 'Completed' :
+          e.status === 'PROCESSING' ? 'Processing' :
+          e.status === 'PENDING' ? 'Pending' :
+          e.status === 'CANCELLED' ? 'Cancelled' :
+          e.status === 'FAILED' ? 'Failed' :
+          e.status === 'REVIEWED' ? 'Reviewed' :
+          e.status === 'REJECTED' ? 'Rejected' :
+          e.status === 'REGISTERED' ? 'Registered' :
+          e.status;
+
         const date = new Date(e.binanceCreatedAt).toLocaleDateString('es-VE', {
           timeZone: 'America/Caracas'
         });
@@ -169,7 +291,7 @@ export class TelegramService {
         message += `${icon} <b>${e.asset} ${e.amount}</b>\n`;
         message += `   → ${e.fiatSymbol} ${e.fiatAmount}\n`;
         message += `   Rate: ${e.exchangeRate} | ${date}\n`;
-        message += `   Status: ${e.status}\n`;
+        message += `   Status: ${statusLabel} | ${tradeTypeLabel}\n`;
         if (e.counterparty) {
           message += `   👤 ${e.counterparty}\n`;
         }
@@ -225,5 +347,68 @@ export class TelegramService {
       this.logger.error(`Sync trigger failed: ${error.message}`);
       throw new Error('Error syncing data');
     }
+  }
+
+  async getReviewedExchanges() {
+    try {
+      const exchanges = await this.exchangesService.findAll({});
+      return exchanges.filter(e => e.status === ExchangeStatus.REVIEWED);
+    } catch (error) {
+      this.logger.error(`Failed to get reviewed exchanges: ${error.message}`);
+      throw error;
+    }
+  }
+
+  calculateRegisterMetrics(exchanges: any[]) {
+    // TLIST: Extract last 4 digits of order numbers
+    const terminalList = exchanges
+      .map(e => e.orderNumber.slice(-4))
+      .join(', ');
+
+    // WAVG: Weighted average
+    const totalAmount = exchanges.reduce((sum, e) => sum + Number(e.amount), 0);
+    const weightedSum = exchanges.reduce(
+      (sum, e) => sum + Number(e.amount) * Number(e.exchangeRate),
+      0
+    );
+    const wavg = Math.round(weightedSum / totalAmount);
+
+    // SUM: Google Sheets formula
+    const amounts = exchanges.map(e => Number(e.amount));
+    const sumFormula = `=${amounts.join('+')}`;
+
+    return { terminalList, wavg, sumFormula, totalAmount };
+  }
+
+  async registerExchanges(exchangeIds: number[], wavg: number): Promise<void> {
+    try {
+      // Update all exchanges to REGISTERED
+      await Promise.all(
+        exchangeIds.map(id =>
+          this.exchangesService.update(id, {
+            status: ExchangeStatus.REGISTERED,
+          })
+        )
+      );
+
+      // Save exchange rate
+      await this.exchangeRateService.create(wavg);
+
+      this.logger.log(`Registered ${exchangeIds.length} exchanges with WAVG ${wavg}`);
+    } catch (error) {
+      this.logger.error(`Failed to register exchanges: ${error.message}`);
+      throw error;
+    }
+  }
+
+  formatRegisterSummary(metrics: any): string {
+    return (
+      `<b>Register Exchanges</b>\n\n` +
+      `📊 <b>Summary:</b>\n` +
+      `Total exchanges: ${metrics.count}\n` +
+      `Total USDT: ${metrics.totalAmount}\n` +
+      `Weighted Avg Rate: ${metrics.wavg} VES/USDT\n\n` +
+      `Use the buttons below to copy data:`
+    );
   }
 }

@@ -3,9 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BinanceApiService } from './binance-api.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
-import { SyncResult, TradeType, ExchangeStatus } from './exchange.types';
-import { TransactionType, TransactionSource } from '../transactions/transaction.types';
-import { Prisma } from '@prisma/client';
+import { SyncResult, TradeType } from './exchange.types';
+import { TransactionType, TransactionPlatform } from '../transactions/transaction.types';
+import { Prisma, ExchangeStatus } from '@prisma/client';
 
 @Injectable()
 export class ExchangesService {
@@ -62,6 +62,13 @@ export class ExchangesService {
       include: {
         transactions: true,
       },
+    });
+  }
+
+  async update(id: number, data: { status: ExchangeStatus }) {
+    return this.prisma.exchange.update({
+      where: { id },
+      data,
     });
   }
 
@@ -139,7 +146,7 @@ export class ExchangesService {
                   currency: trade.fiatSymbol,
                   transactionId: trade.orderNumber,
                   type: transactionType,
-                  source: TransactionSource.BINANCE,
+                  platform: TransactionPlatform.BINANCE,
                   exchangeId: exchange.id,
                 },
               });

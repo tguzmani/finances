@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: finances-postgres
+    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -15,18 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  tesseract:
-    build:
-      context: ./docker
-      dockerfile: Dockerfile.tesseract
-      network: host
-    container_name: finances-tesseract
-    volumes:
-      - ./ocr-input:/input
-      - ./ocr-output:/output
-    stdin_open: true
-    tty: true
 
 volumes:
   postgres_data:

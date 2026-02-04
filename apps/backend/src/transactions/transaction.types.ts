@@ -10,7 +10,12 @@ export enum TransactionType {
   INCOME = 'INCOME',
 }
 
-export enum TransactionSource {
+export enum TransactionPlatform {
   BANESCO = 'BANESCO',
   BINANCE = 'BINANCE',
+}
+
+export enum PaymentMethod {
+  DEBIT_CARD = 'DEBIT_CARD',
+  PAGO_MOVIL = 'PAGO_MOVIL',
 }
