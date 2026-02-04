@@ -55,14 +55,15 @@ export class BanescoParser {
   }
 
   private parseSummaryBlock(block: string): ParsedTransaction | null {
-    const referenceMatch = block.match(/Referencia:\s*(\d+)/);
+    const traceMatch = block.match(/Trace:\s*(\d+)/);
     const dateMatch = block.match(/Fecha:\s*(\d{2}\/\d{2}\/\d{4})/);
     const timeMatch = block.match(/Hora:\s*(\d{2}:\d{2}:\d{2})/);
     const amountMatch = block.match(/Monto:\s*([\d.,]+)/);
 
-    if (!referenceMatch || !dateMatch || !amountMatch) return null;
+    if (!traceMatch || !dateMatch || !amountMatch) return null;
 
-    const reference = referenceMatch[1];
+    // Remove leading zeros from Trace
+    const trace = parseInt(traceMatch[1], 10).toString();
     const dateStr = dateMatch[1];
     const timeStr = timeMatch ? timeMatch[1] : '00:00:00';
     const amount = this.parseAmount(amountMatch[1]);
@@ -75,14 +76,22 @@ export class BanescoParser {
       date,
       amount,
       currency: this.CURRENCY,
-      transactionId: reference,
+      transactionId: trace,
     };
   }
 
   private parseAmount(amountStr: string): number {
-    // Handle both "20703.03" and "20.703,03" formats
-    const normalized = amountStr.replace(/\./g, '').replace(',', '.');
-    return parseFloat(normalized);
+    // Handle both formats:
+    // - "20.703,03" (European: period = thousands, comma = decimal)
+    // - "20703.03" (US/VE: period = decimal)
+    if (amountStr.includes(',')) {
+      // European format: remove periods (thousands), replace comma with period
+      const normalized = amountStr.replace(/\./g, '').replace(',', '.');
+      return parseFloat(normalized);
+    } else {
+      // US/VE format: period is already decimal separator, just parse it
+      return parseFloat(amountStr);
+    }
   }
 
   private parseDate(dateStr: string, timeStr: string): Date {

@@ -16,6 +16,7 @@ enum TransactionStatus {
   NEW
   REVIEWED
   REGISTERED
+  REJECTED
 }
 
 enum TransactionType {

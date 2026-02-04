@@ -5,6 +5,9 @@ import { AppService } from './app.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
+import { TelegramModule } from '../telegram/telegram.module';
+
+const isTelegramEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
 
 @Module({
   imports: [
@@ -12,6 +15,7 @@ import { ExchangesModule } from '../exchanges/exchanges.module';
     PrismaModule,
     TransactionsModule,
     ExchangesModule,
+    ...(isTelegramEnabled ? [TelegramModule] : []),
   ],
   controllers: [AppController],
   providers: [AppService],
