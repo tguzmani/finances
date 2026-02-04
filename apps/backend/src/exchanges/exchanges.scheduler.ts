@@ -1,14 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ExchangesService } from './exchanges.service';
 import { TradeType } from './exchange.types';
+import { NewExchangesEvent } from './events/new-exchanges.event';
+import { ExchangeStatus } from '@prisma/client';
 
 @Injectable()
 export class ExchangesScheduler {
   private readonly logger = new Logger(ExchangesScheduler.name);
   private isRunning = false;
 
-  constructor(private readonly exchangesService: ExchangesService) {}
+  constructor(
+    private readonly exchangesService: ExchangesService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   @Cron(process.env.EXCHANGES_SYNC_CRON || CronExpression.EVERY_30_MINUTES, {
     name: 'exchanges-binance-sync',
@@ -43,6 +49,31 @@ export class ExchangesScheduler {
         `Transactions: ${result.transactionsCreated}, ` +
         `Errors: ${result.errors.length}`
       );
+
+      // Emit event if new exchanges were created
+      if (result.exchangesCreated > 0) {
+        const allExchanges = await this.exchangesService.findAll({});
+
+        // Get only COMPLETED/PENDING status (newly synced ones)
+        const newExchanges = allExchanges
+          .filter(e =>
+            e.status === ExchangeStatus.COMPLETED ||
+            e.status === ExchangeStatus.PENDING
+          )
+          .sort((a, b) => new Date(b.binanceCreatedAt).getTime() - new Date(a.binanceCreatedAt).getTime())
+          .slice(0, result.exchangesCreated);
+
+        if (newExchanges.length > 0) {
+          this.eventEmitter.emit(
+            'exchanges.new',
+            new NewExchangesEvent(newExchanges)
+          );
+
+          this.logger.log(
+            `[EVENT] Emitted NewExchangesEvent for ${newExchanges.length} exchanges`
+          );
+        }
+      }
 
       // Log errores individuales si existen
       if (result.errors.length > 0) {
