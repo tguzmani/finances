@@ -59,7 +59,7 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleTransactions(@Ctx() ctx: SessionContext) {
     try {
-      const message = await this.telegramService.getRecentTransactions();
+      const message = await this.telegramService.transactions.getRecentTransactionsList();
       await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
       await ctx.reply('Error getting transactions.');
@@ -70,7 +70,7 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleExchanges(@Ctx() ctx: SessionContext) {
     try {
-      const message = await this.telegramService.getRecentExchanges();
+      const message = await this.telegramService.exchanges.getRecentExchangesList();
       await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
       await ctx.reply('Error getting exchanges.');
@@ -96,7 +96,7 @@ export class TelegramUpdate {
       ctx.session = {};
 
       // Check if there are reviewed exchanges
-      const reviewedExchanges = await this.telegramService.getReviewedExchanges();
+      const reviewedExchanges = await this.telegramService.exchanges.getReviewedExchanges();
 
       if (reviewedExchanges.length === 0) {
         await ctx.reply('No reviewed exchanges to register.');
@@ -104,14 +104,14 @@ export class TelegramUpdate {
       }
 
       // Calculate metrics
-      const metrics = this.telegramService.calculateRegisterMetrics(reviewedExchanges);
+      const metrics = this.telegramService.exchanges.calculateRegisterMetrics(reviewedExchanges);
 
       // Store in session for Register action
       ctx.session.registerExchangeIds = reviewedExchanges.map(e => e.id);
       ctx.session.registerWavg = metrics.wavg;
 
       // Format message
-      const message = this.telegramService.formatRegisterSummary({
+      const message = this.telegramService.exchanges.formatRegisterSummary({
         ...metrics,
         count: reviewedExchanges.length,
       });
@@ -170,8 +170,8 @@ export class TelegramUpdate {
 
       // Get counts
       const [transactionsCount, exchangesCount] = await Promise.all([
-        this.telegramService.getPendingReviewCount(),
-        this.telegramService.getPendingExchangesCount(),
+        this.telegramService.transactions.getPendingReviewCount(),
+        this.telegramService.exchanges.getPendingReviewCount(),
       ]);
 
       const keyboard = Markup.inlineKeyboard([
@@ -376,7 +376,7 @@ export class TelegramUpdate {
       await ctx.answerCbQuery('Registering exchanges...');
 
       // Perform registration
-      await this.telegramService.registerExchanges(exchangeIds, wavg);
+      await this.telegramService.exchanges.registerExchanges(exchangeIds, wavg);
 
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
@@ -525,7 +525,7 @@ export class TelegramUpdate {
 
   private async showNextTransaction(ctx: SessionContext) {
     try {
-      const transaction = await this.telegramService.getNextReviewTransaction();
+      const transaction = await this.telegramService.transactions.getNextForReview();
 
       if (!transaction) {
         await ctx.reply('✅ No more transactions to review!');
@@ -537,7 +537,7 @@ export class TelegramUpdate {
       ctx.session.currentTransactionId = transaction.id;
       ctx.session.waitingForDescription = true;
 
-      const message = this.telegramService.formatTransactionForReview(transaction);
+      const message = this.telegramService.transactions.formatTransactionForReview(transaction);
 
       const keyboard = Markup.inlineKeyboard([
         [
@@ -564,7 +564,7 @@ export class TelegramUpdate {
 
   private async showNextExchange(ctx: SessionContext) {
     try {
-      const exchange = await this.telegramService.getNextReviewExchange();
+      const exchange = await this.telegramService.exchanges.getNextForReview();
 
       if (!exchange) {
         await ctx.reply('✅ No more exchanges to review!');
@@ -575,7 +575,7 @@ export class TelegramUpdate {
       // Store current exchange in session
       ctx.session.currentExchangeId = exchange.id;
 
-      const message = this.telegramService.formatExchangeForReview(exchange);
+      const message = this.telegramService.exchanges.formatExchangeForReview(exchange);
 
       const keyboard = Markup.inlineKeyboard([
         [

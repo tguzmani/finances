@@ -186,4 +186,69 @@ export class ExchangesService {
 
     return statusMap[binanceStatus] || ExchangeStatus.PENDING;
   }
+
+  // Query methods for review flows
+  async findByStatus(status: ExchangeStatus) {
+    return this.prisma.exchange.findMany({
+      where: { status },
+      orderBy: { binanceCreatedAt: 'desc' },
+    });
+  }
+
+  async getNextPendingReview() {
+    return this.prisma.exchange.findFirst({
+      where: {
+        status: {
+          in: [ExchangeStatus.COMPLETED, ExchangeStatus.PENDING],
+        },
+      },
+      orderBy: { binanceCreatedAt: 'asc' },
+    });
+  }
+
+  async countByStatus(statuses: ExchangeStatus[]): Promise<number> {
+    return this.prisma.exchange.count({
+      where: { status: { in: statuses } },
+    });
+  }
+
+  // Business logic methods
+  calculateRegisterMetrics(exchanges: any[]) {
+    const terminalList = exchanges
+      .map(e => e.orderNumber.slice(-4))
+      .join(', ');
+
+    const totalAmount = exchanges.reduce((sum, e) => sum + Number(e.amountGross), 0);
+    const weightedSum = exchanges.reduce(
+      (sum, e) => sum + Number(e.amountGross) * Number(e.exchangeRate),
+      0
+    );
+    const wavg = Math.round(weightedSum / totalAmount);
+
+    const amounts = exchanges.map(e => Number(e.amountGross));
+    const sumFormula = `=${amounts.join('+')}`;
+
+    return { terminalList, wavg, sumFormula, totalAmount };
+  }
+
+  async registerExchanges(
+    exchangeIds: number[],
+    wavg: number
+  ): Promise<void> {
+    // Use transaction for atomicity
+    await this.prisma.$transaction(async (tx) => {
+      // Update all exchanges to REGISTERED
+      await tx.exchange.updateMany({
+        where: { id: { in: exchangeIds } },
+        data: { status: ExchangeStatus.REGISTERED },
+      });
+
+      // Save exchange rate
+      await tx.exchangeRate.create({
+        data: { value: wavg },
+      });
+    });
+
+    this.logger.log(`Registered ${exchangeIds.length} exchanges with WAVG ${wavg}`);
+  }
 }

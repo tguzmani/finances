@@ -5,8 +5,14 @@ import { TelegramUpdate } from './telegram.update';
 import { TelegramService } from './telegram.service';
 import { TelegramAuthGuard } from './guards/telegram-auth.guard';
 import { TelegramBotInit } from './telegram-bot.init';
+import { TelegramExchangesService } from './exchanges/telegram-exchanges.service';
+import { TelegramExchangesPresenter } from './exchanges/telegram-exchanges.presenter';
+import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
+import { TelegramTransactionsPresenter } from './transactions/telegram-transactions.presenter';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
+import { PagoMovilOcrService } from '../transactions/pago-movil-ocr.service';
+import { PagoMovilParser } from '../transactions/pago-movil.parser';
 import * as https from 'https';
 
 @Module({
@@ -54,6 +60,18 @@ import * as https from 'https';
     TransactionsModule, // Para usar TransactionsService
     ExchangesModule,    // Para usar ExchangesService
   ],
-  providers: [TelegramUpdate, TelegramService, TelegramAuthGuard, TelegramBotInit],
+  providers: [
+    TelegramUpdate,
+    TelegramService,
+    TelegramAuthGuard,
+    TelegramBotInit,
+    TelegramExchangesService,
+    TelegramExchangesPresenter,
+    TelegramTransactionsService,
+    TelegramTransactionsPresenter,
+    PagoMovilOcrService,
+    PagoMovilParser,
+  ],
+  exports: [TelegramService],
 })
 export class TelegramModule {}
