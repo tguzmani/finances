@@ -17,6 +17,10 @@ export interface ReviewSession {
   waitingForDescription?: boolean;
   registerExchangeIds?: number[];
   registerWavg?: number;
+  // Transaction registration flow
+  registerTransactionIds?: number[];
+  registerTransactionIndex?: number;
+  registerTransactionExchangeRate?: number;
 }
 
 export interface SessionContext extends Context {
@@ -28,8 +32,8 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'status', description: 'View finance summary' },
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
-  { command: 'review', description: 'Review pending expenses' },
-  { command: 'register', description: 'Register reviewed exchanges' },
+  { command: 'review', description: 'Review pending items' },
+  { command: 'register', description: 'Register reviewed items' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },
 ];

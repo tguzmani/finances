@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExchangesService } from '../../exchanges/exchanges.service';
 import { TelegramExchangesPresenter } from './telegram-exchanges.presenter';
-import { ExchangeStatus } from '@prisma/client';
+import { ExchangeStatus, Exchange } from '@prisma/client';
 
 @Injectable()
 export class TelegramExchangesService {
@@ -23,9 +23,15 @@ export class TelegramExchangesService {
     ]);
   }
 
-  async getRecentExchangesList(): Promise<string> {
+  async getRecentExchangesList(showAll = false): Promise<string> {
     try {
-      const exchanges = await this.exchangesService.findAll({});
+      const allExchanges = await this.exchangesService.findAll({});
+
+      // Filter out rejected by default
+      const exchanges = showAll
+        ? allExchanges
+        : allExchanges.filter(e => e.status !== ExchangeStatus.REJECTED);
+
       return this.presenter.formatRecentList(exchanges);
     } catch (error) {
       this.logger.error(`Failed to get exchanges list: ${error.message}`);
@@ -33,7 +39,7 @@ export class TelegramExchangesService {
     }
   }
 
-  formatExchangeForReview(exchange: any): string {
+  formatExchangeForReview(exchange: Exchange): string {
     return this.presenter.formatForReview(exchange);
   }
 

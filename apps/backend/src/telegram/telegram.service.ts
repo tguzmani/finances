@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ExchangesService } from '../exchanges/exchanges.service';
+import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TelegramExchangesService } from './exchanges/telegram-exchanges.service';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
-import { TransactionStatus, TransactionPlatform } from '../transactions/transaction.types';
+import { TransactionStatus, TransactionType } from '../transactions/transaction.types';
+import { ExchangeStatus } from '@prisma/client';
 
 @Injectable()
 export class TelegramService {
@@ -12,13 +14,14 @@ export class TelegramService {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly exchangesService: ExchangesService,
+    private readonly exchangeRateService: ExchangeRateService,
     private readonly telegramExchanges: TelegramExchangesService,
     private readonly telegramTransactions: TelegramTransactionsService,
   ) {}
 
   async getStatus(): Promise<string> {
     try {
-      const [allTransactions, allExchanges] = await Promise.all([
+      const [allTransactions, allExchanges, latestRate] = await Promise.all([
         this.transactionsService.findAll({}).catch(err => {
           this.logger.error(`Failed to fetch transactions: ${err.message}`);
           return [];
@@ -27,22 +30,60 @@ export class TelegramService {
           this.logger.error(`Failed to fetch exchanges: ${err.message}`);
           return [];
         }),
+        this.exchangeRateService.findLatest().catch(err => {
+          this.logger.error(`Failed to fetch exchange rate: ${err.message}`);
+          return null;
+        }),
       ]);
 
-      const newBanescoCount = allTransactions.filter(t =>
-        t.status === TransactionStatus.NEW &&
-        t.platform === TransactionPlatform.BANESCO
+      // Filter only EXPENSE transactions
+      const expenses = allTransactions.filter(t => t.type === TransactionType.EXPENSE);
+
+      // Count transactions by status
+      const txNew = expenses.filter(t => t.status === TransactionStatus.NEW).length;
+      const txReviewed = expenses.filter(t => t.status === TransactionStatus.REVIEWED).length;
+      const txRegistered = expenses.filter(t => t.status === TransactionStatus.REGISTERED).length;
+      const txRejected = expenses.filter(t => t.status === TransactionStatus.REJECTED).length;
+
+      const txTotal = txNew + txReviewed + txRegistered + txRejected;
+      const txDone = txRegistered + txRejected;
+      const txDonePercent = txTotal > 0 ? ((txDone / txTotal) * 100).toFixed(2) : '0.00';
+
+      // Count exchanges by status
+      const exNew = allExchanges.filter(e =>
+        e.status === ExchangeStatus.COMPLETED || e.status === ExchangeStatus.PENDING
       ).length;
+      const exReviewed = allExchanges.filter(e => e.status === ExchangeStatus.REVIEWED).length;
+      const exRegistered = allExchanges.filter(e => e.status === ExchangeStatus.REGISTERED).length;
+      const exRejected = allExchanges.filter(e => e.status === ExchangeStatus.REJECTED).length;
 
-      const pendingReviewCount = await this.telegramTransactions.getPendingReviewCount();
-      const exchangesCount = allExchanges.length;
+      const exTotal = exNew + exReviewed + exRegistered + exRejected;
+      const exDone = exRegistered + exRejected;
+      const exDonePercent = exTotal > 0 ? ((exDone / exTotal) * 100).toFixed(2) : '0.00';
 
-      return (
-        `Hello!\n` +
-        `You have ${newBanescoCount} new Banesco transactions\n` +
-        `You have ${pendingReviewCount} expenses pending review\n` +
-        `You have ${exchangesCount} Binance exchanges recorded`
-      );
+      // Build status message
+      let message = `<b>Transactions</b>\n`;
+      message += `- New: ${txNew}\n`;
+      message += `- Reviewed: ${txReviewed}\n`;
+      message += `- Registered: ${txRegistered}\n`;
+      message += `- Rejected: ${txRejected}\n`;
+      message += `- Done: ${txDone} / ${txTotal} (${txDonePercent}%)\n\n`;
+
+      message += `<b>Exchanges</b>\n`;
+      message += `- New: ${exNew}\n`;
+      message += `- Reviewed: ${exReviewed}\n`;
+      message += `- Registered: ${exRegistered}\n`;
+      message += `- Rejected: ${exRejected}\n`;
+      message += `- Done: ${exDone} / ${exTotal} (${exDonePercent}%)\n\n`;
+
+      message += `<b>Exchange Rate</b>\n`;
+      if (latestRate) {
+        message += `${Number(latestRate.value).toFixed(2)} VES/USD`;
+      } else {
+        message += `Not available`;
+      }
+
+      return message;
     } catch (error) {
       this.logger.error(`Status check failed: ${error.message}`);
       throw new Error('Error getting status');

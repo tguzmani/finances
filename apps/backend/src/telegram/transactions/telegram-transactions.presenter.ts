@@ -3,7 +3,7 @@ import { Transaction } from '@prisma/client';
 
 @Injectable()
 export class TelegramTransactionsPresenter {
-  formatForReview(transaction: Transaction): string {
+  formatForReview(transaction: Transaction, exchangeRate?: number): string {
     const transactionDate = new Date(transaction.date);
 
     const dateString = transactionDate.toLocaleDateString('es-VE', {
@@ -23,16 +23,24 @@ export class TelegramTransactionsPresenter {
       timeZone: 'America/Caracas'
     });
 
+    let amountText = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
+
+    // Add USD conversion if exchangeRate is available
+    if (exchangeRate && transaction.currency === 'VES') {
+      const usdAmount = Number(transaction.amount) / exchangeRate;
+      amountText += `\nUSD ${usdAmount.toFixed(2)}`;
+    }
+
     return (
       `<b>Transaction Review</b>\n` +
       `\n` +
       `${date}\n` +
       `Time: ${time}\n` +
-      `Amount: ${transaction.currency} ${transaction.amount}`
+      amountText
     );
   }
 
-  formatRecentList(transactions: Transaction[]): string {
+  formatRecentList(transactions: Transaction[], exchangeRate?: number): string {
     if (transactions.length === 0) {
       return '📭 No expenses recorded.';
     }
@@ -57,14 +65,20 @@ export class TelegramTransactionsPresenter {
         timeZone: 'America/Caracas'
       });
 
+      // Format amounts with 2 decimals
+      const vesAmount = Number(t.amount).toFixed(2);
+      const usdAmount = exchangeRate && t.currency === 'VES'
+        ? ` (USD ${(Number(t.amount) / exchangeRate).toFixed(2)})`
+        : '';
+
       if (t.description) {
         message += `<b>${t.description}</b>\n`;
-        message += `   ${t.currency} ${t.amount}\n`;
+        message += `   ${t.currency} ${vesAmount}${usdAmount}\n`;
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
       } else {
-        message += `<b>${t.currency} ${t.amount}</b>\n`;
+        message += `<b>${t.currency} ${vesAmount}${usdAmount}</b>\n`;
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;

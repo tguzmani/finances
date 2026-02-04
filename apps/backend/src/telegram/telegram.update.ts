@@ -35,7 +35,7 @@ export class TelegramUpdate {
   async handleStatus(@Ctx() ctx: SessionContext) {
     try {
       const message = await this.telegramService.getStatus();
-      await ctx.reply(message);
+      await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
       await ctx.reply('An error occurred. Please try again later.');
     }
@@ -48,8 +48,8 @@ export class TelegramUpdate {
       '/status - View finance summary\n' +
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
-      '/review - Review pending expenses\n' +
-      '/register - Register reviewed exchanges\n' +
+      '/review - Review pending items\n' +
+      '/register - Register reviewed items\n' +
       '/sync - Sync data from Banesco and Binance\n' +
       '/help - Show this help'
     );
@@ -60,7 +60,10 @@ export class TelegramUpdate {
   async handleTransactions(@Ctx() ctx: SessionContext) {
     try {
       const message = await this.telegramService.transactions.getRecentTransactionsList();
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Show all', 'transactions_show_all')],
+      ]);
+      await ctx.reply(message, { parse_mode: 'HTML', ...keyboard });
     } catch (error) {
       await ctx.reply('Error getting transactions.');
     }
@@ -71,7 +74,10 @@ export class TelegramUpdate {
   async handleExchanges(@Ctx() ctx: SessionContext) {
     try {
       const message = await this.telegramService.exchanges.getRecentExchangesList();
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Show all', 'exchanges_show_all')],
+      ]);
+      await ctx.reply(message, { parse_mode: 'HTML', ...keyboard });
     } catch (error) {
       await ctx.reply('Error getting exchanges.');
     }
@@ -93,68 +99,27 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRegister(@Ctx() ctx: SessionContext) {
     try {
+      // Clear any previous session state
       ctx.session = {};
 
-      // Check if there are reviewed exchanges
-      const reviewedExchanges = await this.telegramService.exchanges.getReviewedExchanges();
+      // Get counts
+      const [reviewedTxCount, reviewedExCount] = await Promise.all([
+        this.telegramService.transactions.getReviewedTransactions().then(txs => txs.length),
+        this.telegramService.exchanges.getReviewedExchanges().then(exs => exs.length),
+      ]);
 
-      if (reviewedExchanges.length === 0) {
-        await ctx.reply('No reviewed exchanges to register.');
-        return;
-      }
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`💸 Transactions (${reviewedTxCount})`, 'register_start_transactions')],
+        [Markup.button.callback(`💱 Exchanges (${reviewedExCount})`, 'register_start_exchanges')],
+      ]);
 
-      // Calculate metrics
-      const metrics = this.telegramService.exchanges.calculateRegisterMetrics(reviewedExchanges);
-
-      // Store in session for Register action
-      ctx.session.registerExchangeIds = reviewedExchanges.map(e => e.id);
-      ctx.session.registerWavg = metrics.wavg;
-
-      // Format message
-      const message = this.telegramService.exchanges.formatRegisterSummary({
-        ...metrics,
-        count: reviewedExchanges.length,
-      });
-
-      // Create keyboard with copy buttons and action buttons
-      // Use raw inline_keyboard format for copy_text support
-      const keyboard = {
-        inline_keyboard: [
-          [
-            {
-              text: 'Copy Terminal List',
-              copy_text: { text: metrics.terminalList }
-            } as any
-          ],
-          [
-            {
-              text: `${metrics.wavg} VES/USDT`,
-              copy_text: { text: String(metrics.wavg) }
-            } as any
-          ],
-          [
-            {
-              text: `${metrics.totalAmount} USDT`,
-              copy_text: { text: metrics.sumFormula }
-            } as any
-          ],
-          [
-            {
-              text: '✅ Register',
-              callback_data: 'register_confirm'
-            },
-            {
-              text: '🚫 Exit',
-              callback_data: 'register_cancel'
-            }
-          ]
-        ]
-      };
-
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        reply_markup: keyboard as any,
-      });
+      await ctx.reply(
+        '<b>What would you like to register?</b>',
+        {
+          parse_mode: 'HTML',
+          ...keyboard,
+        }
+      );
     } catch (error) {
       this.logger.error(`Error in register command: ${error.message}`);
       await ctx.reply('Error starting registration process.');
@@ -381,7 +346,7 @@ export class TelegramUpdate {
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
         `Registered ${exchangeIds.length} exchanges\n` +
-        `Exchange rate saved: ${wavg} VES/USDT`,
+        `Exchange rate saved: ${wavg} VES/USD`,
         { parse_mode: 'HTML' }
       );
 
@@ -400,6 +365,261 @@ export class TelegramUpdate {
     try {
       await ctx.answerCbQuery('Cancelled');
       await ctx.reply('🚫 Registration cancelled.');
+      ctx.session = {};
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('register_start_transactions')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterStartTransactions(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      // Check if there are NEW transactions pending review
+      const hasNew = await this.telegramService.transactions.hasNewTransactions();
+
+      if (hasNew) {
+        const keyboard = Markup.inlineKeyboard([
+          [
+            Markup.button.callback('✅ Yes', 'register_tx_review_new'),
+            Markup.button.callback('❌ No', 'register_tx_continue'),
+          ],
+        ]);
+
+        await ctx.reply(
+          'There are still new transactions to be reviewed. Review them first?',
+          keyboard
+        );
+        return;
+      }
+
+      // No NEW transactions, proceed with registration
+      await this.startTransactionRegistration(ctx);
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error starting transaction registration.');
+    }
+  }
+
+  @Action('register_start_exchanges')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterStartExchanges(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      // Get reviewed exchanges
+      const reviewedExchanges = await this.telegramService.exchanges.getReviewedExchanges();
+
+      if (reviewedExchanges.length === 0) {
+        await ctx.reply('No reviewed exchanges to register.');
+        return;
+      }
+
+      // Calculate metrics
+      const metrics = this.telegramService.exchanges.calculateRegisterMetrics(reviewedExchanges);
+
+      // Store in session for Register action
+      ctx.session.registerExchangeIds = reviewedExchanges.map(e => e.id);
+      ctx.session.registerWavg = metrics.wavg;
+
+      // Format message
+      const message = this.telegramService.exchanges.formatRegisterSummary({
+        ...metrics,
+        count: reviewedExchanges.length,
+      });
+
+      // Create keyboard with copy buttons and action buttons
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: 'Copy Terminal List',
+              copy_text: { text: metrics.terminalList }
+            } as any
+          ],
+          [
+            {
+              text: `${metrics.wavg} VES/USD`,
+              copy_text: { text: String(metrics.wavg) }
+            } as any
+          ],
+          [
+            {
+              text: `${metrics.totalAmount} USD`,
+              copy_text: { text: metrics.sumFormula }
+            } as any
+          ],
+          [
+            {
+              text: '✅ Register',
+              callback_data: 'register_confirm'
+            },
+            {
+              text: '🚫 Exit',
+              callback_data: 'register_cancel'
+            }
+          ]
+        ]
+      };
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard as any,
+      });
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error starting exchange registration.');
+    }
+  }
+
+  @Action('transactions_show_all')
+  @UseGuards(TelegramAuthGuard)
+  async handleTransactionsShowAll(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      const message = await this.telegramService.transactions.getRecentTransactionsList(true);
+      await ctx.reply(message, { parse_mode: 'HTML' });
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error getting all transactions.');
+    }
+  }
+
+  @Action('exchanges_show_all')
+  @UseGuards(TelegramAuthGuard)
+  async handleExchangesShowAll(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      const message = await this.telegramService.exchanges.getRecentExchangesList(true);
+      await ctx.reply(message, { parse_mode: 'HTML' });
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error getting all exchanges.');
+    }
+  }
+
+  @Action('register_tx_review_new')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxReviewNew(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      ctx.session.reviewType = 'transactions';
+      await this.showNextTransaction(ctx);
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error starting review.');
+    }
+  }
+
+  @Action('register_tx_continue')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxContinue(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      await this.startTransactionRegistration(ctx);
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error starting registration.');
+    }
+  }
+
+  @Action('register_tx_next')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxNext(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      const currentIndex = ctx.session.registerTransactionIndex || 0;
+      const transactionIds = ctx.session.registerTransactionIds || [];
+      const exchangeRate = ctx.session.registerTransactionExchangeRate;
+
+      if (!exchangeRate || transactionIds.length === 0) {
+        await ctx.reply('Session expired. Please run /register_transactions again.');
+        return;
+      }
+
+      const nextIndex = currentIndex + 1;
+
+      if (nextIndex >= transactionIds.length) {
+        // Reached the end, show confirmation
+        const keyboard = Markup.inlineKeyboard([
+          [
+            Markup.button.callback('✅ Register', 'register_tx_confirm'),
+            Markup.button.callback('🚫 Cancel', 'register_tx_cancel'),
+          ],
+        ]);
+
+        await ctx.reply(
+          `✅ <b>Review Complete!</b>\n\n` +
+          `You have reviewed all ${transactionIds.length} transactions.\n` +
+          `Ready to register them?`,
+          {
+            parse_mode: 'HTML',
+            ...keyboard,
+          }
+        );
+        return;
+      }
+
+      // Update index
+      ctx.session.registerTransactionIndex = nextIndex;
+
+      // Get all transactions and find the one we need
+      const allTransactions = await this.transactionsService.findAll({});
+      const nextTransaction = allTransactions.find(t => t.id === transactionIds[nextIndex]);
+
+      if (!nextTransaction) {
+        await ctx.reply('Error loading next transaction.');
+        return;
+      }
+
+      await this.showTransactionForRegister(ctx, nextTransaction, exchangeRate);
+    } catch (error) {
+      this.logger.error(`Error showing next transaction: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error loading next transaction.');
+    }
+  }
+
+  @Action('register_tx_confirm')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxConfirm(@Ctx() ctx: SessionContext) {
+    try {
+      const transactionIds = ctx.session.registerTransactionIds;
+
+      if (!transactionIds || transactionIds.length === 0) {
+        await ctx.answerCbQuery('Session expired. Please run /register_transactions again.');
+        return;
+      }
+
+      await ctx.answerCbQuery('Registering transactions...');
+
+      // Perform registration
+      await this.telegramService.transactions.registerTransactions(transactionIds);
+
+      await ctx.reply(
+        `✅ <b>Registration Complete!</b>\n\n` +
+        `Registered ${transactionIds.length} transactions`,
+        { parse_mode: 'HTML' }
+      );
+
+      // Clear session
+      ctx.session = {};
+    } catch (error) {
+      this.logger.error(`Error confirming transaction registration: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error completing registration. Please try again.');
+    }
+  }
+
+  @Action('register_tx_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxCancel(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Cancelled');
+      await ctx.reply('🚫 Transaction registration cancelled.');
       ctx.session = {};
     } catch (error) {
       await ctx.answerCbQuery('Error');
@@ -537,7 +757,7 @@ export class TelegramUpdate {
       ctx.session.currentTransactionId = transaction.id;
       ctx.session.waitingForDescription = true;
 
-      const message = this.telegramService.transactions.formatTransactionForReview(transaction);
+      const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
       const keyboard = Markup.inlineKeyboard([
         [
@@ -598,6 +818,83 @@ export class TelegramUpdate {
     } catch (error) {
       this.logger.error(`Error showing next exchange: ${error.message}`);
       await ctx.reply('Error loading exchange.');
+    }
+  }
+
+  private async startTransactionRegistration(ctx: SessionContext) {
+    try {
+      const result = await this.telegramService.transactions.getRegistrationData();
+
+      if (!result.hasTransactions) {
+        await ctx.reply('No reviewed transactions to register.');
+        return;
+      }
+
+      if (!result.exchangeRate) {
+        await ctx.reply('Cannot register transactions: Exchange rate not available. Please register exchanges first.');
+        return;
+      }
+
+      // Store in session
+      ctx.session.registerTransactionIds = result.transactions.map(t => t.id);
+      ctx.session.registerTransactionIndex = 0;
+      ctx.session.registerTransactionExchangeRate = result.exchangeRate;
+
+      // Show first transaction
+      await this.showTransactionForRegister(ctx, result.transactions[0], result.exchangeRate);
+    } catch (error) {
+      this.logger.error(`Error starting transaction registration: ${error.message}`);
+      await ctx.reply('Error starting registration.');
+    }
+  }
+
+  private async showTransactionForRegister(ctx: SessionContext, transaction: any, exchangeRate: number) {
+    try {
+      const message = this.telegramService.transactions.formatTransactionForRegister(transaction, exchangeRate);
+
+      const vesAmount = Number(transaction.amount);
+      const usdAmount = (vesAmount / exchangeRate).toFixed(2);
+      const excelFormula = `=${vesAmount.toFixed(2)}/${exchangeRate.toFixed(2)}`;
+
+      const currentIndex = ctx.session.registerTransactionIndex || 0;
+      const totalCount = ctx.session.registerTransactionIds?.length || 0;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: 'Copy Description',
+              copy_text: { text: transaction.description || 'No description' }
+            } as any
+          ],
+          [
+            {
+              text: `${usdAmount} USD`,
+              copy_text: { text: excelFormula }
+            } as any
+          ],
+          [
+            {
+              text: `⏭️ Next (${currentIndex + 1}/${totalCount})`,
+              callback_data: 'register_tx_next'
+            }
+          ],
+          [
+            {
+              text: '🚫 Cancel',
+              callback_data: 'register_tx_cancel'
+            }
+          ]
+        ]
+      };
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard as any,
+      });
+    } catch (error) {
+      this.logger.error(`Error showing transaction for register: ${error.message}`);
+      await ctx.reply('Error displaying transaction.');
     }
   }
 }

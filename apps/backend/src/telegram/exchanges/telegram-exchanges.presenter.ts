@@ -38,9 +38,9 @@ export class TelegramExchangesPresenter {
     return (
       `<b>Exchange Review</b>\n` +
       `\n` +
-      `${icon} <b>${tradeType}: ${exchange.asset} ${exchange.amount}</b>\n` +
-      `→ ${exchange.fiatSymbol} ${exchange.fiatAmount}\n` +
-      `Rate: ${exchange.exchangeRate}\n` +
+      `${icon} <b>${tradeType}: ${exchange.asset} ${Number(exchange.amount).toFixed(2)}</b>\n` +
+      `→ ${exchange.fiatSymbol} ${Number(exchange.fiatAmount).toFixed(2)}\n` +
+      `Rate: ${Number(exchange.exchangeRate).toFixed(2)}\n` +
       `Order: ...${last4Digits}\n` +
       `${date}\n` +
       `Time: ${time}\n` +
@@ -65,9 +65,9 @@ export class TelegramExchangesPresenter {
         timeZone: 'America/Caracas'
       });
 
-      message += `${icon} <b>${e.asset} ${e.amount}</b>\n`;
-      message += `   → ${e.fiatSymbol} ${e.fiatAmount}\n`;
-      message += `   Rate: ${e.exchangeRate} | ${date}\n`;
+      message += `${icon} <b>${e.asset} ${Number(e.amount).toFixed(2)}</b>\n`;
+      message += `   → ${e.fiatSymbol} ${Number(e.fiatAmount).toFixed(2)}\n`;
+      message += `   Rate: ${Number(e.exchangeRate).toFixed(2)} | ${date}\n`;
       message += `   Status: ${statusLabel} | ${tradeTypeLabel}\n`;
       if (e.counterparty) {
         message += `   👤 ${e.counterparty}\n`;
@@ -83,8 +83,8 @@ export class TelegramExchangesPresenter {
       `<b>Register Exchanges</b>\n\n` +
       `📊 <b>Summary:</b>\n` +
       `Total exchanges: ${metrics.count}\n` +
-      `Total USDT: ${metrics.totalAmount}\n` +
-      `Weighted Avg Rate: ${metrics.wavg} VES/USDT\n\n` +
+      `Total USD: ${metrics.totalAmount}\n` +
+      `Weighted Avg Rate: ${metrics.wavg} VES/USD\n\n` +
       `Use the buttons below to copy data:`
     );
   }
