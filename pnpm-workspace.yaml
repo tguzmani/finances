@@ -1,0 +1,13 @@
+autoInstallPeers: true
+
+ignoredBuiltDependencies:
+  - '@swc/core'
+  - less
+  - unrs-resolver
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@parcel/watcher'
+  - '@prisma/engines'
+  - nx
+  - prisma
