@@ -5,6 +5,7 @@ import { Telegraf } from 'telegraf';
 import { NewTransactionsEvent } from '../../transactions/events/new-transactions.event';
 import { NewExchangesEvent } from '../../exchanges/events/new-exchanges.event';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { TelegramTransactionsPresenter } from '../transactions/telegram-transactions.presenter';
 
 @Injectable()
 export class TelegramNotificationListener {
@@ -14,6 +15,7 @@ export class TelegramNotificationListener {
   constructor(
     @InjectBot() private readonly bot: Telegraf,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly transactionsPresenter: TelegramTransactionsPresenter,
   ) {
     // Get chatId from environment variable
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
@@ -28,30 +30,40 @@ export class TelegramNotificationListener {
     if (!this.chatId) return;
 
     try {
-      const { transactions, totalAmount, currency } = event;
-      const count = transactions.length;
-      const plural = count > 1 ? 's' : '';
+      const { transactions } = event;
 
       // Get latest exchange rate for USD conversion
-      let usdAmount = '';
-      if (currency === 'VES') {
-        const latestRate = await this.exchangeRateService.findLatest();
-        if (latestRate) {
-          const exchangeRate = Number(latestRate.value);
-          const usd = totalAmount / exchangeRate;
-          usdAmount = ` (USD ${usd.toFixed(2)})`;
-        }
+      const latestRate = await this.exchangeRateService.findLatest();
+      const exchangeRate = latestRate ? Number(latestRate.value) : undefined;
+
+      // Send ONE message PER transaction
+      for (const transaction of transactions) {
+        // Format message with transaction details
+        const message = this.transactionsPresenter.formatForNotification(transaction, exchangeRate);
+
+        // Add inline keyboard with Name and Reject buttons
+        const keyboard = {
+          inline_keyboard: [
+            [
+              {
+                text: '✏️ Name',
+                callback_data: `notification_tx_name_${transaction.id}`
+              },
+              {
+                text: '❌ Reject',
+                callback_data: `notification_tx_reject_${transaction.id}`
+              }
+            ]
+          ]
+        };
+
+        await this.bot.telegram.sendMessage(this.chatId, message, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+
+        this.logger.log(`Sent notification for transaction ${transaction.id} to chat ${this.chatId}`);
       }
-
-      const message =
-        `💰 Got ${count} new transfer${plural} for ` +
-        `${currency} ${totalAmount.toFixed(2)}${usdAmount}`;
-
-      await this.bot.telegram.sendMessage(this.chatId, message, {
-        parse_mode: 'HTML',
-      });
-
-      this.logger.log(`Sent notification for ${count} new transactions to chat ${this.chatId}`);
     } catch (error) {
       this.logger.error(`Failed to send transaction notification: ${error.message}`);
     }

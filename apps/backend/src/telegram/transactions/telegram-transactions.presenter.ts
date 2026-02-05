@@ -101,12 +101,55 @@ export class TelegramTransactionsPresenter {
     return message;
   }
 
+  formatForNotification(transaction: Transaction, exchangeRate?: number): string {
+    const transactionDate = new Date(transaction.date);
+
+    const dateString = transactionDate.toLocaleDateString('es-VE', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC'
+    });
+
+    const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
+
+    const time = transactionDate.toLocaleTimeString('es-VE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    });
+
+    const vesAmount = Number(transaction.amount).toFixed(2);
+    let usdAmount = '';
+
+    if (exchangeRate && transaction.currency === 'VES') {
+      const usd = (Number(transaction.amount) / exchangeRate).toFixed(2);
+      usdAmount = ` (USD ${usd})`;
+    }
+
+    const descriptionLine = transaction.description
+      ? `\n<b>${transaction.description}</b>`
+      : '';
+
+    const platformLabel = this.getPlatformLabel(transaction.platform);
+
+    return (
+      `💰 <b>New Transaction</b>${descriptionLine}\n\n` +
+      `${transaction.currency} ${vesAmount}${usdAmount}\n` +
+      `${date}\n` +
+      `Time: ${time}\n` +
+      `Platform: ${platformLabel}`
+    );
+  }
+
   private getStatusIcon(status: string): string {
     const icons: Record<string, string> = {
       'NEW': '🆕',
       'REJECTED': '❌',
       'REGISTERED': '✅',
-      'REVIEWED': '',
+      'REVIEWED': '✏️',
     };
     return icons[status] || '';
   }
@@ -122,13 +165,20 @@ export class TelegramTransactionsPresenter {
   }
 
   private getPlatformLabel(platform: string): string {
-    return platform === 'BANESCO' ? 'Banesco' : platform;
+    const labels: Record<string, string> = {
+      'BANESCO': 'Banesco',
+      'BANK_OF_AMERICA': 'Bank of America',
+      'BINANCE': 'Binance',
+    };
+    return labels[platform] || platform;
   }
 
   private getMethodLabel(method: string): string {
     const labels: Record<string, string> = {
       'DEBIT_CARD': 'Debit Card',
       'PAGO_MOVIL': 'Pago Móvil',
+      'ZELLE': 'Zelle',
+      'CREDIT_CARD': 'Credit Card',
     };
     return labels[method] || method;
   }

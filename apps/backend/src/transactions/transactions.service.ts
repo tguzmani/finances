@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TransactionsEmailService } from './transactions-email.service';
-import { BanescoParser } from './banesco.parser';
+import { EmailServiceRegistry } from './email/email-service.registry';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
-import { TransactionStatus, TransactionPlatform, PaymentMethod, TransactionType } from './transaction.types';
+import { TransactionStatus, TransactionType } from './transaction.types';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -13,8 +12,7 @@ export class TransactionsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailService: TransactionsEmailService,
-    private readonly banescoParser: BanescoParser
+    private readonly emailRegistry: EmailServiceRegistry
   ) { }
 
   async findAll(query: QueryTransactionsDto) {
@@ -64,50 +62,60 @@ export class TransactionsService {
     });
   }
 
-  async syncFromEmail(limit = 30) {
-    this.logger.log(`Starting email sync with limit: ${limit}`);
+  async syncFromEmail(limitPerBank = 30) {
+    this.logger.log(`Starting email sync with limit ${limitPerBank} per bank`);
 
-    const emails = await this.emailService.fetchEmails(limit);
-    let created = 0;
-    let skipped = 0;
+    const services = this.emailRegistry.getAllServices();
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    let totalEmails = 0;
 
-    for (const email of emails) {
-      const transactions = this.banescoParser.parse(email.subject, email.body);
+    for (const service of services) {
+      const platform = service.getBankPlatform();
+      this.logger.log(`Syncing ${platform}...`);
 
-      for (const tx of transactions) {
-        try {
-          await this.prisma.transaction.create({
-            data: {
-              date: tx.date,
-              amount: tx.amount,
-              currency: tx.currency,
-              transactionId: tx.transactionId,
-              platform: TransactionPlatform.BANESCO,
-              method: PaymentMethod.DEBIT_CARD,
-            },
-          });
-          created++;
-        } catch (err) {
-          // Duplicate transactionId - skip
-          if (err.code === 'P2002') {
-            skipped++;
-          } else {
-            this.logger.error(
-              `Failed to create transaction: ${err.message}`
-            );
+      try {
+        const emails = await service.fetchEmails(limitPerBank);
+        const transactions = service.parseEmails(emails);
+
+        totalEmails += emails.length;
+
+        for (const tx of transactions) {
+          try {
+            await this.prisma.transaction.create({
+              data: {
+                date: tx.date,
+                amount: tx.amount,
+                currency: tx.currency,
+                transactionId: tx.transactionId,
+                platform: tx.platform,
+                method: tx.method,
+                type: TransactionType.EXPENSE,
+                status: TransactionStatus.NEW,
+              },
+            });
+            totalCreated++;
+          } catch (err) {
+            if (err.code === 'P2002') {
+              totalSkipped++;
+            } else {
+              this.logger.error(`Failed to create transaction: ${err.message}`);
+            }
           }
         }
+      } catch (err) {
+        this.logger.error(`Failed to sync ${platform}: ${err.message}`);
       }
     }
 
     this.logger.log(
-      `Sync complete: ${created} created, ${skipped} skipped (duplicates)`
+      `Sync complete: ${totalCreated} created, ${totalSkipped} skipped from ${totalEmails} emails`
     );
 
     return {
-      emailsProcessed: emails.length,
-      transactionsCreated: created,
-      transactionsSkipped: skipped,
+      emailsProcessed: totalEmails,
+      transactionsCreated: totalCreated,
+      transactionsSkipped: totalSkipped,
     };
   }
 
@@ -124,8 +132,8 @@ export class TransactionsService {
           amount: parsed.amount,
           currency: parsed.currency,
           transactionId: parsed.transactionId,
-          platform: TransactionPlatform.BANESCO,
-          method: PaymentMethod.PAGO_MOVIL,
+          platform: 'BANESCO',
+          method: 'PAGO_MOVIL',
           type: TransactionType.EXPENSE,
           status: TransactionStatus.NEW,
         },

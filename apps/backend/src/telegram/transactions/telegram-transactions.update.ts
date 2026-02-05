@@ -148,6 +148,81 @@ export class TelegramTransactionsUpdate {
     }
   }
 
+  @Action(/^notification_tx_name_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleNotificationName(@Ctx() ctx: SessionContext) {
+    try {
+      // Extract transaction ID from callback data
+      if (!('data' in ctx.callbackQuery)) {
+        await ctx.answerCbQuery('Invalid callback');
+        return;
+      }
+      const match = ctx.callbackQuery.data.match(/^notification_tx_name_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      await ctx.answerCbQuery();
+
+      // Verify transaction exists
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction) {
+        await ctx.reply('❌ Transaction not found');
+        return;
+      }
+
+      // Set session state for text input
+      ctx.session.currentTransactionId = transactionId;
+      ctx.session.waitingForDescription = true;
+      ctx.session.reviewSingleItem = true; // Important: close session after
+
+      // Ask for description
+      await ctx.reply(
+        '✏️ Please type a description for this transaction:',
+        { reply_markup: { force_reply: true } }
+      );
+    } catch (error) {
+      this.logger.error(`Error handling notification name: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('❌ Error processing action');
+    }
+  }
+
+  @Action(/^notification_tx_reject_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleNotificationReject(@Ctx() ctx: SessionContext) {
+    try {
+      // Extract transaction ID from callback data
+      if (!('data' in ctx.callbackQuery)) {
+        await ctx.answerCbQuery('Invalid callback');
+        return;
+      }
+      const match = ctx.callbackQuery.data.match(/^notification_tx_reject_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      await ctx.answerCbQuery('Rejecting transaction...');
+
+      // Verify transaction exists
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction) {
+        await ctx.reply('❌ Transaction not found');
+        return;
+      }
+
+      // Update status to REJECTED
+      await this.transactionsService.update(transactionId, {
+        status: TransactionStatus.REJECTED,
+      });
+
+      await ctx.reply('❌ Transaction rejected');
+
+      // Clear session (single item, no continuation)
+      this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error handling notification reject: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('❌ Error processing action');
+    }
+  }
+
   @Action('transactions_show_all')
   @UseGuards(TelegramAuthGuard)
   async handleTransactionsShowAll(@Ctx() ctx: SessionContext) {

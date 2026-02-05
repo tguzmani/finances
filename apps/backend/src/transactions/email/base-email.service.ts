@@ -1,24 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
+import { RawEmail, BankEmailConfig } from './email.interfaces';
 
-export interface RawEmail {
-  subject: string;
-  body: string;
-  date: Date;
-}
+export abstract class BaseEmailService {
+  protected readonly logger: Logger;
 
-@Injectable()
-export class TransactionsEmailService {
-  private readonly logger = new Logger(TransactionsEmailService.name);
+  constructor(loggerContext: string) {
+    this.logger = new Logger(loggerContext);
+  }
 
-  private readonly BANESCO_SENDER = 'Notificacion@banesco.com';
-  private readonly VALID_SUBJECTS = [
-    'Notificación Banesco',
-    'Resumen de Operaciones con TDD Banesco',
-  ];
+  protected abstract getBankConfig(): BankEmailConfig;
 
-  private createClient(): ImapFlow {
+  protected createClient(): ImapFlow {
     return new ImapFlow({
       host: process.env.IMAP_HOST || 'imap.gmail.com',
       port: parseInt(process.env.IMAP_PORT || '993', 10),
@@ -32,28 +26,26 @@ export class TransactionsEmailService {
   }
 
   async fetchEmails(limit = 30): Promise<RawEmail[]> {
+    const config = this.getBankConfig();
     const client = this.createClient();
     const emails: RawEmail[] = [];
 
     try {
       await client.connect();
-      this.logger.log('Connected to IMAP server');
+      this.logger.log(`Connected to IMAP for ${config.sender}`);
 
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        // Search for emails from Banesco
         const searchResults = await client.search({
-          from: this.BANESCO_SENDER,
+          from: config.sender,
         });
 
-        // Handle case where search returns false or empty
         if (!searchResults || !Array.isArray(searchResults) || searchResults.length === 0) {
-          this.logger.log('No emails found from Banesco');
+          this.logger.log(`No emails found from ${config.sender}`);
           return [];
         }
 
-        // Get the most recent emails (up to limit)
         const uids = searchResults.slice(-limit).reverse();
 
         for (const uid of uids) {
@@ -64,7 +56,7 @@ export class TransactionsEmailService {
 
             if (message && typeof message !== 'boolean' && message.source) {
               const parsed = await simpleParser(message.source);
-              const email = this.extractEmail(parsed);
+              const email = this.extractEmail(parsed, config);
 
               if (email) {
                 emails.push(email);
@@ -84,16 +76,15 @@ export class TransactionsEmailService {
       await client.logout();
     }
 
-    this.logger.log(`Fetched ${emails.length} valid emails`);
+    this.logger.log(`Fetched ${emails.length} valid emails from ${config.sender}`);
     return emails;
   }
 
-  private extractEmail(parsed: ParsedMail): RawEmail | null {
+  protected extractEmail(parsed: ParsedMail, config: BankEmailConfig): RawEmail | null {
     const subject = parsed.subject || '';
 
-    // Check if subject matches valid Banesco subjects
-    const isValidSubject = this.VALID_SUBJECTS.some((valid) =>
-      subject.includes(valid)
+    const isValidSubject = config.subjectPatterns.some((pattern) =>
+      subject.includes(pattern) || subject.startsWith(pattern)
     );
 
     if (!isValidSubject) {
@@ -107,6 +98,7 @@ export class TransactionsEmailService {
       subject,
       body,
       date,
+      from: parsed.from?.text,
     };
   }
 }

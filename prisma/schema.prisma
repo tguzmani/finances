@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
@@ -11,6 +5,53 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+model Transaction {
+  id            Int                 @id @default(autoincrement())
+  date          DateTime
+  amount        Decimal             @db.Decimal(10, 2)
+  currency      String              @db.VarChar(3)
+  transactionId String              @unique @map("transaction_id")
+  status        TransactionStatus   @default(NEW)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  type          TransactionType     @default(EXPENSE)
+  description   String?
+  platform      TransactionPlatform
+  method        PaymentMethod?
+
+  @@map("transactions")
+}
+
+model Exchange {
+  id               Int            @id @default(autoincrement())
+  orderNumber      String         @unique @map("order_number")
+  asset            String         @db.VarChar(10)
+  amount           Decimal        @db.Decimal(18, 8)
+  amountGross      Decimal        @map("amount_gross") @db.Decimal(18, 8)
+  fiatSymbol       String         @map("fiat_symbol") @db.VarChar(3)
+  fiatAmount       Decimal        @map("fiat_amount") @db.Decimal(18, 2)
+  exchangeRate     Decimal        @map("exchange_rate") @db.Decimal(18, 4)
+  counterparty     String?        @db.VarChar(255)
+  tradeType        TradeType      @map("trade_type")
+  status           ExchangeStatus @default(COMPLETED)
+  binanceCreatedAt DateTime       @map("binance_created_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@index([binanceCreatedAt])
+  @@index([status])
+  @@map("exchanges")
+}
+
+model ExchangeRate {
+  id    Int      @id @default(autoincrement())
+  date  DateTime @default(now())
+  value Decimal  @db.Decimal(10, 2)
+
+  @@index([date])
+  @@map("exchange_rates")
 }
 
 enum TransactionStatus {
@@ -28,11 +69,14 @@ enum TransactionType {
 enum TransactionPlatform {
   BANESCO
   BINANCE
+  BANK_OF_AMERICA
 }
 
 enum PaymentMethod {
   DEBIT_CARD
   PAGO_MOVIL
+  ZELLE
+  CREDIT_CARD
 }
 
 enum ExchangeStatus {
@@ -49,56 +93,4 @@ enum ExchangeStatus {
 enum TradeType {
   BUY
   SELL
-}
-
-model Transaction {
-  id            Int                   @id @default(autoincrement())
-  date          DateTime
-  amount        Decimal               @db.Decimal(10, 2)
-  currency      String                @db.VarChar(3)
-  transactionId String                @unique @map("transaction_id")
-  type          TransactionType       @default(EXPENSE)
-  status        TransactionStatus     @default(NEW)
-  platform      TransactionPlatform
-  method        PaymentMethod?
-  description   String?
-
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
-
-  @@map("transactions")
-}
-
-model Exchange {
-  id                Int             @id @default(autoincrement())
-
-  // Binance metadata
-  orderNumber       String          @unique @map("order_number")
-  asset             String          @db.VarChar(10)
-  amount            Decimal         @db.Decimal(18, 8)
-  amountGross       Decimal         @map("amount_gross") @db.Decimal(18, 8)
-  fiatSymbol        String          @map("fiat_symbol") @db.VarChar(3)
-  fiatAmount        Decimal         @map("fiat_amount") @db.Decimal(18, 2)
-  exchangeRate      Decimal         @map("exchange_rate") @db.Decimal(18, 4)
-  counterparty      String?         @db.VarChar(255)
-  tradeType         TradeType       @map("trade_type")
-  status            ExchangeStatus  @default(COMPLETED)
-
-  // Timestamps
-  binanceCreatedAt  DateTime        @map("binance_created_at")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-
-  @@map("exchanges")
-  @@index([binanceCreatedAt])
-  @@index([status])
-}
-
-model ExchangeRate {
-  id        Int      @id @default(autoincrement())
-  date      DateTime @default(now())
-  value     Decimal  @db.Decimal(10, 2)
-
-  @@map("exchange_rates")
-  @@index([date])
 }
