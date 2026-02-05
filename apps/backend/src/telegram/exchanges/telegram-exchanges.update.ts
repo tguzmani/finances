@@ -306,9 +306,12 @@ export class TelegramExchangesUpdate {
         ]);
       }
 
-      buttons.push([
-        Markup.button.callback('🚫 Stop', 'review_cancel'),
-      ]);
+      // Only show Stop button when reviewing multiple items (not in review_one mode)
+      if (!ctx.session.reviewSingleItem) {
+        buttons.push([
+          Markup.button.callback('🚫 Stop', 'review_cancel'),
+        ]);
+      }
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -356,16 +359,21 @@ export class TelegramExchangesUpdate {
 
       const message = this.telegramService.exchanges.formatExchangeForReview(exchange);
 
-      const keyboard = Markup.inlineKeyboard([
+      const buttons = [
         [
           Markup.button.callback('✅ Accept', 'review_exchange_accept'),
           Markup.button.callback('❌ Reject', 'review_exchange_reject'),
         ],
-        [
-          Markup.button.callback('⏭️ Skip', 'review_exchange_skip'),
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
-        ],
-      ]);
+      ];
+
+      // Add Skip and optionally Stop buttons
+      const lastRow = [Markup.button.callback('⏭️ Skip', 'review_exchange_skip')];
+      if (!ctx.session.reviewSingleItem) {
+        lastRow.push(Markup.button.callback('🚫 Stop', 'review_cancel'));
+      }
+      buttons.push(lastRow);
+
+      const keyboard = Markup.inlineKeyboard(buttons);
 
       await ctx.reply(
         `<b>Exchange ID: ${id}</b>\n\n` + message,
@@ -436,9 +444,12 @@ export class TelegramExchangesUpdate {
         ]);
       }
 
-      buttons.push([
-        Markup.button.callback('🚫 Stop', 'review_cancel'),
-      ]);
+      // Only show Stop button when reviewing multiple items (not in review_one mode)
+      if (!ctx.session.reviewSingleItem) {
+        buttons.push([
+          Markup.button.callback('🚫 Stop', 'review_cancel'),
+        ]);
+      }
 
       const keyboard = Markup.inlineKeyboard(buttons);
 

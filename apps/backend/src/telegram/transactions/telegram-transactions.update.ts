@@ -616,15 +616,20 @@ export class TelegramTransactionsUpdate {
 
       const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
-      const keyboard = Markup.inlineKeyboard([
-        [
-          Markup.button.callback('⏭️ Skip', 'review_skip'),
-          Markup.button.callback('❌ Reject', 'review_reject'),
-        ],
-        [
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
-        ],
+      const buttons = [];
+      buttons.push([
+        Markup.button.callback('⏭️ Skip', 'review_skip'),
+        Markup.button.callback('❌ Reject', 'review_reject'),
       ]);
+
+      // Don't show Stop button for single item review
+      if (!ctx.session.reviewSingleItem) {
+        buttons.push([
+          Markup.button.callback('🚫 Stop', 'review_cancel'),
+        ]);
+      }
+
+      const keyboard = Markup.inlineKeyboard(buttons);
 
       await ctx.reply(
         `<b>Transaction ID: ${id}</b>\n\n` +
@@ -695,9 +700,12 @@ export class TelegramTransactionsUpdate {
         ]);
       }
 
-      buttons.push([
-        Markup.button.callback('🚫 Stop', 'review_cancel'),
-      ]);
+      // Only show Stop button when reviewing multiple items (not in review_one mode)
+      if (!ctx.session.reviewSingleItem) {
+        buttons.push([
+          Markup.button.callback('🚫 Stop', 'review_cancel'),
+        ]);
+      }
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
