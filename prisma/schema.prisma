@@ -7,19 +7,33 @@ datasource db {
   provider = "postgresql"
 }
 
+model TransactionGroup {
+  id           Int                       @id @default(autoincrement())
+  description  String
+  status       TransactionGroupStatus    @default(NEW)
+  createdAt    DateTime                  @default(now()) @map("created_at")
+  updatedAt    DateTime                  @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+
+  @@map("transaction_groups")
+}
+
 model Transaction {
-  id            Int                 @id @default(autoincrement())
+  id            Int                  @id @default(autoincrement())
   date          DateTime
-  amount        Decimal             @db.Decimal(10, 2)
-  currency      String              @db.VarChar(10)
-  transactionId String              @unique @map("transaction_id")
-  status        TransactionStatus   @default(NEW)
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt @map("updated_at")
-  type          TransactionType     @default(EXPENSE)
+  amount        Decimal              @db.Decimal(10, 2)
+  currency      String               @db.VarChar(10)
+  transactionId String               @unique @map("transaction_id")
+  status        TransactionStatus    @default(NEW)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  type          TransactionType      @default(EXPENSE)
   description   String?
   platform      TransactionPlatform
   method        PaymentMethod?
+  groupId       Int?                 @map("group_id")
+  group         TransactionGroup?    @relation(fields: [groupId], references: [id])
 
   @@map("transactions")
 }
@@ -59,6 +73,11 @@ enum TransactionStatus {
   REVIEWED
   REGISTERED
   REJECTED
+}
+
+enum TransactionGroupStatus {
+  NEW
+  REGISTERED
 }
 
 enum TransactionType {

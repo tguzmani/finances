@@ -42,6 +42,13 @@ export interface ReviewSession {
   manualTransactionCurrency?: string;
   manualTransactionMethod?: string;
   manualTransactionAmount?: number;
+  // Transaction grouping flow
+  waitingForGroupDescription?: boolean;
+  pendingGroupTransactionId?: number;
+  currentGroupAction?: 'creating' | 'adding';
+  // Registration with groups
+  registerTransactionGroupIds?: number[];
+  lastRegisteredGroupIds?: number[];
 }
 
 export interface SessionContext extends Context {
@@ -53,6 +60,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'status', description: 'View finance summary' },
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
+  { command: 'groups', description: 'View unregistered groups' },
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },

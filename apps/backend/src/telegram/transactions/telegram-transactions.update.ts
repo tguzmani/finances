@@ -1,6 +1,7 @@
 import { Update, Ctx, Command, Action, On } from 'nestjs-telegraf';
 import { Markup } from 'telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
+import { Transaction, TransactionGroup } from '@prisma/client';
 import { TelegramService } from '../telegram.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { SessionContext } from '../telegram.types';
@@ -11,6 +12,9 @@ import { PagoMovilParser } from '../../transactions/pago-movil.parser';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
+import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
+import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
+import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -26,6 +30,8 @@ export class TelegramTransactionsUpdate {
     private readonly baseHandler: TelegramBaseHandler,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
+    private readonly transactionGroupsService: TransactionGroupsService,
+    private readonly groupsPresenter: TelegramGroupsPresenter,
   ) { }
 
   @Command('transactions')
@@ -89,13 +95,33 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
+      // Check if transaction is in a group
+      const transaction = await this.transactionsService.findOne(transactionId);
+      let ungroupedMessage = '';
+
+      if (transaction?.groupId) {
+        const group = await this.transactionGroupsService.findOne(transaction.groupId);
+        const memberCount = await this.transactionGroupsService.getGroupMemberCount(transaction.groupId);
+
+        // Remove from group
+        await this.transactionGroupsService.removeTransactionFromGroup(transactionId);
+
+        ungroupedMessage = `\n\n🔗 Removed from group: "${group.description}"`;
+
+        // If group now has only 1 member, delete the group
+        if (memberCount === 2) {
+          await this.transactionGroupsService.delete(group.id);
+          ungroupedMessage += '\n⚠️ Group deleted (only 1 transaction remaining).';
+        }
+      }
+
       // Update transaction status to REJECTED
       await this.transactionsService.update(transactionId, {
         status: TransactionStatus.REJECTED,
       });
 
       await ctx.answerCbQuery('Transaction rejected');
-      await ctx.reply('❌ Transaction rejected');
+      await ctx.reply(`❌ Transaction rejected${ungroupedMessage}`);
 
       // If single item review, end the flow. Otherwise show next
       if (ctx.session.reviewSingleItem) {
@@ -299,20 +325,33 @@ export class TelegramTransactionsUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRegisterTxConfirm(@Ctx() ctx: SessionContext) {
     try {
-      const transactionIds = ctx.session.registerTransactionIds;
+      const transactionIds = ctx.session.registerTransactionIds || [];
+      const groupIds = ctx.session.registerTransactionGroupIds || [];
 
-      if (!transactionIds || transactionIds.length === 0) {
-        await ctx.answerCbQuery('Session expired. Please run /register_transactions again.');
+      if (transactionIds.length === 0 && groupIds.length === 0) {
+        await ctx.answerCbQuery('Session expired. Please run /register again.');
         return;
       }
 
-      await ctx.answerCbQuery('Registering transactions...');
+      await ctx.answerCbQuery('Registering...');
 
-      // Perform registration
-      await this.telegramService.transactions.registerTransactions(transactionIds);
+      // Register singles
+      if (transactionIds.length > 0) {
+        await this.telegramService.transactions.registerTransactions(transactionIds);
+      }
+
+      // Register groups (NEW → REGISTERED)
+      if (groupIds.length > 0) {
+        await Promise.all(
+          groupIds.map(id =>
+            this.transactionGroupsService.update(id, { status: TransactionGroupStatus.REGISTERED })
+          )
+        );
+      }
 
       // Store IDs in session for undo
       ctx.session.lastRegisteredTransactionIds = transactionIds;
+      ctx.session.lastRegisteredGroupIds = groupIds;
 
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('↩️ Undo', 'register_tx_undo')],
@@ -320,7 +359,9 @@ export class TelegramTransactionsUpdate {
 
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
-        `Registered ${transactionIds.length} transactions`,
+        `Registered:\n` +
+        `- ${transactionIds.length} transaction(s)\n` +
+        `- ${groupIds.length} group(s)`,
         { parse_mode: 'HTML', ...keyboard }
       );
 
@@ -337,9 +378,10 @@ export class TelegramTransactionsUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRegisterTxUndo(@Ctx() ctx: SessionContext) {
     try {
-      const transactionIds = ctx.session.lastRegisteredTransactionIds;
+      const transactionIds = ctx.session.lastRegisteredTransactionIds || [];
+      const groupIds = ctx.session.lastRegisteredGroupIds || [];
 
-      if (!transactionIds || transactionIds.length === 0) {
+      if (transactionIds.length === 0 && groupIds.length === 0) {
         await ctx.answerCbQuery('Nothing to undo.');
         return;
       }
@@ -347,17 +389,30 @@ export class TelegramTransactionsUpdate {
       await ctx.answerCbQuery('Undoing registration...');
 
       // Revert transactions back to REVIEWED status
-      await Promise.all(
-        transactionIds.map(id =>
-          this.transactionsService.update(id, {
-            status: TransactionStatus.REVIEWED,
-          })
-        )
-      );
+      if (transactionIds.length > 0) {
+        await Promise.all(
+          transactionIds.map(id =>
+            this.transactionsService.update(id, {
+              status: TransactionStatus.REVIEWED,
+            })
+          )
+        );
+      }
+
+      // Revert groups back to NEW status
+      if (groupIds.length > 0) {
+        await Promise.all(
+          groupIds.map(id =>
+            this.transactionGroupsService.update(id, { status: TransactionGroupStatus.NEW })
+          )
+        );
+      }
 
       await ctx.reply(
         `↩️ <b>Registration Undone!</b>\n\n` +
-        `${transactionIds.length} transactions reverted to REVIEWED status`,
+        `Reverted:\n` +
+        `- ${transactionIds.length} transaction(s) to REVIEWED\n` +
+        `- ${groupIds.length} group(s) to NEW`,
         { parse_mode: 'HTML' }
       );
 
@@ -367,6 +422,207 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error undoing transaction registration: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error undoing registration. Please try again.');
+    }
+  }
+
+  @Action('group_transaction')
+  @UseGuards(TelegramAuthGuard)
+  async handleGroupTransaction(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      const currentTxId = ctx.session.currentTransactionId;
+
+      if (!currentTxId) {
+        await ctx.reply('⚠️ No active transaction to group.');
+        return;
+      }
+
+      // Get NEW and REVIEWED transactions, exclude current, exclude already grouped
+      const transactions = await this.transactionsService.findAll({});
+      const available = transactions.filter(t =>
+        (t.status === 'NEW' || t.status === 'REVIEWED') &&
+        t.id !== currentTxId &&
+        t.groupId === null
+      );
+
+      if (available.length === 0) {
+        await ctx.reply('No other transactions available for grouping.');
+        return;
+      }
+
+      // Build message and buttons
+      let message = '<b>Select transaction to group with:</b>\n\n';
+      const buttons = [];
+
+      for (const tx of available) {
+        const date = new Date(tx.date).toLocaleDateString('es-VE', { timeZone: 'UTC' });
+        const amount = Number(tx.amount).toFixed(2);
+        const desc = tx.description || 'No description';
+
+        message += `ID: ${tx.id} - ${desc} - ${date}. ${amount} ${tx.currency}\n`;
+        buttons.push([
+          Markup.button.callback(`ID: ${tx.id}`, `group_select_${tx.id}`)
+        ]);
+      }
+
+      buttons.push([Markup.button.callback('❌ Cancel', 'group_cancel')]);
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(buttons),
+      });
+    } catch (error) {
+      this.logger.error(`Error handling group transaction: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error loading transactions for grouping.');
+    }
+  }
+
+  @Action(/^group_select_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleGroupSelect(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^group_select_(\d+)$/);
+      if (!match) {
+        return;
+      }
+
+      const tx1Id = parseInt(match[1]); // Selected from list
+      const tx2Id = ctx.session.currentTransactionId; // Current transaction
+
+      if (!tx2Id) {
+        await ctx.reply('⚠️ No active transaction.');
+        return;
+      }
+
+      const [tx1, tx2] = await Promise.all([
+        this.transactionsService.findOne(tx1Id),
+        this.transactionsService.findOne(tx2Id),
+      ]);
+
+      if (!tx1 || !tx2) {
+        await ctx.reply('❌ Transaction not found.');
+        return;
+      }
+
+      // Scenario 1: Both have NO group - create new
+      if (!tx1.groupId && !tx2.groupId) {
+        ctx.session.waitingForGroupDescription = true;
+        ctx.session.pendingGroupTransactionId = tx1Id;
+
+        await ctx.reply('📝 Please type a description for this new group:');
+        return;
+      }
+
+      // Scenario 2: tx1 HAS group, tx2 has NO group - add tx2 to group
+      if (tx1.groupId && !tx2.groupId) {
+        await this.transactionGroupsService.addTransactionToGroup(tx2Id, tx1.groupId);
+
+        const group = await this.transactionGroupsService.findOne(tx1.groupId);
+        const count = await this.transactionGroupsService.getGroupMemberCount(tx1.groupId);
+
+        await ctx.reply(
+          `✅ Transaction added to group: "${group.description}"\n` +
+          `Group now contains ${count} transactions.`
+        );
+
+        // Continue review
+        if (ctx.session.reviewSingleItem) {
+          this.baseHandler.clearSession(ctx);
+        } else {
+          await this.showNextTransaction(ctx);
+        }
+        return;
+      }
+
+      // Scenario 3: tx2 already HAS group - error
+      if (tx2.groupId) {
+        const group = await this.transactionGroupsService.findOne(tx2.groupId);
+        await ctx.reply(
+          `⚠️ Current transaction is already in group: "${group.description}"\n` +
+          `Please ungroup it first.`
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error handling group select: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error processing group selection.');
+    }
+  }
+
+  @Action('group_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handleGroupCancel(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Cancelled');
+      await ctx.reply('❌ Grouping cancelled.');
+
+      // Continue review
+      if (ctx.session.reviewSingleItem) {
+        this.baseHandler.clearSession(ctx);
+      } else {
+        await this.showNextTransaction(ctx);
+      }
+    } catch (error) {
+      this.logger.error(`Error handling group cancel: ${error.message}`);
+    }
+  }
+
+  @Action('ungroup_transaction')
+  @UseGuards(TelegramAuthGuard)
+  async handleUngroupTransaction(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      const txId = ctx.session.currentTransactionId;
+
+      if (!txId) {
+        await ctx.reply('⚠️ No active transaction.');
+        return;
+      }
+
+      const transaction = await this.transactionsService.findOne(txId);
+
+      if (!transaction?.groupId) {
+        await ctx.reply('Transaction is not in a group.');
+        return;
+      }
+
+      const group = await this.transactionGroupsService.findOne(transaction.groupId);
+      const memberCount = await this.transactionGroupsService.getGroupMemberCount(transaction.groupId);
+
+      // Remove from group
+      await this.transactionGroupsService.removeTransactionFromGroup(txId);
+
+      let message = `✅ Transaction removed from group: "${group.description}"`;
+
+      // If group now has only 1 member, delete the group
+      if (memberCount === 2) {
+        await this.transactionGroupsService.delete(group.id);
+        message += '\n\n⚠️ Group deleted (only 1 transaction remaining).';
+      } else {
+        message += `\n\nGroup now has ${memberCount - 1} transactions.`;
+      }
+
+      await ctx.reply(message);
+
+      // Continue review
+      if (ctx.session.reviewSingleItem) {
+        this.baseHandler.clearSession(ctx);
+      } else {
+        await this.showNextTransaction(ctx);
+      }
+    } catch (error) {
+      this.logger.error(`Error ungrouping transaction: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error ungrouping transaction.');
     }
   }
 
@@ -394,6 +650,50 @@ export class TelegramTransactionsUpdate {
     if (ctx.session.reviewOneMode === 'waiting_for_tx_id') {
       await this.handleReviewOneTransactionId(ctx);
       return;
+    }
+
+    // Handle group description input
+    if (ctx.session.waitingForGroupDescription) {
+      try {
+        const description = ctx.message.text;
+        const tx1Id = ctx.session.pendingGroupTransactionId;
+        const tx2Id = ctx.session.currentTransactionId;
+
+        if (!tx1Id || !tx2Id) {
+          await ctx.reply('⚠️ Session error. Please try again.');
+          ctx.session.waitingForGroupDescription = false;
+          ctx.session.pendingGroupTransactionId = undefined;
+          return;
+        }
+
+        // Create group with both transactions
+        await this.transactionGroupsService.createGroupWithTransactions(
+          description,
+          [tx1Id, tx2Id]
+        );
+
+        await ctx.reply(
+          `✅ Group created: "${description}"\n` +
+          `Transactions ${tx1Id} and ${tx2Id} are now grouped.`
+        );
+
+        // Clear flags and continue
+        ctx.session.waitingForGroupDescription = false;
+        ctx.session.pendingGroupTransactionId = undefined;
+
+        if (ctx.session.reviewSingleItem) {
+          this.baseHandler.clearSession(ctx);
+        } else {
+          await this.showNextTransaction(ctx);
+        }
+        return;
+      } catch (error) {
+        this.logger.error(`Error creating group: ${error.message}`);
+        await ctx.reply('Error creating group. Please try again.');
+        ctx.session.waitingForGroupDescription = false;
+        ctx.session.pendingGroupTransactionId = undefined;
+        return;
+      }
     }
 
     // Only process if we're waiting for a description
@@ -544,6 +844,10 @@ export class TelegramTransactionsUpdate {
         `<b>Transaction Review${progressText}</b>`
       );
 
+      // Check if transaction has a group
+      const fullTransaction = await this.transactionsService.findOne(transaction.id);
+      const hasGroup = fullTransaction?.groupId !== null;
+
       // Add "Go Back" button if there's history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
 
@@ -555,6 +859,17 @@ export class TelegramTransactionsUpdate {
           Markup.button.callback('❌ Reject', 'review_reject'),
         ]
       );
+
+      // Add Group or Ungroup button
+      if (hasGroup) {
+        buttons.push([
+          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
+        ]);
+      } else {
+        buttons.push([
+          Markup.button.callback('📎 Group', 'group_transaction'),
+        ]);
+      }
 
       if (hasHistory) {
         buttons.push([
@@ -616,16 +931,24 @@ export class TelegramTransactionsUpdate {
 
       const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
+      // Check if transaction has a group
+      const hasGroup = transaction.groupId !== null;
+
       const buttons = [];
+
+      // Only Reject button (no Skip for review_one)
       buttons.push([
-        Markup.button.callback('⏭️ Skip', 'review_skip'),
         Markup.button.callback('❌ Reject', 'review_reject'),
       ]);
 
-      // Don't show Stop button for single item review
-      if (!ctx.session.reviewSingleItem) {
+      // Add Group or Ungroup button
+      if (hasGroup) {
         buttons.push([
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
+          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
+        ]);
+      } else {
+        buttons.push([
+          Markup.button.callback('📎 Group', 'group_transaction'),
         ]);
       }
 
@@ -682,6 +1005,9 @@ export class TelegramTransactionsUpdate {
         `<b>Transaction Review${progressText}</b>`
       );
 
+      // Check if transaction has a group
+      const hasGroup = transaction.groupId !== null;
+
       // Check if there's still more history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
 
@@ -693,6 +1019,17 @@ export class TelegramTransactionsUpdate {
           Markup.button.callback('❌ Reject', 'review_reject'),
         ]
       );
+
+      // Add Group or Ungroup button
+      if (hasGroup) {
+        buttons.push([
+          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
+        ]);
+      } else {
+        buttons.push([
+          Markup.button.callback('📎 Group', 'group_transaction'),
+        ]);
+      }
 
       if (hasHistory) {
         buttons.push([
@@ -725,37 +1062,48 @@ export class TelegramTransactionsUpdate {
 
   private async startTransactionRegistration(ctx: SessionContext) {
     try {
-      const result = await this.telegramService.transactions.getRegistrationData();
+      const result = await this.telegramService.transactions.getRegistrationDataWithGroups();
 
-      if (!result.hasTransactions) {
-        await ctx.reply('No reviewed transactions to register.');
+      if (!result.hasItems) {
+        await ctx.reply('No reviewed transactions or groups to register.');
         return;
       }
 
-      // Check if there are VES transactions that require exchange rate
-      const hasVESTransactions = result.transactions.some(t => t.currency === 'VES');
+      // Validate exchange rate for VES transactions/groups
+      const hasVES = result.singleTransactions.some(t => t.currency === 'VES') ||
+        result.groups.some(g => g.transactions.some(t => t.currency === 'VES'));
 
-      if (hasVESTransactions && !result.exchangeRate) {
-        await ctx.reply('Cannot register VES transactions: Exchange rate not available. Please register exchanges first.');
+      if (hasVES && !result.exchangeRate) {
+        await ctx.reply('Cannot register VES transactions/groups: Exchange rate not available. Please register exchanges first.');
         return;
       }
 
-      // Store in session (no need for index anymore)
-      ctx.session.registerTransactionIds = result.transactions.map(t => t.id);
+      // Store in session
+      ctx.session.registerTransactionIds = result.singleTransactions.map(t => t.id);
+      ctx.session.registerTransactionGroupIds = result.groups.map(g => g.id);
       ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
-      // Show ALL transactions
-      for (const transaction of result.transactions) {
-        await this.showTransactionForRegister(ctx, transaction, result.exchangeRate || 0);
+      // Show singles
+      for (const tx of result.singleTransactions) {
+        await this.showTransactionForRegister(ctx, tx, result.exchangeRate || 0);
+      }
+
+      // Show groups
+      for (const group of result.groups) {
+        await this.showGroupForRegister(ctx, group, result.exchangeRate || 0);
       }
 
       // Show final commit button
+      const totalCount = result.singleTransactions.length + result.groups.length;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Commit', 'register_tx_confirm')],
       ]);
 
       await ctx.reply(
-        `<b>Ready to register ${result.transactions.length} transaction(s)</b>\n\n` +
+        `<b>Ready to register:</b>\n` +
+        `- ${result.singleTransactions.length} single(s)\n` +
+        `- ${result.groups.length} group(s)\n\n` +
+        `Total: ${totalCount} item(s)\n\n` +
         `Click Commit to complete the registration.`,
         {
           parse_mode: 'HTML',
@@ -825,6 +1173,40 @@ export class TelegramTransactionsUpdate {
     } catch (error) {
       this.logger.error(`Error showing transaction for register: ${error.message}`);
       await ctx.reply('Error displaying transaction.');
+    }
+  }
+
+  private async showGroupForRegister(ctx: SessionContext, group: TransactionGroup & { transactions: Transaction[] }, exchangeRate: number) {
+    try {
+      const calculation = await this.transactionGroupsService.calculateGroupAmount(group.id, exchangeRate);
+      const groupDate = await this.transactionGroupsService.calculateGroupDate(group.id);
+
+      // Use presenter to format the message
+      const message = this.groupsPresenter.formatGroupForDisplay(group, calculation, groupDate, exchangeRate);
+
+      // If it's a NEUTRAL group, no buttons
+      if (!calculation.hasMonetaryValue || calculation.type === 'NEUTRAL') {
+        await ctx.reply(message, { parse_mode: 'HTML' });
+        return;
+      }
+
+      // Copy buttons for groups with monetary value
+      const dateFormatted = `${groupDate.getUTCDate()}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any],
+          [{ text: 'Copy Description', copy_text: { text: group.description } } as any],
+          [{ text: `${calculation.totalAmount.toFixed(2)} USD`, copy_text: { text: calculation.excelFormula } } as any],
+        ]
+      };
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard as any,
+      });
+    } catch (error) {
+      this.logger.error(`Error showing group for register: ${error.message}`);
+      await ctx.reply('Error displaying group.');
     }
   }
 }

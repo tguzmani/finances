@@ -9,6 +9,7 @@ import { TelegramExchangesService } from './exchanges/telegram-exchanges.service
 import { TelegramExchangesPresenter } from './exchanges/telegram-exchanges.presenter';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
 import { TelegramTransactionsPresenter } from './transactions/telegram-transactions.presenter';
+import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
 import { TelegramNotificationListener } from './listeners/telegram-notification.listener';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
@@ -16,6 +17,7 @@ import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
+import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { PagoMovilOcrService } from '../transactions/pago-movil-ocr.service';
 import { PagoMovilParser } from '../transactions/pago-movil.parser';
 import * as https from 'https';
@@ -62,8 +64,9 @@ import * as https from 'https';
         };
       },
     }),
-    TransactionsModule, // Para usar TransactionsService
-    ExchangesModule,    // Para usar ExchangesService
+    TransactionsModule,      // Para usar TransactionsService
+    ExchangesModule,         // Para usar ExchangesService
+    TransactionGroupsModule, // Para usar TransactionGroupsService
   ],
   providers: [
     TelegramUpdate,
@@ -74,6 +77,7 @@ import * as https from 'https';
     TelegramExchangesPresenter,
     TelegramTransactionsService,
     TelegramTransactionsPresenter,
+    TelegramGroupsPresenter,
     TelegramNotificationListener,
     TelegramBaseHandler,
     TelegramTransactionsUpdate,

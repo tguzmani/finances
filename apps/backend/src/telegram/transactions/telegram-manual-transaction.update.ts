@@ -1,9 +1,11 @@
 import { Update, Ctx, Action } from 'nestjs-telegraf';
+import { Markup } from 'telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
 import { SessionContext } from '../telegram.types';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { TelegramBaseHandler } from '../telegram-base.handler';
+import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 
 @Update()
 export class TelegramManualTransactionUpdate {
@@ -12,6 +14,7 @@ export class TelegramManualTransactionUpdate {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly baseHandler: TelegramBaseHandler,
+    private readonly transactionGroupsService: TransactionGroupsService,
   ) {
     this.logger.log('TelegramManualTransactionUpdate instantiated');
   }
@@ -185,6 +188,34 @@ export class TelegramManualTransactionUpdate {
     try {
       const text = ctx.message.text.trim();
 
+      // Handle group description input (from manual connect group flow)
+      if (ctx.session.waitingForGroupDescription) {
+        const description = text;
+        const tx1Id = ctx.session.pendingGroupTransactionId;
+        const tx2Id = ctx.session.currentTransactionId;
+
+        if (!tx1Id || !tx2Id) {
+          await ctx.reply('⚠️ Session error. Please try again.');
+          this.baseHandler.clearSession(ctx);
+          return;
+        }
+
+        // Create group with both transactions
+        await this.transactionGroupsService.createGroupWithTransactions(
+          description,
+          [tx1Id, tx2Id]
+        );
+
+        await ctx.reply(
+          `✅ Group created: "${description}"\n` +
+          `Transactions ${tx1Id} and ${tx2Id} are now grouped.`
+        );
+
+        // Clear session
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
       if (ctx.session.manualTransactionState === 'waiting_amount') {
         // Parse amount
         const amount = parseFloat(text.replace(/,/g, ''));
@@ -232,8 +263,30 @@ export class TelegramManualTransactionUpdate {
           { parse_mode: 'HTML' }
         );
 
-        // Clear session
-        this.baseHandler.clearSession(ctx);
+        // Check if there are other REVIEWED transactions to connect to a group
+        const allTransactions = await this.transactionsService.findAll({});
+        const otherReviewedTransactions = allTransactions.filter(t =>
+          t.status === 'REVIEWED' &&
+          t.id !== transaction.id &&
+          t.groupId === null
+        );
+
+        if (otherReviewedTransactions.length > 0) {
+          // Store the created transaction ID in session for grouping
+          ctx.session.currentTransactionId = transaction.id;
+
+          const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('📎 Connect to Group', 'manual_connect_group')],
+          ]);
+
+          await ctx.reply(
+            'Would you like to connect this transaction to a group?',
+            keyboard
+          );
+        } else {
+          // Clear session if no other transactions available
+          this.baseHandler.clearSession(ctx);
+        }
       }
     } catch (error) {
       this.logger.error(`Error handling manual text input: ${error.message}`);
@@ -251,6 +304,151 @@ export class TelegramManualTransactionUpdate {
       this.baseHandler.clearSession(ctx);
     } catch (error) {
       this.logger.error(`Error cancelling manual transaction: ${error.message}`);
+    }
+  }
+
+  @Action('manual_connect_group')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualConnectGroup(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      const currentTxId = ctx.session.currentTransactionId;
+
+      if (!currentTxId) {
+        await ctx.reply('⚠️ Transaction not found.');
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      // Get available transactions to group with
+      const allTransactions = await this.transactionsService.findAll({});
+      const available = allTransactions.filter(t =>
+        (t.status === 'NEW' || t.status === 'REVIEWED') &&
+        t.id !== currentTxId &&
+        t.groupId === null
+      );
+
+      if (available.length === 0) {
+        await ctx.reply('No other transactions available for grouping.');
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      // Build message and buttons
+      let message = '<b>Select transaction to group with:</b>\n\n';
+      const buttons = [];
+
+      for (const tx of available) {
+        const date = new Date(tx.date).toLocaleDateString('es-VE', { timeZone: 'UTC' });
+        const amount = Number(tx.amount).toFixed(2);
+        const desc = tx.description || 'No description';
+
+        message += `ID: ${tx.id} - ${desc} - ${date}. ${amount} ${tx.currency}\n`;
+        buttons.push([
+          Markup.button.callback(`ID: ${tx.id}`, `manual_group_select_${tx.id}`)
+        ]);
+      }
+
+      buttons.push([Markup.button.callback('❌ Cancel', 'manual_group_cancel')]);
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(buttons),
+      });
+    } catch (error) {
+      this.logger.error(`Error in manual connect group: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error loading transactions.');
+      this.baseHandler.clearSession(ctx);
+    }
+  }
+
+  @Action(/^manual_group_select_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleManualGroupSelect(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^manual_group_select_(\d+)$/);
+      if (!match) {
+        return;
+      }
+
+      const tx1Id = parseInt(match[1]); // Selected from list
+      const tx2Id = ctx.session.currentTransactionId; // Newly created transaction
+
+      if (!tx2Id) {
+        await ctx.reply('⚠️ Transaction not found.');
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      const [tx1, tx2] = await Promise.all([
+        this.transactionsService.findOne(tx1Id),
+        this.transactionsService.findOne(tx2Id),
+      ]);
+
+      if (!tx1 || !tx2) {
+        await ctx.reply('❌ Transaction not found.');
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      // Scenario 1: Both have NO group - create new
+      if (!tx1.groupId && !tx2.groupId) {
+        ctx.session.waitingForGroupDescription = true;
+        ctx.session.pendingGroupTransactionId = tx1Id;
+
+        await ctx.reply('📝 Please type a description for this new group:');
+        return;
+      }
+
+      // Scenario 2: tx1 HAS group, tx2 has NO group - add tx2 to group
+      if (tx1.groupId && !tx2.groupId) {
+        await this.transactionGroupsService.addTransactionToGroup(tx2Id, tx1.groupId);
+
+        const group = await this.transactionGroupsService.findOne(tx1.groupId);
+        const count = await this.transactionGroupsService.getGroupMemberCount(tx1.groupId);
+
+        await ctx.reply(
+          `✅ Transaction added to group: "${group.description}"\n` +
+          `Group now contains ${count} transactions.`
+        );
+
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      // Scenario 3: tx2 already HAS group - error
+      if (tx2.groupId) {
+        const group = await this.transactionGroupsService.findOne(tx2.groupId);
+        await ctx.reply(
+          `⚠️ Transaction is already in group: "${group.description}"`
+        );
+        this.baseHandler.clearSession(ctx);
+      }
+    } catch (error) {
+      this.logger.error(`Error handling manual group select: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error processing selection.');
+      this.baseHandler.clearSession(ctx);
+    }
+  }
+
+  @Action('manual_group_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualGroupCancel(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Cancelled');
+      await ctx.reply('❌ Grouping cancelled.');
+      this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error handling manual group cancel: ${error.message}`);
     }
   }
 

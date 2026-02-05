@@ -38,6 +38,9 @@ export class TransactionsService {
       where,
       take: limit,
       orderBy: { date: 'desc' },
+      include: {
+        group: true,
+      },
     });
   }
 

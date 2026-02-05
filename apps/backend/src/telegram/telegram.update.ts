@@ -8,6 +8,9 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
+import { TransactionGroupsService } from '../transaction-groups/transaction-groups.service';
+import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
 
 @Update()
 export class TelegramUpdate {
@@ -19,6 +22,9 @@ export class TelegramUpdate {
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly baseHandler: TelegramBaseHandler,
+    private readonly transactionGroupsService: TransactionGroupsService,
+    private readonly exchangeRateService: ExchangeRateService,
+    private readonly groupsPresenter: TelegramGroupsPresenter,
   ) { }
 
   @Command('start')
@@ -44,12 +50,47 @@ export class TelegramUpdate {
       '/status - View finance summary\n' +
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
+      '/groups - View unregistered groups\n' +
       '/review - Review pending items\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
+  }
+
+  @Command('groups')
+  @UseGuards(TelegramAuthGuard)
+  async handleGroups(@Ctx() ctx: SessionContext) {
+    try {
+      const [groups, latestRate] = await Promise.all([
+        this.transactionGroupsService.findGroupsForRegistration(),
+        this.exchangeRateService.findLatest(),
+      ]);
+
+      if (groups.length === 0) {
+        await ctx.reply('📭 No unregistered groups.');
+        return;
+      }
+
+      const exchangeRate = latestRate ? Number(latestRate.value) : 0;
+
+      let message = `<b>Unregistered Groups (${groups.length}):</b>\n\n`;
+
+      for (const group of groups) {
+        const calculation = await this.transactionGroupsService.calculateGroupAmount(group.id, exchangeRate);
+        const groupDate = await this.transactionGroupsService.calculateGroupDate(group.id);
+
+        // Use presenter to format the group
+        message += this.groupsPresenter.formatGroupForDisplay(group, calculation, groupDate, exchangeRate);
+        message += '\n\n';
+      }
+
+      await ctx.reply(message, { parse_mode: 'HTML' });
+    } catch (error) {
+      this.logger.error(`Error in groups command: ${error.message}`);
+      await ctx.reply('Error getting groups.');
+    }
   }
 
   @Command('add_transaction')

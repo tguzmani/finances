@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
+import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { TelegramModule } from '../telegram/telegram.module';
 
 const isTelegramEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
@@ -17,6 +18,7 @@ const isTelegramEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
     PrismaModule,
     TransactionsModule,
     ExchangesModule,
+    TransactionGroupsModule,
     ...(isTelegramEnabled ? [TelegramModule] : []),
   ],
   controllers: [AppController],

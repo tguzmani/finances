@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Transaction } from '@prisma/client';
+import { Transaction, TransactionGroup } from '@prisma/client';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TelegramTransactionsPresenter } from './telegram-transactions.presenter';
 import { TransactionStatus, TransactionType } from '../../transactions/transaction.types';
 
@@ -12,6 +13,7 @@ export class TelegramTransactionsService {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly transactionGroupsService: TransactionGroupsService,
     private readonly presenter: TelegramTransactionsPresenter,
   ) {}
 
@@ -126,6 +128,49 @@ export class TelegramTransactionsService {
       };
     } catch (error) {
       this.logger.error(`Failed to get registration data: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getReviewedTransactionsNotInGroup(): Promise<Transaction[]> {
+    try {
+      const allReviewed = await this.getReviewedTransactions();
+      return allReviewed.filter(t => !t.groupId);
+    } catch (error) {
+      this.logger.error(`Failed to get reviewed transactions not in group: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getRegistrationDataWithGroups() {
+    try {
+      const [singleTransactions, groups, latestRate] = await Promise.all([
+        this.getReviewedTransactionsNotInGroup(),
+        this.transactionGroupsService.findGroupsForRegistration(),
+        this.exchangeRateService.findLatest(),
+      ]);
+
+      // Sort singles by date (oldest first)
+      const sortedSingles = singleTransactions.sort((a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      // Sort groups by calculated date
+      const sortedGroups = await Promise.all(
+        groups.map(async (g) => ({
+          group: g,
+          date: await this.transactionGroupsService.calculateGroupDate(g.id),
+        }))
+      ).then(items => items.sort((a, b) => a.date.getTime() - b.date.getTime()));
+
+      return {
+        singleTransactions: sortedSingles,
+        groups: sortedGroups.map(item => item.group),
+        exchangeRate: latestRate ? Number(latestRate.value) : null,
+        hasItems: sortedSingles.length > 0 || sortedGroups.length > 0,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get registration data with groups: ${error.message}`);
       throw error;
     }
   }

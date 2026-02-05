@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Transaction } from '@prisma/client';
+import { Transaction, TransactionGroup } from '@prisma/client';
 
 @Injectable()
 export class TelegramTransactionsPresenter {
@@ -57,7 +57,7 @@ export class TelegramTransactionsPresenter {
     );
   }
 
-  formatRecentList(transactions: Transaction[], exchangeRate?: number): string {
+  formatRecentList(transactions: (Transaction & { group?: TransactionGroup | null })[], exchangeRate?: number): string {
     if (transactions.length === 0) {
       return '📭 No transactions recorded.';
     }
@@ -96,11 +96,17 @@ export class TelegramTransactionsPresenter {
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
+        if (t.group) {
+          message += `   📦 Group: ${t.group.description}\n`;
+        }
       } else {
         message += `<b>${typeIcon} ${t.currency} ${vesAmount}${usdAmount}</b>\n`;
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
+        if (t.group) {
+          message += `   📦 Group: ${t.group.description}\n`;
+        }
       }
       message += '\n';
     });
