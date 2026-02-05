@@ -31,6 +31,10 @@ export interface ReviewSession {
   // Progress tracking
   reviewTotalCount?: number;
   reviewCurrentIndex?: number;
+  // Undo functionality
+  lastRegisteredTransactionIds?: number[];
+  lastRegisteredExchangeIds?: number[];
+  lastRegisteredWavg?: number;
 }
 
 export interface SessionContext extends Context {

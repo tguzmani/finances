@@ -18,10 +18,7 @@ export class TelegramTransactionsService {
   async getNextForReview() {
     try {
       const transactions = await this.transactionsService.findAll({});
-      return transactions.find(t =>
-        t.status === TransactionStatus.NEW &&
-        t.type === TransactionType.EXPENSE
-      );
+      return transactions.find(t => t.status === TransactionStatus.NEW);
     } catch (error) {
       this.logger.error(`Failed to get next review transaction: ${error.message}`);
       throw error;
@@ -31,10 +28,7 @@ export class TelegramTransactionsService {
   async getPendingReviewCount(): Promise<number> {
     try {
       const transactions = await this.transactionsService.findAll({});
-      return transactions.filter(t =>
-        t.status === TransactionStatus.NEW &&
-        t.type === TransactionType.EXPENSE
-      ).length;
+      return transactions.filter(t => t.status === TransactionStatus.NEW).length;
     } catch (error) {
       this.logger.error(`Failed to count pending reviews: ${error.message}`);
       return 0;
@@ -48,16 +42,16 @@ export class TelegramTransactionsService {
         this.exchangeRateService.findLatest(),
       ]);
 
-      let expenses = allTransactions.filter(t => t.type === TransactionType.EXPENSE);
+      let transactions = allTransactions;
 
       // Filter out rejected by default
       if (!showAll) {
-        expenses = expenses.filter(t => t.status !== TransactionStatus.REJECTED);
+        transactions = transactions.filter(t => t.status !== TransactionStatus.REJECTED);
       }
 
       const exchangeRate = latestRate ? Number(latestRate.value) : undefined;
 
-      return this.presenter.formatRecentList(expenses, exchangeRate);
+      return this.presenter.formatRecentList(transactions, exchangeRate);
     } catch (error) {
       this.logger.error(`Failed to get transactions list: ${error.message}`);
       throw new Error('Error getting transactions');
@@ -79,10 +73,7 @@ export class TelegramTransactionsService {
   async hasNewTransactions(): Promise<boolean> {
     try {
       const transactions = await this.transactionsService.findAll({});
-      return transactions.some(t =>
-        t.status === TransactionStatus.NEW &&
-        t.type === TransactionType.EXPENSE
-      );
+      return transactions.some(t => t.status === TransactionStatus.NEW);
     } catch (error) {
       this.logger.error(`Failed to check new transactions: ${error.message}`);
       return false;
@@ -92,10 +83,7 @@ export class TelegramTransactionsService {
   async getReviewedTransactions(): Promise<Transaction[]> {
     try {
       const transactions = await this.transactionsService.findAll({});
-      return transactions.filter(t =>
-        t.status === TransactionStatus.REVIEWED &&
-        t.type === TransactionType.EXPENSE
-      );
+      return transactions.filter(t => t.status === TransactionStatus.REVIEWED);
     } catch (error) {
       this.logger.error(`Failed to get reviewed transactions: ${error.message}`);
       throw error;
@@ -162,15 +150,22 @@ export class TelegramTransactionsService {
       timeZone: 'UTC'
     });
 
-    const vesAmount = Number(transaction.amount).toFixed(2);
-    const usdAmount = (Number(transaction.amount) / exchangeRate).toFixed(2);
+    const amount = Number(transaction.amount).toFixed(2);
+
+    let amountText: string;
+    if (transaction.currency === 'VES') {
+      const usdAmount = (Number(transaction.amount) / exchangeRate).toFixed(2);
+      amountText = `VES ${amount}\nUSD ${usdAmount}`;
+    } else {
+      // For non-VES currencies, just show USD amount
+      amountText = `USD ${amount}`;
+    }
 
     return (
       `<b>${transaction.description || 'Transaction'}</b>\n\n` +
       `${date}\n` +
       `Time: ${time}\n\n` +
-      `VES ${vesAmount}\n` +
-      `USD ${usdAmount}`
+      amountText
     );
   }
 }

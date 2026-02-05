@@ -4,7 +4,7 @@ import { ExchangesService } from '../exchanges/exchanges.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TelegramExchangesService } from './exchanges/telegram-exchanges.service';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
-import { TransactionStatus, TransactionType } from '../transactions/transaction.types';
+import { TransactionStatus } from '../transactions/transaction.types';
 import { ExchangeStatus } from '@prisma/client';
 
 @Injectable()
@@ -36,14 +36,11 @@ export class TelegramService {
         }),
       ]);
 
-      // Filter only EXPENSE transactions
-      const expenses = allTransactions.filter(t => t.type === TransactionType.EXPENSE);
-
-      // Count transactions by status
-      const txNew = expenses.filter(t => t.status === TransactionStatus.NEW).length;
-      const txReviewed = expenses.filter(t => t.status === TransactionStatus.REVIEWED).length;
-      const txRegistered = expenses.filter(t => t.status === TransactionStatus.REGISTERED).length;
-      const txRejected = expenses.filter(t => t.status === TransactionStatus.REJECTED).length;
+      // Count transactions by status (both EXPENSE and INCOME)
+      const txNew = allTransactions.filter(t => t.status === TransactionStatus.NEW).length;
+      const txReviewed = allTransactions.filter(t => t.status === TransactionStatus.REVIEWED).length;
+      const txRegistered = allTransactions.filter(t => t.status === TransactionStatus.REGISTERED).length;
+      const txRejected = allTransactions.filter(t => t.status === TransactionStatus.REJECTED).length;
 
       const txTotal = txNew + txReviewed + txRegistered + txRejected;
       const txDone = txRegistered + txRejected;
@@ -96,6 +93,7 @@ export class TelegramService {
 
       const results = await Promise.allSettled([
         this.transactionsService.syncFromEmail(10),
+        this.transactionsService.syncFromBinance(10),
         this.exchangesService.syncFromBinance({ limit: 10, tradeType: 'SELL' as any }),
       ]);
 
@@ -108,21 +106,30 @@ export class TelegramService {
         message += `   Created: ${txResult.transactionsCreated}\n`;
         message += `   Skipped: ${txResult.transactionsSkipped}\n\n`;
       } else {
-        message += `❌ Transactions error: ${results[0].reason}\n\n`;
+        message += `❌ Transactions (Email) error: ${results[0].reason}\n\n`;
       }
 
       if (results[1].status === 'fulfilled') {
-        const exResult = results[1].value;
-        message += `💱 <b>Exchanges (Binance):</b>\n`;
+        const binanceTxResult = results[1].value;
+        message += `💰 <b>Transactions (Binance):</b>\n`;
+        message += `   Fetched: ${binanceTxResult.totalFetched}\n`;
+        message += `   Created: ${binanceTxResult.transactionsCreated}\n`;
+        message += `   Skipped: ${binanceTxResult.transactionsSkipped}\n\n`;
+      } else {
+        message += `❌ Transactions (Binance) error: ${results[1].reason}\n\n`;
+      }
+
+      if (results[2].status === 'fulfilled') {
+        const exResult = results[2].value;
+        message += `💱 <b>Exchanges (Binance P2P):</b>\n`;
         message += `   Fetched: ${exResult.exchangesFetched}\n`;
         message += `   Created: ${exResult.exchangesCreated}\n`;
         message += `   Skipped: ${exResult.exchangesSkipped}\n`;
-        message += `   Transactions: ${exResult.transactionsCreated}\n`;
         if (exResult.errors.length > 0) {
           message += `   ⚠️ Errors: ${exResult.errors.length}\n`;
         }
       } else {
-        message += `❌ Exchanges error: ${results[1].reason}\n`;
+        message += `❌ Exchanges error: ${results[2].reason}\n`;
       }
 
       return message;

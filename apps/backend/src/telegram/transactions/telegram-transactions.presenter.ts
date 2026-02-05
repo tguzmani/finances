@@ -23,6 +23,8 @@ export class TelegramTransactionsPresenter {
       timeZone: 'UTC'
     });
 
+    const typeIcon = this.getTypeIcon(transaction.type);
+    const typeLabel = this.getTypeLabel(transaction.type);
     let amountText = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
 
     // Add USD conversion if exchangeRate is available
@@ -30,6 +32,9 @@ export class TelegramTransactionsPresenter {
       const usdAmount = Number(transaction.amount) / exchangeRate;
       amountText += `\nUSD ${usdAmount.toFixed(2)}`;
     }
+
+    // Add type
+    const typeText = `\nType: ${typeIcon} ${typeLabel}`;
 
     // Add status
     const statusLabel = this.getStatusLabel(transaction.status);
@@ -46,6 +51,7 @@ export class TelegramTransactionsPresenter {
       `${date}\n` +
       `Time: ${time}\n` +
       amountText +
+      typeText +
       statusText +
       descriptionText
     );
@@ -53,17 +59,18 @@ export class TelegramTransactionsPresenter {
 
   formatRecentList(transactions: Transaction[], exchangeRate?: number): string {
     if (transactions.length === 0) {
-      return '📭 No expenses recorded.';
+      return '📭 No transactions recorded.';
     }
 
     const recent = transactions.slice(0, 10);
-    let message = `<b>Last ${recent.length} expenses:</b>\n\n`;
+    let message = `<b>Last ${recent.length} transactions:</b>\n\n`;
 
     recent.forEach((t) => {
       const statusIcon = this.getStatusIcon(t.status);
       const statusLabel = this.getStatusLabel(t.status);
       const platformLabel = this.getPlatformLabel(t.platform);
       const methodLabel = t.method ? this.getMethodLabel(t.method) : null;
+      const typeIcon = this.getTypeIcon(t.type);
 
       const transactionDate = new Date(t.date);
       const date = transactionDate.toLocaleDateString('es-VE', {
@@ -84,13 +91,13 @@ export class TelegramTransactionsPresenter {
 
       message += `ID: ${t.id}\n`;
       if (t.description) {
-        message += `<b>${t.description}</b>\n`;
+        message += `<b>${typeIcon} ${t.description}</b>\n`;
         message += `   ${t.currency} ${vesAmount}${usdAmount}\n`;
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
       } else {
-        message += `<b>${t.currency} ${vesAmount}${usdAmount}</b>\n`;
+        message += `<b>${typeIcon} ${t.currency} ${vesAmount}${usdAmount}</b>\n`;
         message += `   ${date} ${time}\n`;
         message += `   Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n`;
         message += `   ${statusIcon}${statusIcon ? ' ' : ''}${statusLabel}\n`;
@@ -121,6 +128,7 @@ export class TelegramTransactionsPresenter {
       timeZone: 'UTC'
     });
 
+    const typeIcon = this.getTypeIcon(transaction.type);
     const vesAmount = Number(transaction.amount).toFixed(2);
     let usdAmount = '';
 
@@ -136,7 +144,7 @@ export class TelegramTransactionsPresenter {
     const platformLabel = this.getPlatformLabel(transaction.platform);
 
     return (
-      `💰 <b>New Transaction</b>${descriptionLine}\n\n` +
+      `${typeIcon} <b>New Transaction</b>${descriptionLine}\n\n` +
       `${transaction.currency} ${vesAmount}${usdAmount}\n` +
       `${date}\n` +
       `Time: ${time}\n` +
@@ -179,7 +187,26 @@ export class TelegramTransactionsPresenter {
       'PAGO_MOVIL': 'Pago Móvil',
       'ZELLE': 'Zelle',
       'CREDIT_CARD': 'Credit Card',
+      'BINANCE_PAY': 'Binance Pay',
+      'DEPOSIT': 'Deposit',
+      'WITHDRAWAL': 'Withdrawal',
     };
     return labels[method] || method;
+  }
+
+  private getTypeIcon(type: string): string {
+    const icons: Record<string, string> = {
+      'EXPENSE': '💸',
+      'INCOME': '💰',
+    };
+    return icons[type] || '💵';
+  }
+
+  private getTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      'EXPENSE': 'Expense',
+      'INCOME': 'Income',
+    };
+    return labels[type] || type;
   }
 }

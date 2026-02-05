@@ -44,7 +44,7 @@ export class TelegramUpdate {
       '/exchanges - View recent exchanges\n' +
       '/review - Review pending items\n' +
       '/register - Register reviewed items\n' +
-      '/sync - Sync data from Banesco and Binance\n' +
+      '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
   }

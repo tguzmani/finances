@@ -188,19 +188,67 @@ export class TelegramExchangesUpdate {
       // Perform registration
       await this.telegramService.exchanges.registerExchanges(exchangeIds, wavg);
 
+      // Store IDs in session for undo
+      ctx.session.lastRegisteredExchangeIds = exchangeIds;
+      ctx.session.lastRegisteredWavg = wavg;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('↩️ Undo', 'register_ex_undo')],
+      ]);
+
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
         `Registered ${exchangeIds.length} exchanges\n` +
         `Exchange rate saved: ${wavg} VES/USD`,
+        { parse_mode: 'HTML', ...keyboard }
+      );
+
+      // Don't clear session yet - keep it for undo
+      // this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error confirming registration: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error completing registration. Please try again.');
+    }
+  }
+
+  @Action('register_ex_undo')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterExUndo(@Ctx() ctx: SessionContext) {
+    try {
+      const exchangeIds = ctx.session.lastRegisteredExchangeIds;
+
+      if (!exchangeIds || exchangeIds.length === 0) {
+        await ctx.answerCbQuery('Nothing to undo.');
+        return;
+      }
+
+      await ctx.answerCbQuery('Undoing registration...');
+
+      // Revert exchanges back to REVIEWED status
+      await Promise.all(
+        exchangeIds.map(id =>
+          this.exchangesService.update(id, {
+            status: ExchangeStatus.REVIEWED,
+          })
+        )
+      );
+
+      // Note: The exchange rate remains in the database but exchanges are reverted
+      // If needed, we could also delete the exchange rate, but that's more complex
+
+      await ctx.reply(
+        `↩️ <b>Registration Undone!</b>\n\n` +
+        `${exchangeIds.length} exchanges reverted to REVIEWED status`,
         { parse_mode: 'HTML' }
       );
 
       // Clear session
       this.baseHandler.clearSession(ctx);
     } catch (error) {
-      this.logger.error(`Error confirming registration: ${error.message}`);
+      this.logger.error(`Error undoing exchange registration: ${error.message}`);
       await ctx.answerCbQuery('Error');
-      await ctx.reply('Error completing registration. Please try again.');
+      await ctx.reply('Error undoing registration. Please try again.');
     }
   }
 
@@ -242,12 +290,6 @@ export class TelegramExchangesUpdate {
 
       const buttons = [];
 
-      if (hasHistory) {
-        buttons.push([
-          Markup.button.callback('⬅️ Go Back', 'review_go_back'),
-        ]);
-      }
-
       buttons.push(
         [
           Markup.button.callback('✅ Accept', 'review_exchange_accept'),
@@ -255,9 +297,18 @@ export class TelegramExchangesUpdate {
         ],
         [
           Markup.button.callback('⏭️ Skip', 'review_exchange_skip'),
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
         ]
       );
+
+      if (hasHistory) {
+        buttons.push([
+          Markup.button.callback('⬅️ Go Back', 'review_go_back'),
+        ]);
+      }
+
+      buttons.push([
+        Markup.button.callback('🚫 Stop', 'review_cancel'),
+      ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -369,12 +420,6 @@ export class TelegramExchangesUpdate {
 
       const buttons = [];
 
-      if (hasHistory) {
-        buttons.push([
-          Markup.button.callback('⬅️ Go Back', 'review_go_back'),
-        ]);
-      }
-
       buttons.push(
         [
           Markup.button.callback('✅ Accept', 'review_exchange_accept'),
@@ -382,9 +427,18 @@ export class TelegramExchangesUpdate {
         ],
         [
           Markup.button.callback('⏭️ Skip', 'review_exchange_skip'),
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
         ]
       );
+
+      if (hasHistory) {
+        buttons.push([
+          Markup.button.callback('⬅️ Go Back', 'review_go_back'),
+        ]);
+      }
+
+      buttons.push([
+        Markup.button.callback('🚫 Stop', 'review_cancel'),
+      ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 

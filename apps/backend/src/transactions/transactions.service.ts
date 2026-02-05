@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
+import { TransactionsBinanceService } from './transactions-binance.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
@@ -12,7 +13,8 @@ export class TransactionsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailRegistry: EmailServiceRegistry
+    private readonly emailRegistry: EmailServiceRegistry,
+    private readonly binanceTransactions: TransactionsBinanceService
   ) { }
 
   async findAll(query: QueryTransactionsDto) {
@@ -147,5 +149,59 @@ export class TransactionsService {
       }
       throw error;
     }
+  }
+
+  async syncFromBinance(limitPerType = 30): Promise<{
+    transactionsCreated: number;
+    transactionsSkipped: number;
+    totalFetched: number;
+  }> {
+    this.logger.log(`Starting Binance sync with limit ${limitPerType} per type`);
+
+    let totalCreated = 0;
+    let totalSkipped = 0;
+
+    // Fetch all types in parallel
+    const [deposits, withdrawals, pays] = await Promise.all([
+      this.binanceTransactions.getDeposits(limitPerType),
+      this.binanceTransactions.getWithdrawals(limitPerType),
+      this.binanceTransactions.getBinancePay(limitPerType),
+    ]);
+
+    const allTransactions = [...deposits, ...withdrawals, ...pays];
+
+    for (const tx of allTransactions) {
+      try {
+        await this.prisma.transaction.create({
+          data: {
+            date: tx.date,
+            amount: tx.amount,
+            currency: tx.currency,
+            transactionId: tx.transactionId,
+            platform: tx.platform,
+            method: tx.method,
+            type: tx.type,
+            status: TransactionStatus.NEW,
+          },
+        });
+        totalCreated++;
+      } catch (err) {
+        if (err.code === 'P2002') {
+          totalSkipped++; // Duplicate transactionId
+        } else {
+          this.logger.error(`Failed to create transaction: ${err.message}`);
+        }
+      }
+    }
+
+    this.logger.log(
+      `Binance sync complete: ${totalCreated} created, ${totalSkipped} skipped from ${allTransactions.length} transactions`
+    );
+
+    return {
+      transactionsCreated: totalCreated,
+      transactionsSkipped: totalSkipped,
+      totalFetched: allTransactions.length,
+    };
   }
 }

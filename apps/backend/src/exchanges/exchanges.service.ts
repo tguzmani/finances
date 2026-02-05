@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BinanceApiService } from './binance-api.service';
+import { ExchangesBinanceService } from './exchanges-binance.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
 import { SyncResult, TradeType } from './exchange.types';
@@ -12,7 +12,7 @@ export class ExchangesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly binanceApi: BinanceApiService
+    private readonly binanceApi: ExchangesBinanceService
   ) {}
 
   async findAll(query: QueryExchangesDto) {

@@ -11,7 +11,7 @@ model Transaction {
   id            Int                 @id @default(autoincrement())
   date          DateTime
   amount        Decimal             @db.Decimal(10, 2)
-  currency      String              @db.VarChar(3)
+  currency      String              @db.VarChar(10)
   transactionId String              @unique @map("transaction_id")
   status        TransactionStatus   @default(NEW)
   createdAt     DateTime            @default(now()) @map("created_at")
@@ -77,6 +77,9 @@ enum PaymentMethod {
   PAGO_MOVIL
   ZELLE
   CREDIT_CARD
+  BINANCE_PAY
+  DEPOSIT
+  WITHDRAWAL
 }
 
 enum ExchangeStatus {

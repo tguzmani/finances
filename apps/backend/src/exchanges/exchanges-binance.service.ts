@@ -1,19 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MainClient } from 'binance';
+import { BinanceApiClient } from '../common/binance-api';
 import { BinanceP2PTrade } from './interfaces/binance-p2p.interface';
 import { TradeType } from './exchange.types';
 
 @Injectable()
-export class BinanceApiService {
-  private readonly logger = new Logger(BinanceApiService.name);
-  private readonly client: MainClient;
+export class ExchangesBinanceService {
+  private readonly logger = new Logger(ExchangesBinanceService.name);
 
-  constructor() {
-    this.client = new MainClient({
-      api_key: process.env.BINANCE_API_KEY || '',
-      api_secret: process.env.BINANCE_SECRET_KEY || '',
-    });
-  }
+  constructor(private readonly binanceApi: BinanceApiClient) {}
 
   async getP2PHistory(
     tradeType: TradeType = TradeType.SELL,
@@ -24,7 +18,7 @@ export class BinanceApiService {
         `Fetching P2P trade history: tradeType=${tradeType}, limit=${limit}`
       );
 
-      const response = await this.client.getC2CTradeHistory({
+      const response = await this.binanceApi.getC2CTradeHistory({
         tradeType: tradeType,
       });
 

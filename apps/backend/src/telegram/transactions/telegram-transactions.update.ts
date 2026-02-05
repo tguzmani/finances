@@ -309,18 +309,62 @@ export class TelegramTransactionsUpdate {
       // Perform registration
       await this.telegramService.transactions.registerTransactions(transactionIds);
 
+      // Store IDs in session for undo
+      ctx.session.lastRegisteredTransactionIds = transactionIds;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('↩️ Undo', 'register_tx_undo')],
+      ]);
+
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
         `Registered ${transactionIds.length} transactions`,
+        { parse_mode: 'HTML', ...keyboard }
+      );
+
+      // Don't clear session yet - keep it for undo
+      // this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error confirming transaction registration: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error completing registration. Please try again.');
+    }
+  }
+
+  @Action('register_tx_undo')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterTxUndo(@Ctx() ctx: SessionContext) {
+    try {
+      const transactionIds = ctx.session.lastRegisteredTransactionIds;
+
+      if (!transactionIds || transactionIds.length === 0) {
+        await ctx.answerCbQuery('Nothing to undo.');
+        return;
+      }
+
+      await ctx.answerCbQuery('Undoing registration...');
+
+      // Revert transactions back to REVIEWED status
+      await Promise.all(
+        transactionIds.map(id =>
+          this.transactionsService.update(id, {
+            status: TransactionStatus.REVIEWED,
+          })
+        )
+      );
+
+      await ctx.reply(
+        `↩️ <b>Registration Undone!</b>\n\n` +
+        `${transactionIds.length} transactions reverted to REVIEWED status`,
         { parse_mode: 'HTML' }
       );
 
       // Clear session
       this.baseHandler.clearSession(ctx);
     } catch (error) {
-      this.logger.error(`Error confirming transaction registration: ${error.message}`);
+      this.logger.error(`Error undoing transaction registration: ${error.message}`);
       await ctx.answerCbQuery('Error');
-      await ctx.reply('Error completing registration. Please try again.');
+      await ctx.reply('Error undoing registration. Please try again.');
     }
   }
 
@@ -496,21 +540,22 @@ export class TelegramTransactionsUpdate {
 
       const buttons = [];
 
+      buttons.push(
+        [
+          Markup.button.callback('⏭️ Skip', 'review_skip'),
+          Markup.button.callback('❌ Reject', 'review_reject'),
+        ]
+      );
+
       if (hasHistory) {
         buttons.push([
           Markup.button.callback('⬅️ Go Back', 'review_go_back'),
         ]);
       }
 
-      buttons.push(
-        [
-          Markup.button.callback('⏭️ Skip', 'review_skip'),
-          Markup.button.callback('❌ Reject', 'review_reject'),
-        ],
-        [
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
-        ]
-      );
+      buttons.push([
+        Markup.button.callback('🚫 Stop', 'review_cancel'),
+      ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -625,21 +670,22 @@ export class TelegramTransactionsUpdate {
 
       const buttons = [];
 
+      buttons.push(
+        [
+          Markup.button.callback('⏭️ Skip', 'review_skip'),
+          Markup.button.callback('❌ Reject', 'review_reject'),
+        ]
+      );
+
       if (hasHistory) {
         buttons.push([
           Markup.button.callback('⬅️ Go Back', 'review_go_back'),
         ]);
       }
 
-      buttons.push(
-        [
-          Markup.button.callback('⏭️ Skip', 'review_skip'),
-          Markup.button.callback('❌ Reject', 'review_reject'),
-        ],
-        [
-          Markup.button.callback('🚫 Stop', 'review_cancel'),
-        ]
-      );
+      buttons.push([
+        Markup.button.callback('🚫 Stop', 'review_cancel'),
+      ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -666,18 +712,21 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
-      if (!result.exchangeRate) {
-        await ctx.reply('Cannot register transactions: Exchange rate not available. Please register exchanges first.');
+      // Check if there are VES transactions that require exchange rate
+      const hasVESTransactions = result.transactions.some(t => t.currency === 'VES');
+
+      if (hasVESTransactions && !result.exchangeRate) {
+        await ctx.reply('Cannot register VES transactions: Exchange rate not available. Please register exchanges first.');
         return;
       }
 
       // Store in session (no need for index anymore)
       ctx.session.registerTransactionIds = result.transactions.map(t => t.id);
-      ctx.session.registerTransactionExchangeRate = result.exchangeRate;
+      ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
       // Show ALL transactions
       for (const transaction of result.transactions) {
-        await this.showTransactionForRegister(ctx, transaction, result.exchangeRate);
+        await this.showTransactionForRegister(ctx, transaction, result.exchangeRate || 0);
       }
 
       // Show final commit button
@@ -703,9 +752,19 @@ export class TelegramTransactionsUpdate {
     try {
       const message = this.telegramService.transactions.formatTransactionForRegister(transaction, exchangeRate);
 
-      const vesAmount = Number(transaction.amount);
-      const usdAmount = (vesAmount / exchangeRate).toFixed(2);
-      const excelFormula = `=${vesAmount.toFixed(2)}/${exchangeRate.toFixed(2)}`;
+      const amount = Number(transaction.amount);
+      let usdAmount: string;
+      let excelFormula: string;
+
+      if (transaction.currency === 'VES') {
+        // For VES, divide by exchange rate
+        usdAmount = (amount / exchangeRate).toFixed(2);
+        excelFormula = `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`;
+      } else {
+        // For non-VES (USD, USDT, etc.), use amount directly
+        usdAmount = amount.toFixed(2);
+        excelFormula = amount.toFixed(2);
+      }
 
       // Format date as "1-Feb"
       const transactionDate = new Date(transaction.date);
