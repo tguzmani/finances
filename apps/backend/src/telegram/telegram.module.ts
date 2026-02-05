@@ -10,6 +10,9 @@ import { TelegramExchangesPresenter } from './exchanges/telegram-exchanges.prese
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
 import { TelegramTransactionsPresenter } from './transactions/telegram-transactions.presenter';
 import { TelegramNotificationListener } from './listeners/telegram-notification.listener';
+import { TelegramBaseHandler } from './telegram-base.handler';
+import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
+import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { PagoMovilOcrService } from '../transactions/pago-movil-ocr.service';
@@ -71,6 +74,9 @@ import * as https from 'https';
     TelegramTransactionsService,
     TelegramTransactionsPresenter,
     TelegramNotificationListener,
+    TelegramBaseHandler,
+    TelegramTransactionsUpdate,
+    TelegramExchangesUpdate,
     PagoMovilOcrService,
     PagoMovilParser,
   ],

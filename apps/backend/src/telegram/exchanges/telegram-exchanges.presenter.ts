@@ -19,7 +19,7 @@ export class TelegramExchangesPresenter {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -28,7 +28,7 @@ export class TelegramExchangesPresenter {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     const tradeType = exchange.tradeType === 'SELL' ? 'Sell' : 'Buy';
@@ -38,10 +38,10 @@ export class TelegramExchangesPresenter {
     return (
       `<b>Exchange Review</b>\n` +
       `\n` +
-      `${icon} <b>${tradeType}: ${exchange.asset} ${Number(exchange.amount).toFixed(2)}</b>\n` +
+      `${icon} <b>${tradeType}: ${exchange.asset} ${Number(exchange.amountGross).toFixed(2)}</b>\n` +
       `→ ${exchange.fiatSymbol} ${Number(exchange.fiatAmount).toFixed(2)}\n` +
       `Rate: ${Number(exchange.exchangeRate).toFixed(2)}\n` +
-      `Order: ...${last4Digits}\n` +
+      `Order: ${last4Digits}\n` +
       `${date}\n` +
       `Time: ${time}\n` +
       (exchange.counterparty ? `Counterparty: ${exchange.counterparty}\n` : '')
@@ -62,10 +62,11 @@ export class TelegramExchangesPresenter {
       const statusLabel = this.getStatusLabel(e.status);
 
       const date = new Date(e.binanceCreatedAt).toLocaleDateString('es-VE', {
-        timeZone: 'America/Caracas'
+        timeZone: 'UTC'
       });
 
-      message += `${icon} <b>${e.asset} ${Number(e.amount).toFixed(2)}</b>\n`;
+      message += `ID: ${e.id}\n`;
+      message += `${icon} <b>${e.asset} ${Number(e.amountGross).toFixed(2)}</b>\n`;
       message += `   → ${e.fiatSymbol} ${Number(e.fiatAmount).toFixed(2)}\n`;
       message += `   Rate: ${Number(e.exchangeRate).toFixed(2)} | ${date}\n`;
       message += `   Status: ${statusLabel} | ${tradeTypeLabel}\n`;

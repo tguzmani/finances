@@ -143,7 +143,7 @@ export class ExchangesService {
                 data: {
                   date: new Date(trade.createTime),
                   amount: fiatAmount,
-                  currency: trade.fiatSymbol,
+                  currency: 'VES',
                   transactionId: trade.orderNumber,
                   type: transactionType,
                   platform: TransactionPlatform.BINANCE,
@@ -202,7 +202,7 @@ export class ExchangesService {
           in: [ExchangeStatus.COMPLETED, ExchangeStatus.PENDING],
         },
       },
-      orderBy: { binanceCreatedAt: 'asc' },
+      orderBy: { binanceCreatedAt: 'desc' },
     });
   }
 

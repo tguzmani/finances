@@ -11,7 +11,7 @@ export class TelegramTransactionsPresenter {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -20,7 +20,7 @@ export class TelegramTransactionsPresenter {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     let amountText = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
@@ -31,12 +31,23 @@ export class TelegramTransactionsPresenter {
       amountText += `\nUSD ${usdAmount.toFixed(2)}`;
     }
 
+    // Add status
+    const statusLabel = this.getStatusLabel(transaction.status);
+    const statusText = `\nStatus: ${statusLabel}`;
+
+    // Add description if exists
+    const descriptionText = transaction.description
+      ? `\nDescription: ${transaction.description}`
+      : '';
+
     return (
       `<b>Transaction Review</b>\n` +
       `\n` +
       `${date}\n` +
       `Time: ${time}\n` +
-      amountText
+      amountText +
+      statusText +
+      descriptionText
     );
   }
 
@@ -56,13 +67,13 @@ export class TelegramTransactionsPresenter {
 
       const transactionDate = new Date(t.date);
       const date = transactionDate.toLocaleDateString('es-VE', {
-        timeZone: 'America/Caracas'
+        timeZone: 'UTC'
       });
       const time = transactionDate.toLocaleTimeString('es-VE', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'America/Caracas'
+        timeZone: 'UTC'
       });
 
       // Format amounts with 2 decimals
@@ -71,6 +82,7 @@ export class TelegramTransactionsPresenter {
         ? ` (USD ${(Number(t.amount) / exchangeRate).toFixed(2)})`
         : '';
 
+      message += `ID: ${t.id}\n`;
       if (t.description) {
         message += `<b>${t.description}</b>\n`;
         message += `   ${t.currency} ${vesAmount}${usdAmount}\n`;

@@ -126,10 +126,15 @@ export class TelegramTransactionsService {
         this.exchangeRateService.findLatest(),
       ]);
 
+      // Sort transactions in ascending order (oldest first) for registration
+      const sortedTransactions = transactions.sort((a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
       return {
-        transactions,
+        transactions: sortedTransactions,
         exchangeRate: latestRate ? Number(latestRate.value) : null,
-        hasTransactions: transactions.length > 0,
+        hasTransactions: sortedTransactions.length > 0,
       };
     } catch (error) {
       this.logger.error(`Failed to get registration data: ${error.message}`);
@@ -145,7 +150,7 @@ export class TelegramTransactionsService {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -154,7 +159,7 @@ export class TelegramTransactionsService {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/Caracas'
+      timeZone: 'UTC'
     });
 
     const vesAmount = Number(transaction.amount).toFixed(2);

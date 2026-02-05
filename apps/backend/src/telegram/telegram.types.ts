@@ -21,6 +21,16 @@ export interface ReviewSession {
   registerTransactionIds?: number[];
   registerTransactionIndex?: number;
   registerTransactionExchangeRate?: number;
+  // Review by ID flow
+  reviewOneMode?: 'selecting' | 'waiting_for_tx_id' | 'waiting_for_ex_id';
+  reviewOneType?: 'transaction' | 'exchange';
+  reviewSingleItem?: boolean; // True when reviewing a single item via /review_one
+  // Go Back functionality
+  transactionReviewHistory?: number[];
+  exchangeReviewHistory?: number[];
+  // Progress tracking
+  reviewTotalCount?: number;
+  reviewCurrentIndex?: number;
 }
 
 export interface SessionContext extends Context {
@@ -33,6 +43,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
   { command: 'review', description: 'Review pending items' },
+  { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },
