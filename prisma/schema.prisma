@@ -63,15 +63,10 @@ model Transaction {
   method        PaymentMethod?
   description   String?
 
-  // Relación opcional con Exchange
-  exchangeId    Int?                  @map("exchange_id")
-  exchange      Exchange?             @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
-
   createdAt     DateTime              @default(now()) @map("created_at")
   updatedAt     DateTime              @updatedAt @map("updated_at")
 
   @@map("transactions")
-  @@index([exchangeId])
 }
 
 model Exchange {
@@ -93,9 +88,6 @@ model Exchange {
   binanceCreatedAt  DateTime        @map("binance_created_at")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
-
-  // Relación con transactions
-  transactions      Transaction[]
 
   @@map("exchanges")
   @@index([binanceCreatedAt])

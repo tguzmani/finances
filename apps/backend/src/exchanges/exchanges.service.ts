@@ -4,7 +4,6 @@ import { BinanceApiService } from './binance-api.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
 import { SyncResult, TradeType } from './exchange.types';
-import { TransactionType, TransactionPlatform } from '../transactions/transaction.types';
 import { Prisma, ExchangeStatus } from '@prisma/client';
 
 @Injectable()
@@ -111,49 +110,24 @@ export class ExchangesService {
           // Map Binance status to our enum
           const status = this.mapBinanceStatus(trade.orderStatus);
 
-          // Use Prisma transaction for atomicity
-          await this.prisma.$transaction(async (tx) => {
-            // 1. Create Exchange
-            const exchange = await tx.exchange.create({
-              data: {
-                orderNumber: trade.orderNumber,
-                asset: trade.asset,
-                amount: amount,
-                amountGross: amountGross,
-                fiatSymbol: trade.fiatSymbol,
-                fiatAmount: fiatAmount,
-                exchangeRate: exchangeRate,
-                counterparty: trade.counterPartNickName || null,
-                tradeType: trade.tradeType as TradeType,
-                status: status,
-                binanceCreatedAt: new Date(trade.createTime),
-              },
-            });
-
-            result.exchangesCreated++;
-
-            // 2. Create Transaction if trade is completed
-            if (trade.orderStatus === 'COMPLETED') {
-              const transactionType =
-                trade.tradeType === 'SELL'
-                  ? TransactionType.INCOME
-                  : TransactionType.EXPENSE;
-
-              await tx.transaction.create({
-                data: {
-                  date: new Date(trade.createTime),
-                  amount: fiatAmount,
-                  currency: 'VES',
-                  transactionId: trade.orderNumber,
-                  type: transactionType,
-                  platform: TransactionPlatform.BINANCE,
-                  exchangeId: exchange.id,
-                },
-              });
-
-              result.transactionsCreated++;
-            }
+          // Create Exchange
+          await this.prisma.exchange.create({
+            data: {
+              orderNumber: trade.orderNumber,
+              asset: trade.asset,
+              amount: amount,
+              amountGross: amountGross,
+              fiatSymbol: trade.fiatSymbol,
+              fiatAmount: fiatAmount,
+              exchangeRate: exchangeRate,
+              counterparty: trade.counterPartNickName || null,
+              tradeType: trade.tradeType as TradeType,
+              status: status,
+              binanceCreatedAt: new Date(trade.createTime),
+            },
           });
+
+          result.exchangesCreated++;
 
           this.logger.debug(`Created exchange: ${trade.orderNumber}`);
         } catch (err) {
