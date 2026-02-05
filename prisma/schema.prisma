@@ -70,6 +70,8 @@ enum TransactionPlatform {
   BANESCO
   BINANCE
   BANK_OF_AMERICA
+  WALLET
+  CASH_BOX
 }
 
 enum PaymentMethod {

@@ -10,6 +10,7 @@ import { PagoMovilOcrService } from '../../transactions/pago-movil-ocr.service';
 import { PagoMovilParser } from '../../transactions/pago-movil.parser';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
+import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -24,6 +25,7 @@ export class TelegramTransactionsUpdate {
     private readonly pagoMovilParser: PagoMovilParser,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
+    private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
   ) { }
 
   @Command('transactions')
@@ -375,6 +377,13 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Manual transaction flow is handled by TelegramManualTransactionUpdate
+    if (ctx.session.manualTransactionState === 'waiting_amount' ||
+        ctx.session.manualTransactionState === 'waiting_description') {
+      await this.manualTransactionUpdate.handleManualAmountOrDescription(ctx);
+      return;
+    }
+
     // Handle review by ID for exchange flow - delegate to exchanges handler
     if (ctx.session.reviewOneMode === 'waiting_for_ex_id') {
       await this.exchangesUpdate.handleReviewOneExchangeIdPublic(ctx);
@@ -553,9 +562,12 @@ export class TelegramTransactionsUpdate {
         ]);
       }
 
-      buttons.push([
-        Markup.button.callback('🚫 Stop', 'review_cancel'),
-      ]);
+      // Only show Stop button when reviewing multiple items (not in review_one mode)
+      if (!ctx.session.reviewSingleItem) {
+        buttons.push([
+          Markup.button.callback('🚫 Stop', 'review_cancel'),
+        ]);
+      }
 
       const keyboard = Markup.inlineKeyboard(buttons);
 

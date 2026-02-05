@@ -177,6 +177,8 @@ export class TelegramTransactionsPresenter {
       'BANESCO': 'Banesco',
       'BANK_OF_AMERICA': 'Bank of America',
       'BINANCE': 'Binance',
+      'WALLET': 'Wallet',
+      'CASH_BOX': 'Cash Box',
     };
     return labels[platform] || platform;
   }

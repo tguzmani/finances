@@ -5,7 +5,7 @@ import { TransactionsBinanceService } from './transactions-binance.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionPlatform, PaymentMethod, Transaction } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -203,5 +203,74 @@ export class TransactionsService {
       transactionsSkipped: totalSkipped,
       totalFetched: allTransactions.length,
     };
+  }
+
+  /**
+   * Get currency for a given platform
+   * Banesco = VES, Binance = USDT, Others = USD
+   */
+  getCurrencyForPlatform(platform: TransactionPlatform): string {
+    switch (platform) {
+      case TransactionPlatform.BANESCO:
+        return 'VES';
+      case TransactionPlatform.BINANCE:
+        return 'USDT';
+      case TransactionPlatform.BANK_OF_AMERICA:
+      case TransactionPlatform.WALLET:
+      case TransactionPlatform.CASH_BOX:
+        return 'USD';
+      default:
+        return 'USD';
+    }
+  }
+
+  /**
+   * Get available payment methods for a platform
+   */
+  getAvailablePaymentMethods(platform: TransactionPlatform): PaymentMethod[] {
+    switch (platform) {
+      case TransactionPlatform.BANESCO:
+        return [PaymentMethod.DEBIT_CARD, PaymentMethod.PAGO_MOVIL];
+      case TransactionPlatform.BANK_OF_AMERICA:
+        return [PaymentMethod.DEBIT_CARD, PaymentMethod.CREDIT_CARD, PaymentMethod.ZELLE];
+      case TransactionPlatform.BINANCE:
+        return [PaymentMethod.BINANCE_PAY, PaymentMethod.DEPOSIT, PaymentMethod.WITHDRAWAL];
+      case TransactionPlatform.WALLET:
+      case TransactionPlatform.CASH_BOX:
+        return []; // No specific methods, can be left null
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Create manual transaction
+   */
+  async createManualTransaction(data: {
+    type: TransactionType;
+    platform: TransactionPlatform;
+    currency: string;
+    amount: number;
+    description: string;
+    method?: PaymentMethod;
+  }): Promise<Transaction> {
+    // Generate unique transaction ID for manual entries
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    const transactionId = `MANUAL_${data.platform}_${timestamp}_${random}`;
+
+    return await this.prisma.transaction.create({
+      data: {
+        date: new Date(),
+        amount: data.amount,
+        currency: data.currency,
+        transactionId,
+        platform: data.platform,
+        method: data.method || null,
+        type: data.type,
+        description: data.description,
+        status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status
+      },
+    });
   }
 }

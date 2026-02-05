@@ -6,6 +6,7 @@ import { TelegramAuthGuard } from './guards/telegram-auth.guard';
 import { SessionContext } from './telegram.types';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
+import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
 
 @Update()
@@ -16,6 +17,7 @@ export class TelegramUpdate {
     private readonly telegramService: TelegramService,
     private readonly transactionsUpdate: TelegramTransactionsUpdate,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
+    private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly baseHandler: TelegramBaseHandler,
   ) { }
 
@@ -44,9 +46,16 @@ export class TelegramUpdate {
       '/exchanges - View recent exchanges\n' +
       '/review - Review pending items\n' +
       '/register - Register reviewed items\n' +
+      '/add_transaction - Add manual transaction\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
+  }
+
+  @Command('add_transaction')
+  @UseGuards(TelegramAuthGuard)
+  async handleAddTransaction(@Ctx() ctx: SessionContext) {
+    await this.manualTransactionUpdate.handleAddTransaction(ctx);
   }
 
   @Command('sync')
