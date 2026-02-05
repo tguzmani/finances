@@ -49,18 +49,12 @@ export class ExchangesService {
       where,
       take: limit,
       orderBy: { binanceCreatedAt: 'desc' },
-      include: {
-        transactions: true,
-      },
     });
   }
 
   async findOne(id: number) {
     return this.prisma.exchange.findUnique({
       where: { id },
-      include: {
-        transactions: true,
-      },
     });
   }
 
