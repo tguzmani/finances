@@ -269,14 +269,34 @@ export class TransactionsService {
     const random = Math.floor(Math.random() * 1000);
     const transactionId = `MANUAL_${data.platform}_${timestamp}_${random}`;
 
+    // Get current date/time in Caracas, Venezuela timezone (America/Caracas)
+    const now = new Date();
+    const venezuelaTimeStr = now.toLocaleString('en-US', {
+      timeZone: 'America/Caracas',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const venezuelaDate = new Date(venezuelaTimeStr);
+
+    // Determine payment method: CASH for CASH_BOX and WALLET platforms
+    let paymentMethod = data.method;
+    if (!paymentMethod && (data.platform === TransactionPlatform.CASH_BOX || data.platform === TransactionPlatform.WALLET)) {
+      paymentMethod = PaymentMethod.CASH;
+    }
+
     return await this.prisma.transaction.create({
       data: {
-        date: new Date(),
+        date: venezuelaDate,
         amount: data.amount,
         currency: data.currency,
         transactionId,
         platform: data.platform,
-        method: data.method || null,
+        method: paymentMethod || null,
         type: data.type,
         description: data.description,
         status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status

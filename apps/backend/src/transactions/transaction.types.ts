@@ -24,4 +24,5 @@ export enum PaymentMethod {
   BINANCE_PAY = 'BINANCE_PAY',
   DEPOSIT = 'DEPOSIT',
   WITHDRAWAL = 'WITHDRAWAL',
+  CASH = 'CASH',
 }

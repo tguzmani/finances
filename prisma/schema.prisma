@@ -101,6 +101,7 @@ enum PaymentMethod {
   BINANCE_PAY
   DEPOSIT
   WITHDRAWAL
+  CASH
 }
 
 enum ExchangeStatus {
