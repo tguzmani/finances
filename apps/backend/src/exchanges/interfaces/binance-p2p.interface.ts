@@ -22,3 +22,27 @@ export interface BinanceP2PResponse {
   total: number;
   success: boolean;
 }
+
+// P2P Market Offers (current offers, not historical trades)
+export interface BinanceP2POffer {
+  adv: {
+    advNo: string;
+    price: string;
+    tradableQuantity: string;
+    minSingleTransAmount: string;
+    maxSingleTransAmount: string;
+  };
+  advertiser: {
+    nickName: string;
+    monthOrderCount: number;
+    monthFinishRate: number;
+  };
+}
+
+export interface BinanceP2POffersResponse {
+  code: string;
+  message: string | null;
+  data: BinanceP2POffer[];
+  total: number;
+  success: boolean;
+}

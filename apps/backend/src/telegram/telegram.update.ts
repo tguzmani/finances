@@ -7,6 +7,7 @@ import { SessionContext } from './telegram.types';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
+import { TelegramRatesUpdate } from './rates/telegram-rates.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TransactionGroupsService } from '../transaction-groups/transaction-groups.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
@@ -21,6 +22,7 @@ export class TelegramUpdate {
     private readonly transactionsUpdate: TelegramTransactionsUpdate,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
+    private readonly ratesUpdate: TelegramRatesUpdate,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly exchangeRateService: ExchangeRateService,
@@ -51,6 +53,7 @@ export class TelegramUpdate {
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
       '/groups - View unregistered groups\n' +
+      '/rates - View exchange rates and discounts\n' +
       '/review - Review pending items\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
@@ -97,6 +100,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleAddTransaction(@Ctx() ctx: SessionContext) {
     await this.manualTransactionUpdate.handleAddTransaction(ctx);
+  }
+
+  @Command('rates')
+  @UseGuards(TelegramAuthGuard)
+  async handleRates(@Ctx() ctx: SessionContext) {
+    await this.ratesUpdate.handleRates(ctx);
   }
 
   @Command('sync')

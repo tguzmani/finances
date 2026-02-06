@@ -15,6 +15,10 @@ import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
+import { TelegramRatesUpdate } from './rates/telegram-rates.update';
+import { TelegramRatesService } from './rates/telegram-rates.service';
+import { TelegramRatesPresenter } from './rates/telegram-rates.presenter';
+import { TelegramRatesScheduler } from './rates/telegram-rates.scheduler';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
@@ -83,6 +87,10 @@ import * as https from 'https';
     TelegramTransactionsUpdate,
     TelegramManualTransactionUpdate,
     TelegramExchangesUpdate,
+    TelegramRatesUpdate,
+    TelegramRatesService,
+    TelegramRatesPresenter,
+    TelegramRatesScheduler,
     PagoMovilOcrService,
     PagoMovilParser,
   ],

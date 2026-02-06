@@ -10,6 +10,8 @@ export interface ParsedPagoMovilTransaction {
 @Injectable()
 export class PagoMovilParser {
   private readonly CURRENCY = 'VES';
+  private readonly RIF_SURCHARGE_MULTIPLIER = 1.015;
+  private readonly CEDULA_SURCHARGE_MULTIPLIER = 1.003;
 
   /**
    * Parse OCR text from Pago Móvil screenshot
@@ -32,7 +34,23 @@ export class PagoMovilParser {
 
     // Remove leading zeros from reference
     const reference = parseInt(referenceMatch[1], 10).toString();
-    const amount = this.parseAmount(amountMatch[1]);
+    let amount = this.parseAmount(amountMatch[1]);
+
+    // Detect if it's RIF (starts with J) or Cédula (starts with V) and apply surcharge
+    const isRIF = /J-?\d{8,9}/i.test(ocrText);
+    const isCedula = /V-?\d{7,9}/i.test(ocrText);
+
+    if (isRIF) {
+      // Apply 1.5% surcharge for RIF
+      amount = amount * this.RIF_SURCHARGE_MULTIPLIER;
+    } else if (isCedula) {
+      // Apply 0.3% surcharge for Cédula
+      amount = amount * this.CEDULA_SURCHARGE_MULTIPLIER;
+    } else {
+      // Default to Cédula surcharge if type cannot be determined
+      amount = amount * this.CEDULA_SURCHARGE_MULTIPLIER;
+    }
+
     const date = this.parseDate(dateMatch?.[1], timeMatch?.[1]);
 
     return {
