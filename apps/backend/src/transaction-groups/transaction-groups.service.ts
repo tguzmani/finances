@@ -190,16 +190,18 @@ export class TransactionGroupsService {
     const totalAmount = Math.abs(net);
     const type = net > 0 ? 'INCOME' : net < 0 ? 'EXPENSE' : 'NEUTRAL';
 
+    const currency = isMixed ? 'MIXED' : (hasVES ? 'VES' : 'USD');
+
     return {
       totalAmount,
-      currency: isMixed ? 'MIXED' : (hasVES ? 'VES' : 'USD'),
+      currency,
       type,
       hasMonetaryValue: totalAmount > 0,
-      excelFormula: this.buildExcelFormula(group.transactions, exchangeRate),
+      excelFormula: this.buildExcelFormula(group.transactions, exchangeRate, currency),
     };
   }
 
-  private buildExcelFormula(transactions: Transaction[], exchangeRate?: number): string {
+  private buildExcelFormula(transactions: Transaction[], exchangeRate?: number, groupCurrency?: string): string {
     const terms: string[] = [];
 
     for (const tx of transactions) {
@@ -210,7 +212,8 @@ export class TransactionGroupsService {
 
     const sumExpr = terms.join('');
 
-    if (exchangeRate) {
+    // Only divide by exchange rate if ALL transactions are VES (not mixed, not USD)
+    if (exchangeRate && groupCurrency === 'VES') {
       return `=abs((${sumExpr})/${exchangeRate.toFixed(2)})`;
     }
 

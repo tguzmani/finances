@@ -50,6 +50,12 @@ export class TransactionsService {
     });
   }
 
+  async findByTransactionId(transactionId: string) {
+    return this.prisma.transaction.findUnique({
+      where: { transactionId },
+    });
+  }
+
   async update(id: number, dto: UpdateTransactionDto) {
     const data: Prisma.TransactionUpdateInput = {};
 
@@ -97,6 +103,7 @@ export class TransactionsService {
                 method: tx.method,
                 type: TransactionType.EXPENSE,
                 status: TransactionStatus.NEW,
+                description: tx.description,
               },
             });
             totalCreated++;

@@ -335,24 +335,30 @@ export class TelegramManualTransactionUpdate {
         return;
       }
 
-      // Build message and buttons
-      let message = '<b>Select transaction to group with:</b>\n\n';
+      // Build buttons (no text list)
       const buttons = [];
 
       for (const tx of available) {
-        const date = new Date(tx.date).toLocaleDateString('es-VE', { timeZone: 'UTC' });
         const amount = Number(tx.amount).toFixed(2);
         const desc = tx.description || 'No description';
 
-        message += `ID: ${tx.id} - ${desc} - ${date}. ${amount} ${tx.currency}\n`;
+        // Truncate long descriptions to fit in button
+        const maxDescLength = 45;
+        const truncatedDesc = desc.length > maxDescLength
+          ? desc.substring(0, maxDescLength) + '...'
+          : desc;
+
+        // Button format: "Description - Amount USD"
+        const buttonText = `${truncatedDesc} - ${amount} ${tx.currency}`;
+
         buttons.push([
-          Markup.button.callback(`ID: ${tx.id}`, `manual_group_select_${tx.id}`)
+          Markup.button.callback(buttonText, `manual_group_select_${tx.id}`)
         ]);
       }
 
       buttons.push([Markup.button.callback('❌ Cancel', 'manual_group_cancel')]);
 
-      await ctx.reply(message, {
+      await ctx.reply('<b>Select transaction to group with:</b>', {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons),
       });

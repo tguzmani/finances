@@ -14,6 +14,7 @@ export interface ParsedTransaction {
   transactionId: string;
   platform: TransactionPlatform;
   method: PaymentMethod;
+  description?: string;
 }
 
 export interface BankEmailConfig {

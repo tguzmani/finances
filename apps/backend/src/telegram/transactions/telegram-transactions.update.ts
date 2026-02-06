@@ -176,6 +176,36 @@ export class TelegramTransactionsUpdate {
     }
   }
 
+  @Action('review_mark_reviewed')
+  @UseGuards(TelegramAuthGuard)
+  async handleMarkReviewed(@Ctx() ctx: SessionContext) {
+    try {
+      const transactionId = ctx.session.currentTransactionId;
+
+      if (!transactionId) {
+        await ctx.answerCbQuery('No active transaction');
+        return;
+      }
+
+      // Mark transaction as REVIEWED without requiring description
+      await this.transactionsService.update(transactionId, {
+        status: TransactionStatus.REVIEWED,
+      });
+
+      await ctx.answerCbQuery('Marked as reviewed');
+      await ctx.reply('✅ Marked as reviewed');
+
+      // If single item review, end the flow. Otherwise show next
+      if (ctx.session.reviewSingleItem) {
+        this.baseHandler.clearSession(ctx);
+      } else {
+        await this.showNextTransaction(ctx);
+      }
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
   @Action(/^notification_tx_name_(\d+)$/)
   @UseGuards(TelegramAuthGuard)
   async handleNotificationName(@Ctx() ctx: SessionContext) {
@@ -451,24 +481,30 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
-      // Build message and buttons
-      let message = '<b>Select transaction to group with:</b>\n\n';
+      // Build buttons (no text list)
       const buttons = [];
 
       for (const tx of available) {
-        const date = new Date(tx.date).toLocaleDateString('es-VE', { timeZone: 'UTC' });
         const amount = Number(tx.amount).toFixed(2);
         const desc = tx.description || 'No description';
 
-        message += `ID: ${tx.id} - ${desc} - ${date}. ${amount} ${tx.currency}\n`;
+        // Truncate long descriptions to fit in button
+        const maxDescLength = 45;
+        const truncatedDesc = desc.length > maxDescLength
+          ? desc.substring(0, maxDescLength) + '...'
+          : desc;
+
+        // Button format: "Description - Amount USD"
+        const buttonText = `${truncatedDesc} - ${amount} ${tx.currency}`;
+
         buttons.push([
-          Markup.button.callback(`ID: ${tx.id}`, `group_select_${tx.id}`)
+          Markup.button.callback(buttonText, `group_select_${tx.id}`)
         ]);
       }
 
       buttons.push([Markup.button.callback('❌ Cancel', 'group_cancel')]);
 
-      await ctx.reply(message, {
+      await ctx.reply('<b>Select transaction to group with:</b>', {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons),
       });
@@ -527,6 +563,11 @@ export class TelegramTransactionsUpdate {
 
         const group = await this.transactionGroupsService.findOne(tx1.groupId);
         const count = await this.transactionGroupsService.getGroupMemberCount(tx1.groupId);
+
+        // Mark current transaction as REVIEWED since it's been grouped
+        await this.transactionsService.update(tx2Id, {
+          status: TransactionStatus.REVIEWED,
+        });
 
         await ctx.reply(
           `✅ Transaction added to group: "${group.description}"\n` +
@@ -671,6 +712,11 @@ export class TelegramTransactionsUpdate {
           description,
           [tx1Id, tx2Id]
         );
+
+        // Mark current transaction as REVIEWED since it's been grouped
+        await this.transactionsService.update(tx2Id, {
+          status: TransactionStatus.REVIEWED,
+        });
 
         await ctx.reply(
           `✅ Group created: "${description}"\n` +
@@ -857,6 +903,7 @@ export class TelegramTransactionsUpdate {
         [
           Markup.button.callback('⏭️ Skip', 'review_skip'),
           Markup.button.callback('❌ Reject', 'review_reject'),
+          Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
         ]
       );
 
@@ -1017,6 +1064,7 @@ export class TelegramTransactionsUpdate {
         [
           Markup.button.callback('⏭️ Skip', 'review_skip'),
           Markup.button.callback('❌ Reject', 'review_reject'),
+          Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
         ]
       );
 
