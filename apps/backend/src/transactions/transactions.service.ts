@@ -263,25 +263,31 @@ export class TransactionsService {
     amount: number;
     description: string;
     method?: PaymentMethod;
+    date?: Date;
   }): Promise<Transaction> {
     // Generate unique transaction ID for manual entries
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
     const transactionId = `MANUAL_${data.platform}_${timestamp}_${random}`;
 
-    // Get current date/time in Caracas, Venezuela timezone (America/Caracas)
-    const now = new Date();
-    const venezuelaTimeStr = now.toLocaleString('en-US', {
-      timeZone: 'America/Caracas',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-    const venezuelaDate = new Date(venezuelaTimeStr);
+    // Use provided date or get current date/time in Caracas, Venezuela timezone (America/Caracas)
+    let venezuelaDate: Date;
+    if (data.date) {
+      venezuelaDate = data.date;
+    } else {
+      const now = new Date();
+      const venezuelaTimeStr = now.toLocaleString('en-US', {
+        timeZone: 'America/Caracas',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      venezuelaDate = new Date(venezuelaTimeStr);
+    }
 
     // Determine payment method: CASH for CASH_BOX and WALLET platforms
     let paymentMethod = data.method;

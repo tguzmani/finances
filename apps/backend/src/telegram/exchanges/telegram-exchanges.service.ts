@@ -59,4 +59,16 @@ export class TelegramExchangesService {
   async registerExchanges(exchangeIds: number[], wavg: number): Promise<void> {
     return this.exchangesService.registerExchanges(exchangeIds, wavg);
   }
+
+  async updateExchangeRateOnly(wavg: number): Promise<{updated: boolean, value: number}> {
+    return this.exchangesService.updateExchangeRateOnly(wavg);
+  }
+
+  formatExchangeRateUpdated(value: number): string {
+    return this.presenter.formatExchangeRateUpdated(value);
+  }
+
+  formatExchangeRateUnchanged(value: number): string {
+    return this.presenter.formatExchangeRateUnchanged(value);
+  }
 }

@@ -22,6 +22,7 @@ import { TelegramRatesScheduler } from './rates/telegram-rates.scheduler';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
+import { CommonModule } from '../common/common.module';
 import { PagoMovilOcrService } from '../transactions/pago-movil-ocr.service';
 import { PagoMovilParser } from '../transactions/pago-movil.parser';
 import * as https from 'https';
@@ -71,6 +72,7 @@ import * as https from 'https';
     TransactionsModule,      // Para usar TransactionsService
     ExchangesModule,         // Para usar ExchangesService
     TransactionGroupsModule, // Para usar TransactionGroupsService
+    CommonModule,            // Para usar DateParserService
   ],
   providers: [
     TelegramUpdate,

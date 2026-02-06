@@ -219,4 +219,28 @@ export class ExchangesService {
 
     this.logger.log(`Registered ${exchangeIds.length} exchanges with WAVG ${wavg}`);
   }
+
+  async updateExchangeRateOnly(wavg: number): Promise<{updated: boolean, value: number}> {
+    // Fetch latest exchange rate
+    const latestRate = await this.prisma.exchangeRate.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    // Round wavg to match database precision (Decimal 10,2)
+    const roundedWavg = Math.round(wavg * 100) / 100;
+
+    // If latest rate exists and has same value, return no update
+    if (latestRate && Number(latestRate.value) === roundedWavg) {
+      this.logger.log(`Exchange rate unchanged: ${roundedWavg} VES/USD`);
+      return { updated: false, value: roundedWavg };
+    }
+
+    // Save new rate
+    await this.prisma.exchangeRate.create({
+      data: { value: roundedWavg },
+    });
+
+    this.logger.log(`Saved new exchange rate: ${roundedWavg} VES/USD`);
+    return { updated: true, value: roundedWavg };
+  }
 }

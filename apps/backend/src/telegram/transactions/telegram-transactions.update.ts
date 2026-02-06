@@ -676,7 +676,8 @@ export class TelegramTransactionsUpdate {
 
     // Manual transaction flow is handled by TelegramManualTransactionUpdate
     if (ctx.session.manualTransactionState === 'waiting_amount' ||
-        ctx.session.manualTransactionState === 'waiting_description') {
+        ctx.session.manualTransactionState === 'waiting_description' ||
+        ctx.session.manualTransactionState === 'waiting_custom_date') {
       await this.manualTransactionUpdate.handleManualAmountOrDescription(ctx);
       return;
     }
@@ -1131,14 +1132,30 @@ export class TelegramTransactionsUpdate {
       ctx.session.registerTransactionGroupIds = result.groups.map(g => g.id);
       ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
-      // Show singles
-      for (const tx of result.singleTransactions) {
-        await this.showTransactionForRegister(ctx, tx, result.exchangeRate || 0);
-      }
+      // Combine transactions and groups into a single chronologically ordered list
+      const combinedItems: Array<{type: 'transaction' | 'group', date: Date, data: any}> = [
+        ...result.singleTransactions.map(tx => ({
+          type: 'transaction' as const,
+          date: new Date(tx.date),
+          data: tx,
+        })),
+        ...result.groupsWithDates.map(item => ({
+          type: 'group' as const,
+          date: item.date,
+          data: item.group,
+        })),
+      ];
 
-      // Show groups
-      for (const group of result.groups) {
-        await this.showGroupForRegister(ctx, group, result.exchangeRate || 0);
+      // Sort by date (oldest first)
+      combinedItems.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      // Show all items in chronological order
+      for (const item of combinedItems) {
+        if (item.type === 'transaction') {
+          await this.showTransactionForRegister(ctx, item.data, result.exchangeRate || 0);
+        } else {
+          await this.showGroupForRegister(ctx, item.data, result.exchangeRate || 0);
+        }
       }
 
       // Show final commit button

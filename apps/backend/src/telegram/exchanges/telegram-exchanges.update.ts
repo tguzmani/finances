@@ -252,6 +252,38 @@ export class TelegramExchangesUpdate {
     }
   }
 
+  @Action('register_update_rate_only')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterUpdateRateOnly(@Ctx() ctx: SessionContext) {
+    try {
+      const wavg = ctx.session.registerWavg;
+
+      if (!wavg) {
+        await ctx.answerCbQuery('Session expired. Please run /register again.');
+        return;
+      }
+
+      await ctx.answerCbQuery('Checking exchange rate...');
+
+      // Update rate only (does not change exchange status)
+      const result = await this.telegramService.exchanges.updateExchangeRateOnly(wavg);
+
+      if (result.updated) {
+        const message = this.telegramService.exchanges.formatExchangeRateUpdated(result.value);
+        await ctx.reply(message, { parse_mode: 'HTML' });
+      } else {
+        const message = this.telegramService.exchanges.formatExchangeRateUnchanged(result.value);
+        await ctx.reply(message, { parse_mode: 'HTML' });
+      }
+
+      // Don't clear session - user might still want to register or exit
+    } catch (error) {
+      this.logger.error(`Error updating exchange rate: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error updating exchange rate. Please try again.');
+    }
+  }
+
   private async showNextExchange(ctx: SessionContext) {
     try {
       const exchange = await this.telegramService.exchanges.getNextForReview();
@@ -509,6 +541,12 @@ export class TelegramExchangesUpdate {
               text: `${metrics.totalAmount} USD`,
               copy_text: { text: metrics.sumFormula }
             } as any
+          ],
+          [
+            {
+              text: '📊 Update Exchange Rate',
+              callback_data: 'register_update_rate_only'
+            }
           ],
           [
             {

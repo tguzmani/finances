@@ -1,0 +1,68 @@
+import { Injectable, Logger } from '@nestjs/common';
+import * as chrono from 'chrono-node';
+
+@Injectable()
+export class DateParserService {
+  private readonly logger = new Logger(DateParserService.name);
+
+  /**
+   * Parse natural language date input with Spanish locale support
+   * @param input - Natural language date string (e.g., "now", "ayer", "yesterday", "Dec 25", "2 days ago")
+   * @returns Parsed Date object or null if parsing fails
+   *
+   * Edge cases handled:
+   * - If no year specified, uses current year
+   * - "now" returns current moment
+   * - Supports both Spanish and English input (tries Spanish first, then English)
+   *
+   * Note: chrono-node automatically uses current year if not specified
+   */
+  parseNaturalLanguageDate(input: string): Date | null {
+    try {
+      // Handle "now" explicitly
+      const normalized = input.toLowerCase().trim();
+      if (normalized === 'now' || normalized === 'ahora') {
+        return new Date();
+      }
+
+      // Try Spanish locale first
+      let parsed = chrono.es.parseDate(input);
+
+      // If Spanish parsing failed, try English locale
+      if (!parsed) {
+        parsed = chrono.parseDate(input);
+      }
+
+      if (!parsed) {
+        this.logger.warn(`Failed to parse date: "${input}"`);
+        return null;
+      }
+
+      // Chrono automatically uses current year if not specified
+      this.logger.log(`Parsed "${input}" as ${parsed.toISOString()}`);
+      return parsed;
+    } catch (error) {
+      this.logger.error(`Error parsing date "${input}": ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Parse date for Venezuela context
+   * @param input - Natural language date string
+   * @returns Parsed Date object or null if parsing fails
+   *
+   * Note: Assumes the user is inputting dates in Venezuela timezone context (America/Caracas, UTC-4)
+   */
+  parseVenezuelaDate(input: string): Date | null {
+    return this.parseNaturalLanguageDate(input);
+  }
+
+  /**
+   * Get current date/time in Venezuela timezone
+   * @returns Current Date object
+   */
+  getNowVenezuela(): Date {
+    return new Date();
+  }
+}

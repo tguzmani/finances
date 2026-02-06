@@ -46,9 +46,12 @@ export class TelegramTransactionsService {
 
       let transactions = allTransactions;
 
-      // Filter out rejected by default
+      // Filter out rejected and registered by default
       if (!showAll) {
-        transactions = transactions.filter(t => t.status !== TransactionStatus.REJECTED);
+        transactions = transactions.filter(t =>
+          t.status !== TransactionStatus.REJECTED &&
+          t.status !== TransactionStatus.REGISTERED
+        );
       }
 
       const exchangeRate = latestRate ? Number(latestRate.value) : undefined;
@@ -166,6 +169,7 @@ export class TelegramTransactionsService {
       return {
         singleTransactions: sortedSingles,
         groups: sortedGroups.map(item => item.group),
+        groupsWithDates: sortedGroups, // Include dates for chronological merging
         exchangeRate: latestRate ? Number(latestRate.value) : null,
         hasItems: sortedSingles.length > 0 || sortedGroups.length > 0,
       };

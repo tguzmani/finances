@@ -6,6 +6,7 @@ import { TransactionsService } from '../../transactions/transactions.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
+import { DateParserService } from '../../common/date-parser.service';
 
 @Update()
 export class TelegramManualTransactionUpdate {
@@ -15,6 +16,7 @@ export class TelegramManualTransactionUpdate {
     private readonly transactionsService: TransactionsService,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly transactionGroupsService: TransactionGroupsService,
+    private readonly dateParser: DateParserService,
   ) {
     this.logger.log('TelegramManualTransactionUpdate instantiated');
   }
@@ -234,64 +236,83 @@ export class TelegramManualTransactionUpdate {
           { parse_mode: 'HTML' }
         );
       } else if (ctx.session.manualTransactionState === 'waiting_description') {
-        // Save description and create transaction
+        // Save description and ask for date
         const description = text;
 
-        await ctx.reply('Creating transaction...');
-
-        const transaction = await this.transactionsService.createManualTransaction({
-          type: ctx.session.manualTransactionType as any,
-          platform: ctx.session.manualTransactionPlatform as any,
-          currency: ctx.session.manualTransactionCurrency!,
-          amount: ctx.session.manualTransactionAmount!,
-          description,
-          method: ctx.session.manualTransactionMethod as any || undefined,
-        });
-
-        // Format success message
-        const typeIcon = transaction.type === 'INCOME' ? '💰' : '💸';
-        const platformLabel = this.getPlatformLabel(transaction.platform);
-        const methodLabel = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
+        ctx.session.manualTransactionDescription = description;
+        ctx.session.manualTransactionState = 'waiting_date_choice';
 
         await ctx.reply(
-          `✅ <b>Transaction Created!</b>\n\n` +
-          `${typeIcon} <b>${description}</b>\n\n` +
-          `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}\n` +
-          `Account: ${platformLabel}\n` +
-          `Method: ${methodLabel}\n` +
-          `Status: Reviewed (ready to register)`,
-          { parse_mode: 'HTML' }
+          `Description: ${description}\n\n` +
+          'When did this transaction occur?',
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '⏰ Now', callback_data: 'manual_date_now' },
+                  { text: '📅 Custom', callback_data: 'manual_date_custom' },
+                ],
+                [
+                  { text: '🚫 Cancel', callback_data: 'manual_cancel' },
+                ],
+              ],
+            },
+          }
         );
+      } else if (ctx.session.manualTransactionState === 'waiting_custom_date') {
+        // Parse custom date input
+        const dateInput = text;
 
-        // Check if there are other REVIEWED transactions to connect to a group
-        const allTransactions = await this.transactionsService.findAll({});
-        const otherReviewedTransactions = allTransactions.filter(t =>
-          t.status === 'REVIEWED' &&
-          t.id !== transaction.id &&
-          t.groupId === null
-        );
+        const parsedDate = this.dateParser.parseVenezuelaDate(dateInput);
 
-        if (otherReviewedTransactions.length > 0) {
-          // Store the created transaction ID in session for grouping
-          ctx.session.currentTransactionId = transaction.id;
-
-          const keyboard = Markup.inlineKeyboard([
-            [Markup.button.callback('📎 Connect to Group', 'manual_connect_group')],
-          ]);
-
-          await ctx.reply(
-            'Would you like to connect this transaction to a group?',
-            keyboard
-          );
-        } else {
-          // Clear session if no other transactions available
-          this.baseHandler.clearSession(ctx);
+        if (!parsedDate) {
+          await ctx.reply('❌ Invalid date format. Please try again.');
+          return;
         }
+
+        // Create transaction with custom date
+        await this.createTransactionAndFinish(ctx, parsedDate);
       }
     } catch (error) {
       this.logger.error(`Error handling manual text input: ${error.message}`);
       await ctx.reply('Error processing input. Please try again or use /add_transaction to restart.');
       this.baseHandler.clearSession(ctx);
+    }
+  }
+
+  @Action('manual_date_now')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualDateNow(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Using current time');
+
+      // Create transaction with current date (no date parameter = uses current time)
+      await this.createTransactionAndFinish(ctx);
+    } catch (error) {
+      this.logger.error(`Error handling date now: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error creating transaction. Please try again.');
+    }
+  }
+
+  @Action('manual_date_custom')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualDateCustom(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      ctx.session.manualTransactionState = 'waiting_custom_date';
+
+      await ctx.reply(
+        '📅 <b>Enter custom date/time</b>\n\n' +
+        'You can use natural language',
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      this.logger.error(`Error handling date custom: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error. Please try again.');
     }
   }
 
@@ -455,6 +476,76 @@ export class TelegramManualTransactionUpdate {
       this.baseHandler.clearSession(ctx);
     } catch (error) {
       this.logger.error(`Error handling manual group cancel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create transaction with all collected data and handle post-creation flow
+   * @param ctx Session context
+   * @param date Optional date (if not provided, uses current time)
+   */
+  private async createTransactionAndFinish(@Ctx() ctx: SessionContext, date?: Date) {
+    const description = ctx.session.manualTransactionDescription!;
+
+    await ctx.reply('Creating transaction...');
+
+    const transaction = await this.transactionsService.createManualTransaction({
+      type: ctx.session.manualTransactionType as any,
+      platform: ctx.session.manualTransactionPlatform as any,
+      currency: ctx.session.manualTransactionCurrency!,
+      amount: ctx.session.manualTransactionAmount!,
+      description,
+      method: ctx.session.manualTransactionMethod as any || undefined,
+      date,
+    });
+
+    // Format success message
+    const typeIcon = transaction.type === 'INCOME' ? '💰' : '💸';
+    const platformLabel = this.getPlatformLabel(transaction.platform);
+    const methodLabel = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
+    const dateStr = new Date(transaction.date).toLocaleString('en-US', {
+      timeZone: 'America/Caracas',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    await ctx.reply(
+      `✅ <b>Transaction Created!</b>\n\n` +
+      `${typeIcon} <b>${description}</b>\n\n` +
+      `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}\n` +
+      `Account: ${platformLabel}\n` +
+      `Method: ${methodLabel}\n` +
+      `Date: ${dateStr}\n` +
+      `Status: Reviewed (ready to register)`,
+      { parse_mode: 'HTML' }
+    );
+
+    // Check if there are other REVIEWED transactions to connect to a group
+    const allTransactions = await this.transactionsService.findAll({});
+    const otherReviewedTransactions = allTransactions.filter(t =>
+      t.status === 'REVIEWED' &&
+      t.id !== transaction.id &&
+      t.groupId === null
+    );
+
+    if (otherReviewedTransactions.length > 0) {
+      // Store the created transaction ID in session for grouping
+      ctx.session.currentTransactionId = transaction.id;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📎 Connect to Group', 'manual_connect_group')],
+      ]);
+
+      await ctx.reply(
+        'Would you like to connect this transaction to a group?',
+        keyboard
+      );
+    } else {
+      // Clear session if no other transactions available
+      this.baseHandler.clearSession(ctx);
     }
   }
 

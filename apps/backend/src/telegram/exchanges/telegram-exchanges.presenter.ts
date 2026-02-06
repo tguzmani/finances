@@ -90,6 +90,20 @@ export class TelegramExchangesPresenter {
     );
   }
 
+  formatExchangeRateUpdated(value: number): string {
+    return (
+      `✅ <b>Exchange Rate Updated!</b>\n\n` +
+      `New rate saved: ${value} VES/USD`
+    );
+  }
+
+  formatExchangeRateUnchanged(value: number): string {
+    return (
+      `ℹ️ <b>Exchange Rate Unchanged</b>\n\n` +
+      `${value} VES/USD already exists in the database`
+    );
+  }
+
   private getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       'COMPLETED': 'Completed',
