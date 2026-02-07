@@ -531,6 +531,16 @@ export class TelegramManualTransactionUpdate {
       t.groupId === null
     );
 
+    // Clear manual transaction flow state (but keep currentTransactionId if grouping)
+    ctx.session.manualTransactionState = undefined;
+    ctx.session.manualTransactionType = undefined;
+    ctx.session.manualTransactionPlatform = undefined;
+    ctx.session.manualTransactionCurrency = undefined;
+    ctx.session.manualTransactionMethod = undefined;
+    ctx.session.manualTransactionAmount = undefined;
+    ctx.session.manualTransactionDescription = undefined;
+    ctx.session.manualTransactionDate = undefined;
+
     if (otherReviewedTransactions.length > 0) {
       // Store the created transaction ID in session for grouping
       ctx.session.currentTransactionId = transaction.id;
@@ -544,7 +554,7 @@ export class TelegramManualTransactionUpdate {
         keyboard
       );
     } else {
-      // Clear session if no other transactions available
+      // Clear session completely if no other transactions available
       this.baseHandler.clearSession(ctx);
     }
   }

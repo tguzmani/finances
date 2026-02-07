@@ -51,6 +51,16 @@ export interface ReviewSession {
   // Registration with groups
   registerTransactionGroupIds?: number[];
   lastRegisteredGroupIds?: number[];
+  // Photo processing
+  pendingPhotoFileId?: string;
+  pendingBillData?: {
+    datetime: Date | null;
+    amount: number | null;
+    transactionId: string | null;
+    currency: string;
+    ocrText: string;
+    recipeName?: string;
+  };
 }
 
 export interface SessionContext extends Context {

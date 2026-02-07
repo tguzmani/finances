@@ -27,10 +27,13 @@ export class TelegramExchangesService {
     try {
       const allExchanges = await this.exchangesService.findAll({});
 
-      // Filter out rejected by default
+      // Filter out rejected and registered by default
       const exchanges = showAll
         ? allExchanges
-        : allExchanges.filter(e => e.status !== ExchangeStatus.REJECTED);
+        : allExchanges.filter(e =>
+            e.status !== ExchangeStatus.REJECTED &&
+            e.status !== ExchangeStatus.REGISTERED
+          );
 
       return this.presenter.formatRecentList(exchanges);
     } catch (error) {

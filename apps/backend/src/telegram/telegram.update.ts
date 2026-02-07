@@ -102,6 +102,12 @@ export class TelegramUpdate {
     await this.manualTransactionUpdate.handleAddTransaction(ctx);
   }
 
+  @Command('exchanges')
+  @UseGuards(TelegramAuthGuard)
+  async handleExchanges(@Ctx() ctx: SessionContext) {
+    await this.exchangesUpdate.handleExchanges(ctx);
+  }
+
   @Command('rates')
   @UseGuards(TelegramAuthGuard)
   async handleRates(@Ctx() ctx: SessionContext) {

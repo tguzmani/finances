@@ -23,8 +23,6 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { CommonModule } from '../common/common.module';
-import { PagoMovilOcrService } from '../transactions/pago-movil-ocr.service';
-import { PagoMovilParser } from '../transactions/pago-movil.parser';
 import * as https from 'https';
 
 @Module({
@@ -93,8 +91,6 @@ import * as https from 'https';
     TelegramRatesService,
     TelegramRatesPresenter,
     TelegramRatesScheduler,
-    PagoMovilOcrService,
-    PagoMovilParser,
   ],
   exports: [TelegramService],
 })

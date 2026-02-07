@@ -6,9 +6,8 @@ import { TelegramService } from '../telegram.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { SessionContext } from '../telegram.types';
 import { TransactionsService } from '../../transactions/transactions.service';
-import { TransactionStatus } from '../../transactions/transaction.types';
-import { PagoMovilOcrService } from '../../transactions/pago-movil-ocr.service';
-import { PagoMovilParser } from '../../transactions/pago-movil.parser';
+import { TransactionStatus, TransactionType, TransactionPlatform, PaymentMethod } from '../../transactions/transaction.types';
+import { TransactionOcrParser } from '../../transactions/ocr/parsers/transaction-ocr-parser';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
@@ -25,8 +24,7 @@ export class TelegramTransactionsUpdate {
   constructor(
     private readonly telegramService: TelegramService,
     private readonly transactionsService: TransactionsService,
-    private readonly pagoMovilOcr: PagoMovilOcrService,
-    private readonly pagoMovilParser: PagoMovilParser,
+    private readonly transactionOcrParser: TransactionOcrParser,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
@@ -784,77 +782,301 @@ export class TelegramTransactionsUpdate {
     }
 
     try {
-      await ctx.reply('📸 Processing image...');
-
       // Get highest resolution photo
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
       this.logger.log(`Photo received: ${photo.file_id}`);
 
-      // Get file URL from Telegram
-      const file = await ctx.telegram.getFile(photo.file_id);
-      const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-      this.logger.log(`File URL: ${file.file_path}`);
+      await ctx.reply('📸 Processing image with OCR...');
 
-      // Download image using axios with custom HTTPS agent
-      const httpsAgent = new https.Agent({
-        keepAlive: true,
-        keepAliveMsecs: 30000,
-        timeout: 60000,
-        family: 4, // Force IPv4
-      });
+      // Download and process image directly
+      const imageBuffer = await this.downloadImage(photo.file_id, ctx);
 
-      const response = await axios.get(fileUrl, {
-        responseType: 'arraybuffer',
-        httpsAgent,
-        timeout: 60000,
-      });
-      const imageBuffer = Buffer.from(response.data);
-      this.logger.log(`Image downloaded: ${imageBuffer.length} bytes`);
+      // Parse with unified OCR parser
+      this.logger.log('Parsing transaction with Google Vision...');
+      const transactionData = await this.transactionOcrParser.parseTransaction(imageBuffer);
 
-      // OCR
-      this.logger.log('Starting OCR...');
-      const ocrText = await this.pagoMovilOcr.extractText(imageBuffer);
-      this.logger.log(`OCR completed: ${ocrText.substring(0, 100)}...`);
+      this.logger.log(`Parsed transaction: ${JSON.stringify(transactionData)}`);
 
-      // Parse
-      this.logger.log('Parsing OCR text...');
-      const parsed = this.pagoMovilParser.parse(ocrText);
-
-      if (!parsed) {
-        this.logger.warn('Failed to parse transaction data from OCR text');
-        await ctx.reply('❌ Could not extract transaction data from image. Please try again with a clearer photo.');
+      // Handle based on which recipe succeeded
+      if (!transactionData.recipeName) {
+        // No recipe succeeded
+        await ctx.reply(
+          '❌ Could not recognize this image as a transaction.\n\n' +
+          'Supported formats:\n' +
+          '• Pago Móvil screenshots\n' +
+          '• Store receipts (Plaza, etc.)\n' +
+          '• Mini receipts\n\n' +
+          'Please try again with a clearer photo.'
+        );
         return;
       }
 
-      this.logger.log(`Parsed transaction: ${JSON.stringify(parsed)}`);
-
-      // Create transaction
-      try {
-        await this.transactionsService.createFromPagoMovil(parsed);
+      // Show OCR text if enabled
+      if (process.env.SHOW_OCR_RESULT === 'true') {
+        const ocrPreview = transactionData.ocrText.length > 4000
+          ? transactionData.ocrText.substring(0, 4000) + '...'
+          : transactionData.ocrText;
 
         await ctx.reply(
-          `✅ Transaction saved!\n\n` +
-          `Amount: ${parsed.currency} ${parsed.amount}\n` +
-          `Reference: ${parsed.transactionId}\n` +
-          `Date: ${parsed.date.toLocaleString('es-VE')}`
+          `📝 <b>OCR Text (Debug)</b>\n\n` +
+          `<code>${ocrPreview}</code>`,
+          { parse_mode: 'HTML' }
         );
+      }
+
+      if (transactionData.recipeName === 'pago-movil') {
+        // Pago Móvil: Create transaction directly
+        await this.handlePagoMovilTransaction(ctx, transactionData);
+      } else {
+        // Bill/Receipt: Show preview with action buttons
+        await this.handleBillTransaction(ctx, transactionData);
+      }
+
+    } catch (error) {
+      this.logger.error(`Photo handling failed: ${error?.message || 'Unknown error'}`);
+      this.logger.error(error);
+      await ctx.reply('❌ Error processing image. Please try again.');
+    }
+  }
+
+  @Action('bill_save')
+  @UseGuards(TelegramAuthGuard)
+  async handleBillSave(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Saving transaction...');
+
+      const billData = ctx.session.pendingBillData;
+      if (!billData) {
+        await ctx.reply('❌ Session expired. Please send the photo again.');
+        return;
+      }
+
+      // Validate required fields
+      if (!billData.datetime || !billData.amount) {
+        await ctx.reply('❌ Cannot save transaction: Missing required data (date or amount).');
+        return;
+      }
+
+      // Create transaction from bill data
+      await this.transactionsService.createManualTransaction({
+        type: TransactionType.EXPENSE, // Bills are usually expenses
+        platform: TransactionPlatform.BANESCO, // Default platform for bills
+        currency: billData.currency,
+        amount: billData.amount,
+        description: billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase',
+        method: PaymentMethod.DEBIT_CARD, // Default payment method
+        date: billData.datetime,
+      });
+
+      await ctx.reply(
+        `✅ <b>Transaction saved!</b>\n\n` +
+        `Amount: ${billData.currency} ${billData.amount.toFixed(2)}\n` +
+        `Date: ${billData.datetime.toLocaleString('es-VE')}\n` +
+        `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
+        `<i>Status: Unreviewed</i>`,
+        { parse_mode: 'HTML' }
+      );
+
+      // Clear session
+      ctx.session.pendingBillData = undefined;
+
+    } catch (error) {
+      this.logger.error(`Bill save failed: ${error?.message || 'Unknown error'}`);
+      this.logger.error(error);
+      await ctx.reply('❌ Error saving transaction. Please try again.');
+    }
+  }
+
+  @Action('bill_manual')
+  @UseGuards(TelegramAuthGuard)
+  async handleBillManual(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Starting manual entry...');
+
+      // Clear bill data
+      ctx.session.pendingBillData = undefined;
+
+      // Delegate to manual transaction flow
+      await this.manualTransactionUpdate.handleAddTransaction(ctx);
+
+    } catch (error) {
+      this.logger.error(`Bill manual entry failed: ${error?.message || 'Unknown error'}`);
+      this.logger.error(error);
+      await ctx.reply('❌ Error starting manual entry. Please try again.');
+    }
+  }
+
+  @Action('pago_movil_save')
+  @UseGuards(TelegramAuthGuard)
+  async handlePagoMovilSave(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Saving transaction...');
+
+      const pagoMovilData = ctx.session.pendingBillData;
+      if (!pagoMovilData) {
+        await ctx.reply('❌ Session expired. Please send the photo again.');
+        return;
+      }
+
+      // Validate required fields
+      if (!pagoMovilData.datetime || !pagoMovilData.amount || !pagoMovilData.transactionId) {
+        await ctx.reply('❌ Cannot save transaction: Missing required data.');
+        return;
+      }
+
+      this.logger.log(`Creating Pago Móvil transaction: ${JSON.stringify(pagoMovilData)}`);
+
+      // Create Pago Móvil transaction
+      try {
+        await this.transactionsService.createFromPagoMovil({
+          date: pagoMovilData.datetime,
+          amount: pagoMovilData.amount,
+          currency: pagoMovilData.currency,
+          transactionId: pagoMovilData.transactionId,
+        });
+
+        await ctx.reply(
+          `✅ <b>Pago Móvil Transaction Saved!</b>\n\n` +
+          `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}\n` +
+          `Reference: ${pagoMovilData.transactionId}\n` +
+          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE')}`,
+          { parse_mode: 'HTML' }
+        );
+
+        // Clear session
+        ctx.session.pendingBillData = undefined;
+
       } catch (dbError) {
         if (dbError.message === 'Transaction already exists') {
           await ctx.reply(
             `⚠️ This transaction already exists in the database.\n\n` +
-            `Reference: ${parsed.transactionId}\n` +
-            `Amount: ${parsed.currency} ${parsed.amount}`
+            `Reference: ${pagoMovilData.transactionId}\n` +
+            `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}`
           );
+          // Clear session even on duplicate
+          ctx.session.pendingBillData = undefined;
         } else {
-          throw dbError; // Re-throw if it's a different error
+          throw dbError;
         }
       }
 
     } catch (error) {
-      this.logger.error(`Photo processing failed: ${error?.message || 'Unknown error'}`);
+      this.logger.error(`Pago Móvil save failed: ${error?.message || 'Unknown error'}`);
       this.logger.error(error);
-      await ctx.reply('❌ Error processing image. Please try again.');
+      await ctx.reply('❌ Error saving transaction. Please try again.');
     }
+  }
+
+  private async handlePagoMovilTransaction(ctx: SessionContext, transactionData: any) {
+    // Validate all required fields
+    if (!transactionData.datetime || !transactionData.amount || !transactionData.transactionId) {
+      this.logger.warn('Missing required Pago Móvil data');
+      await ctx.reply('❌ Could not extract all transaction data. Please try again with a clearer photo.');
+      return;
+    }
+
+    this.logger.log(`Showing Pago Móvil preview: ${JSON.stringify(transactionData)}`);
+
+    // Format preview message with extracted data
+    const dateStr = transactionData.datetime.toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // Show preview with confirmation button
+    await ctx.reply(
+      `💸 <b>Pago Móvil Data (Preview)</b>\n\n` +
+      `📅 Date: ${dateStr}\n` +
+      `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}\n` +
+      `🔢 Reference: ${transactionData.transactionId}\n\n` +
+      `<i>Confirm to save:</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ OK', callback_data: 'pago_movil_save' },
+            ],
+          ],
+        },
+      }
+    );
+
+    // Store Pago Móvil data in session for confirmation
+    ctx.session.pendingBillData = transactionData;
+  }
+
+  private async handleBillTransaction(ctx: SessionContext, transactionData: any) {
+    // Format message with extracted data
+    const dateStr = transactionData.datetime
+      ? transactionData.datetime.toLocaleString('en-US', {
+          timeZone: 'America/Caracas',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'Not detected';
+
+    const amountStr = transactionData.amount !== null
+      ? `${transactionData.currency} ${transactionData.amount.toFixed(2)}`
+      : 'Not detected';
+
+    const transactionIdStr = transactionData.transactionId || 'Not detected';
+    const recipeStr = transactionData.recipeName ? `\n🍳 Recipe: ${transactionData.recipeName}` : '';
+
+    // Send parsed data with action buttons
+    await ctx.reply(
+      `🧾 <b>Bill Data (Preview)</b>\n\n` +
+      `📅 Date: ${dateStr}\n` +
+      `💰 Amount: ${amountStr}\n` +
+      `🔢 Transaction ID: ${transactionIdStr}${recipeStr}\n\n` +
+      `<i>Choose an action:</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ OK', callback_data: 'bill_save' },
+              { text: '✏️ Enter Manually', callback_data: 'bill_manual' },
+            ],
+          ],
+        },
+      }
+    );
+
+    // Store bill data in session for later use
+    ctx.session.pendingBillData = transactionData;
+  }
+
+  private async downloadImage(fileId: string, ctx: SessionContext): Promise<Buffer> {
+    // Get file URL from Telegram
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+    this.logger.log(`File URL: ${file.file_path}`);
+
+    // Download image using axios with custom HTTPS agent
+    const httpsAgent = new https.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      timeout: 60000,
+      family: 4, // Force IPv4
+    });
+
+    const response = await axios.get(fileUrl, {
+      responseType: 'arraybuffer',
+      httpsAgent,
+      timeout: 60000,
+    });
+    const imageBuffer = Buffer.from(response.data);
+    this.logger.log(`Image downloaded: ${imageBuffer.length} bytes`);
+
+    return imageBuffer;
   }
 
   private async showNextTransaction(ctx: SessionContext) {
