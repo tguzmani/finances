@@ -12,11 +12,22 @@ export class GoogleVisionOcrService {
     const credentials = process.env.GOOGLE_CLOUD_VISION_CREDENTIALS;
 
     if (credentials) {
-      // Parse JSON credentials from env var
-      this.client = new ImageAnnotatorClient({
-        credentials: JSON.parse(credentials),
-      });
-      this.logger.log('Google Cloud Vision client initialized with env credentials');
+      try {
+        // Parse JSON credentials from env var
+        const parsedCredentials = JSON.parse(credentials);
+        this.client = new ImageAnnotatorClient({
+          credentials: parsedCredentials,
+        });
+        this.logger.log('Google Cloud Vision client initialized with env credentials');
+      } catch (error) {
+        this.logger.error('Failed to parse GOOGLE_CLOUD_VISION_CREDENTIALS. Make sure it is valid JSON.');
+        this.logger.error(`First 100 chars: ${credentials.substring(0, 100)}`);
+        throw new Error(
+          'Invalid GOOGLE_CLOUD_VISION_CREDENTIALS format. ' +
+          'Must be a valid JSON string (use double quotes, not single quotes). ' +
+          `Parse error: ${error.message}`
+        );
+      }
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // Use service account key file path
       this.client = new ImageAnnotatorClient();

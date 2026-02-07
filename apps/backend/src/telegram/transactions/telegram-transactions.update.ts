@@ -858,7 +858,7 @@ export class TelegramTransactionsUpdate {
       }
 
       // Create transaction from bill data
-      await this.transactionsService.createManualTransaction({
+      const transaction = await this.transactionsService.createManualTransaction({
         type: TransactionType.EXPENSE, // Bills are usually expenses
         platform: TransactionPlatform.BANESCO, // Default platform for bills
         currency: billData.currency,
@@ -875,6 +875,21 @@ export class TelegramTransactionsUpdate {
         `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
         `<i>Status: Unreviewed</i>`,
         { parse_mode: 'HTML' }
+      );
+
+      // Ask if user wants to add/change description
+      await ctx.reply(
+        '📝 Do you want to add a description?',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
+                { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
+              ],
+            ],
+          },
+        }
       );
 
       // Clear session
@@ -906,6 +921,48 @@ export class TelegramTransactionsUpdate {
     }
   }
 
+  @Action(/^add_desc_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleAddDescription(@Ctx() ctx: SessionContext) {
+    try {
+      if (!('data' in ctx.callbackQuery)) {
+        await ctx.answerCbQuery('Invalid callback');
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^add_desc_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      await ctx.answerCbQuery();
+
+      // Set session state for description input
+      ctx.session.currentTransactionId = transactionId;
+      ctx.session.waitingForDescription = true;
+      ctx.session.reviewSingleItem = true; // End session after description
+
+      await ctx.reply(
+        '✏️ Please type a description for this transaction:',
+        { reply_markup: { force_reply: true } }
+      );
+    } catch (error) {
+      this.logger.error(`Error handling add description: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('❌ Error processing action');
+    }
+  }
+
+  @Action('add_desc_skip')
+  @UseGuards(TelegramAuthGuard)
+  async handleAddDescriptionSkip(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Skipped');
+      await ctx.reply('⏭️ Description skipped. Transaction saved without description.');
+    } catch (error) {
+      this.logger.error(`Error handling skip description: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
   @Action('pago_movil_save')
   @UseGuards(TelegramAuthGuard)
   async handlePagoMovilSave(@Ctx() ctx: SessionContext) {
@@ -928,7 +985,7 @@ export class TelegramTransactionsUpdate {
 
       // Create Pago Móvil transaction
       try {
-        await this.transactionsService.createFromPagoMovil({
+        const transaction = await this.transactionsService.createFromPagoMovil({
           date: pagoMovilData.datetime,
           amount: pagoMovilData.amount,
           currency: pagoMovilData.currency,
@@ -943,7 +1000,22 @@ export class TelegramTransactionsUpdate {
           { parse_mode: 'HTML' }
         );
 
-        // Clear session
+        // Ask if user wants to add description
+        await ctx.reply(
+          '📝 Do you want to add a description?',
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
+                  { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
+                ],
+              ],
+            },
+          }
+        );
+
+        // Clear pending data
         ctx.session.pendingBillData = undefined;
 
       } catch (dbError) {
@@ -1221,6 +1293,11 @@ export class TelegramTransactionsUpdate {
           Markup.button.callback('📎 Group', 'group_transaction'),
         ]);
       }
+
+      // Add Change Name button
+      buttons.push([
+        Markup.button.callback('✏️ Change Name', 'review_name'),
+      ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 

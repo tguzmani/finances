@@ -136,9 +136,9 @@ export class TransactionsService {
     amount: number;
     currency: string;
     transactionId: string;
-  }): Promise<void> {
+  }) {
     try {
-      await this.prisma.transaction.create({
+      const transaction = await this.prisma.transaction.create({
         data: {
           date: parsed.date,
           amount: parsed.amount,
@@ -152,6 +152,7 @@ export class TransactionsService {
       });
 
       this.logger.log(`Created Pago Móvil transaction: ${parsed.transactionId}`);
+      return transaction;
     } catch (error) {
       if (error.code === 'P2002') {
         this.logger.warn(`Duplicate transaction: ${parsed.transactionId}`);
