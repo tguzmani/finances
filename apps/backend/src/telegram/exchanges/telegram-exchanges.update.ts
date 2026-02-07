@@ -146,6 +146,66 @@ export class TelegramExchangesUpdate {
     }
   }
 
+  @Action(/^notification_ex_accept_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleNotificationExchangeAccept(@Ctx() ctx: SessionContext) {
+    try {
+      const match = ctx.match;
+      if (!match || !match[1]) {
+        await ctx.answerCbQuery('Invalid exchange ID');
+        return;
+      }
+
+      const exchangeId = parseInt(match[1], 10);
+
+      // Update exchange status to REVIEWED
+      await this.exchangesService.update(exchangeId, {
+        status: ExchangeStatus.REVIEWED,
+      });
+
+      await ctx.answerCbQuery('Exchange accepted');
+      await ctx.editMessageText(
+        `${ctx.callbackQuery?.message?.text || ''}\n\n✅ <b>Accepted</b>`,
+        { parse_mode: 'HTML' }
+      );
+
+      this.logger.log(`Exchange ${exchangeId} accepted from notification`);
+    } catch (error) {
+      this.logger.error(`Error accepting exchange from notification: ${error.message}`);
+      await ctx.answerCbQuery('Error accepting exchange');
+    }
+  }
+
+  @Action(/^notification_ex_reject_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleNotificationExchangeReject(@Ctx() ctx: SessionContext) {
+    try {
+      const match = ctx.match;
+      if (!match || !match[1]) {
+        await ctx.answerCbQuery('Invalid exchange ID');
+        return;
+      }
+
+      const exchangeId = parseInt(match[1], 10);
+
+      // Update exchange status to REJECTED
+      await this.exchangesService.update(exchangeId, {
+        status: ExchangeStatus.REJECTED,
+      });
+
+      await ctx.answerCbQuery('Exchange rejected');
+      await ctx.editMessageText(
+        `${ctx.callbackQuery?.message?.text || ''}\n\n❌ <b>Rejected</b>`,
+        { parse_mode: 'HTML' }
+      );
+
+      this.logger.log(`Exchange ${exchangeId} rejected from notification`);
+    } catch (error) {
+      this.logger.error(`Error rejecting exchange from notification: ${error.message}`);
+      await ctx.answerCbQuery('Error rejecting exchange');
+    }
+  }
+
   @Action('exchanges_show_all')
   @UseGuards(TelegramAuthGuard)
   async handleExchangesShowAll(@Ctx() ctx: SessionContext) {

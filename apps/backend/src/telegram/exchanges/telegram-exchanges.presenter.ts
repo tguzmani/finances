@@ -48,6 +48,35 @@ export class TelegramExchangesPresenter {
     );
   }
 
+  formatForNotification(exchange: Exchange): string {
+    const amountGross = Number(exchange.amountGross).toFixed(2);
+    const unitPrice = Number(exchange.exchangeRate).toFixed(2);
+    const fiatAmount = Number(exchange.fiatAmount).toFixed(2);
+
+    const exchangeDate = new Date(exchange.binanceCreatedAt);
+    const date = exchangeDate.toLocaleDateString('es-VE', {
+      timeZone: 'UTC'
+    });
+    const time = exchangeDate.toLocaleTimeString('es-VE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    });
+
+    const tradeType = exchange.tradeType === 'SELL' ? 'Sold' : 'Bought';
+    const icon = exchange.tradeType === 'SELL' ? '💵' : '🪙';
+
+    return (
+      `${icon} <b>${tradeType} ${amountGross} ${exchange.asset}</b>\n` +
+      `→ ${exchange.fiatSymbol} ${fiatAmount}\n` +
+      `Rate: ${unitPrice} ${exchange.fiatSymbol}/${exchange.asset}\n` +
+      `${date} ${time}\n` +
+      (exchange.counterparty ? `👤 ${exchange.counterparty}\n` : '') +
+      `\n<i>ID: ${exchange.id}</i>`
+    );
+  }
+
   formatRecentList(exchanges: Exchange[]): string {
     if (exchanges.length === 0) {
       return '📭 No exchanges recorded.';

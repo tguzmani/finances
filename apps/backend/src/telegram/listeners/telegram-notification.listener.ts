@@ -6,6 +6,7 @@ import { NewTransactionsEvent } from '../../transactions/events/new-transactions
 import { NewExchangesEvent } from '../../exchanges/events/new-exchanges.event';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TelegramTransactionsPresenter } from '../transactions/telegram-transactions.presenter';
+import { TelegramExchangesPresenter } from '../exchanges/telegram-exchanges.presenter';
 
 @Injectable()
 export class TelegramNotificationListener {
@@ -16,6 +17,7 @@ export class TelegramNotificationListener {
     @InjectBot() private readonly bot: Telegraf,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly transactionsPresenter: TelegramTransactionsPresenter,
+    private readonly exchangesPresenter: TelegramExchangesPresenter,
   ) {
     // Get chatId from environment variable
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
@@ -76,21 +78,33 @@ export class TelegramNotificationListener {
     try {
       const { exchanges } = event;
 
-      // Send notification for each exchange
+      // Send ONE message PER exchange
       for (const exchange of exchanges) {
-        const amountGross = Number(exchange.amountGross).toFixed(2);
-        const unitPrice = Number(exchange.exchangeRate).toFixed(2);
-        const fiatAmount = Number(exchange.fiatAmount).toFixed(2);
+        // Format message with exchange details
+        const message = this.exchangesPresenter.formatForNotification(exchange);
 
-        const message =
-          `💱 Sold ${amountGross} USDT for ${unitPrice} VES/USDT ` +
-          `for a total ${fiatAmount} VES`;
+        // Add inline keyboard with Accept and Reject buttons
+        const keyboard = {
+          inline_keyboard: [
+            [
+              {
+                text: '✅ Accept',
+                callback_data: `notification_ex_accept_${exchange.id}`
+              },
+              {
+                text: '❌ Reject',
+                callback_data: `notification_ex_reject_${exchange.id}`
+              }
+            ]
+          ]
+        };
 
         await this.bot.telegram.sendMessage(this.chatId, message, {
           parse_mode: 'HTML',
+          reply_markup: keyboard
         });
 
-        this.logger.log(`Sent notification for exchange ${exchange.orderNumber} to chat ${this.chatId}`);
+        this.logger.log(`Sent notification for exchange ${exchange.id} to chat ${this.chatId}`);
       }
     } catch (error) {
       this.logger.error(`Failed to send exchange notification: ${error.message}`);
