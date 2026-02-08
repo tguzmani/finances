@@ -11,7 +11,7 @@ export class TelegramTransactionsPresenter {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -20,7 +20,7 @@ export class TelegramTransactionsPresenter {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const typeIcon = this.getTypeIcon(transaction.type);
@@ -74,13 +74,13 @@ export class TelegramTransactionsPresenter {
 
       const transactionDate = new Date(t.date);
       const date = transactionDate.toLocaleDateString('es-VE', {
-        timeZone: 'UTC'
+        timeZone: 'America/Caracas'
       });
       const time = transactionDate.toLocaleTimeString('es-VE', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'UTC'
+        timeZone: 'America/Caracas'
       });
 
       // Format amounts with 2 decimals
@@ -122,7 +122,7 @@ export class TelegramTransactionsPresenter {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -131,7 +131,7 @@ export class TelegramTransactionsPresenter {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const typeIcon = this.getTypeIcon(transaction.type);

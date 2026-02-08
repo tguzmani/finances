@@ -50,12 +50,25 @@ export class DateParserService {
   /**
    * Parse date for Venezuela context
    * @param input - Natural language date string
-   * @returns Parsed Date object or null if parsing fails
+   * @returns Parsed Date object in UTC, but interpreted as Venezuela time
    *
-   * Note: Assumes the user is inputting dates in Venezuela timezone context (America/Caracas, UTC-4)
+   * Note: Interprets user input as Venezuela time (America/Caracas, UTC-4) and converts to UTC
+   * Example: "hoy a la 1 pm" = 1 PM Venezuela time = 5 PM UTC
    */
   parseVenezuelaDate(input: string): Date | null {
-    return this.parseNaturalLanguageDate(input);
+    const parsed = this.parseNaturalLanguageDate(input);
+    if (!parsed) {
+      return null;
+    }
+
+    // chrono parses dates assuming server timezone (UTC)
+    // But we want to interpret user input as Venezuela time
+    // Venezuela is UTC-4, so we need to add 4 hours to convert local interpretation to UTC
+    const venezuelaOffset = 4 * 60; // Venezuela is UTC-4 (4 hours * 60 minutes)
+    const adjustedDate = new Date(parsed.getTime() + venezuelaOffset * 60 * 1000);
+
+    this.logger.log(`Adjusted Venezuela date "${input}": ${parsed.toISOString()} -> ${adjustedDate.toISOString()}`);
+    return adjustedDate;
   }
 
   /**
