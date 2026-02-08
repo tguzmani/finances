@@ -93,6 +93,26 @@ export class TransactionsService {
 
         for (const tx of transactions) {
           try {
+            // Check for amount-based duplicates (BANESCO only)
+            if (tx.platform === TransactionPlatform.BANESCO) {
+              const existingByAmount = await this.prisma.transaction.findFirst({
+                where: {
+                  platform: TransactionPlatform.BANESCO,
+                  amount: tx.amount,
+                },
+              });
+
+              if (existingByAmount) {
+                this.logger.warn(
+                  `Duplicate BANESCO transaction detected by amount: ${tx.amount} ${tx.currency}. ` +
+                  `Existing transaction ID: ${existingByAmount.id} (${existingByAmount.transactionId}), ` +
+                  `New email transaction ID: ${tx.transactionId}. Skipping.`
+                );
+                totalSkipped++;
+                continue;
+              }
+            }
+
             await this.prisma.transaction.create({
               data: {
                 date: tx.date,
