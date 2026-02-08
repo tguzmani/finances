@@ -61,14 +61,12 @@ export class DateParserService {
       return null;
     }
 
-    // chrono parses dates assuming server timezone (UTC)
-    // But we want to interpret user input as Venezuela time
-    // Venezuela is UTC-4, so we need to add 4 hours to convert local interpretation to UTC
-    const venezuelaOffset = 4 * 60; // Venezuela is UTC-4 (4 hours * 60 minutes)
-    const adjustedDate = new Date(parsed.getTime() + venezuelaOffset * 60 * 1000);
-
-    this.logger.log(`Adjusted Venezuela date "${input}": ${parsed.toISOString()} -> ${adjustedDate.toISOString()}`);
-    return adjustedDate;
+    // Return parsed date as-is (already in UTC from chrono)
+    // For relative times ("1 hour ago"), chrono calculates correctly in UTC
+    // For absolute times ("1 pm"), chrono assumes server timezone (UTC)
+    // TODO: Need smarter logic to handle absolute times in Venezuela timezone
+    this.logger.log(`Parsed Venezuela date "${input}": ${parsed.toISOString()}`);
+    return parsed;
   }
 
   /**
