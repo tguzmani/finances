@@ -11,6 +11,7 @@ import { TransactionOcrParser } from '../../transactions/ocr/parsers/transaction
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
+import { TelegramAccountsUpdate } from '../accounts/telegram-accounts.update';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
@@ -28,6 +29,7 @@ export class TelegramTransactionsUpdate {
     private readonly baseHandler: TelegramBaseHandler,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
+    private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly groupsPresenter: TelegramGroupsPresenter,
   ) { }
@@ -669,6 +671,12 @@ export class TelegramTransactionsUpdate {
   async handleText(@Ctx() ctx: SessionContext) {
     // Type guard for text messages
     if (!('text' in ctx.message)) {
+      return;
+    }
+
+    // Banesco balance update flow - delegate to accounts handler
+    if (ctx.session.waitingForBanescoAmount) {
+      await this.accountsUpdate.handleBanescoAmountInput(ctx);
       return;
     }
 

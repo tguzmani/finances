@@ -19,6 +19,7 @@ import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
 import { CursorScheduler } from './email/subscriptions/cursor/cursor.scheduler';
 import { CommonModule } from '../common/common.module';
+import { TransactionsSheetsService } from './transactions-sheets.service';
 
 @Module({
   imports: [CommonModule],
@@ -28,6 +29,7 @@ import { CommonModule } from '../common/common.module';
     TransactionsScheduler,
     TransactionsBinanceService,
     TransactionsBinanceScheduler,
+    TransactionsSheetsService,
 
     EmailServiceRegistry,
 
@@ -54,6 +56,7 @@ import { CommonModule } from '../common/common.module';
   exports: [
     TransactionsService,
     TransactionOcrParser,
+    TransactionsSheetsService,
   ],
 })
 export class TransactionsModule {

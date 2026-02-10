@@ -8,6 +8,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ExchangesScheduler } from './exchanges.scheduler';
 import { ExchangeRateService } from './exchange-rate.service';
 import { CommonModule } from '../common/common.module';
+import { ExchangesSheetsService } from './exchanges-sheets.service';
 
 @Module({
   imports: [PrismaModule, CommonModule],
@@ -19,12 +20,14 @@ import { CommonModule } from '../common/common.module';
     ExchangeRatesAggregatorService,
     ExchangesScheduler,
     ExchangeRateService,
+    ExchangesSheetsService,
   ],
   exports: [
     ExchangesService,
     ExchangeRateService,
     ExchangesBcvService,
     ExchangeRatesAggregatorService,
+    ExchangesSheetsService,
   ],
 })
 export class ExchangesModule {}

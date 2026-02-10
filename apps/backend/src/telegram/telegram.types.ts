@@ -61,6 +61,8 @@ export interface ReviewSession {
     ocrText: string;
     recipeName?: string;
   };
+  // Banesco balance update flow
+  waitingForBanescoAmount?: boolean;
 }
 
 export interface SessionContext extends Context {
