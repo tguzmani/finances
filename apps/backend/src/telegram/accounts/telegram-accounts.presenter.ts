@@ -3,7 +3,7 @@ import { StablecoinOverview } from '../../accounts/interfaces/binance-account.in
 
 @Injectable()
 export class TelegramAccountsPresenter {
-  formatStablecoinOverview(overview: StablecoinOverview): string {
+  formatStablecoinOverview(overview: StablecoinOverview, sheetsBalance: number): string {
     let message = '<b>Binance Stablecoin Balance</b>\n\n';
 
     for (const asset of overview.assets) {
@@ -14,7 +14,14 @@ export class TelegramAccountsPresenter {
       }
     }
 
-    message += `\n<b>Total:</b> ${overview.totalBalance.toFixed(2)} USD`;
+    const binanceTotal = overview.totalBalance;
+    message += `\n<b>Binance Total:</b> ${binanceTotal.toFixed(2)} USD`;
+    message += `\n<b>Internal Balance:</b> ${sheetsBalance.toFixed(2)} USD`;
+
+    const difference = Math.abs(binanceTotal - sheetsBalance);
+    const inFavourOf = binanceTotal > sheetsBalance ? 'Binance' : 'Internal';
+
+    message += `\n<b>Difference:</b> ${difference.toFixed(2)} USD in favour of ${inFavourOf}`;
 
     return message;
   }
