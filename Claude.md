@@ -52,6 +52,7 @@ El decorador `@Update()` en el archivo principal (`telegram.update.ts`) es el qu
 
 - `/add_transaction` → delega a `manualTransactionUpdate.handleAddTransaction(ctx)`
 - `/rates` → delega a `ratesUpdate.handleRates(ctx)`
+- `/accounts` → delega a `accountsUpdate.handleAccounts(ctx)`
 
 ### No olvidar:
 

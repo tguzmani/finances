@@ -70,6 +70,8 @@ export interface SessionContext extends Context {
 export const BOT_COMMANDS: BotCommand[] = [
   { command: 'start', description: 'Start the bot' },
   { command: 'status', description: 'View finance summary' },
+  { command: 'accounts', description: 'View account balances' },
+  { command: 'rates', description: 'View exchange rates' },
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
   { command: 'groups', description: 'View unregistered groups' },

@@ -8,6 +8,7 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramRatesUpdate } from './rates/telegram-rates.update';
+import { TelegramAccountsUpdate } from './accounts/telegram-accounts.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TransactionGroupsService } from '../transaction-groups/transaction-groups.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
@@ -23,6 +24,7 @@ export class TelegramUpdate {
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly ratesUpdate: TelegramRatesUpdate,
+    private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly exchangeRateService: ExchangeRateService,
@@ -50,10 +52,11 @@ export class TelegramUpdate {
     await ctx.reply(
       'Available commands:\n' +
       '/status - View finance summary\n' +
+      '/accounts - View account balances\n' +
+      '/rates - View exchange rates and discounts\n' +
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
       '/groups - View unregistered groups\n' +
-      '/rates - View exchange rates and discounts\n' +
       '/review - Review pending items\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
@@ -112,6 +115,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRates(@Ctx() ctx: SessionContext) {
     await this.ratesUpdate.handleRates(ctx);
+  }
+
+  @Command('accounts')
+  @UseGuards(TelegramAuthGuard)
+  async handleAccounts(@Ctx() ctx: SessionContext) {
+    await this.accountsUpdate.handleAccounts(ctx);
   }
 
   @Command('sync')

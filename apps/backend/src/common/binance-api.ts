@@ -58,4 +58,38 @@ export class BinanceApiClient {
       throw err;
     }
   }
+
+  // Funding Wallet Balance
+  async getFundingWallet(params?: { asset?: string }) {
+    try {
+      return await this.client.getFundingAsset(params);
+    } catch (err) {
+      this.logger.error(`getFundingWallet failed: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  // Simple Earn Flexible Position
+  async getSimpleEarnFlexiblePosition(params?: { asset?: string }) {
+    try {
+      return await this.client.getFlexibleProductPosition(params);
+    } catch (err) {
+      this.logger.error(
+        `getSimpleEarnFlexiblePosition failed: ${(err as Error).message}`,
+      );
+      throw err;
+    }
+  }
+
+  // Simple Earn Locked Position
+  async getSimpleEarnLockedPosition(params?: { asset?: string }) {
+    try {
+      return await this.client.getLockedProductPosition(params);
+    } catch (err) {
+      this.logger.error(
+        `getSimpleEarnLockedPosition failed: ${(err as Error).message}`,
+      );
+      throw err;
+    }
+  }
 }

@@ -4,6 +4,7 @@ import { ExchangesService } from '../exchanges/exchanges.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TelegramExchangesService } from './exchanges/telegram-exchanges.service';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
+import { TelegramAccountsService } from './accounts/telegram-accounts.service';
 import { TransactionStatus } from '../transactions/transaction.types';
 import { ExchangeStatus } from '@prisma/client';
 
@@ -17,6 +18,7 @@ export class TelegramService {
     private readonly exchangeRateService: ExchangeRateService,
     private readonly telegramExchanges: TelegramExchangesService,
     private readonly telegramTransactions: TelegramTransactionsService,
+    private readonly telegramAccounts: TelegramAccountsService,
   ) {}
 
   async getStatus(): Promise<string> {
@@ -146,5 +148,9 @@ export class TelegramService {
 
   get transactions() {
     return this.telegramTransactions;
+  }
+
+  get accounts() {
+    return this.telegramAccounts;
   }
 }
