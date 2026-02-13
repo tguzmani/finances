@@ -33,6 +33,7 @@ export class TelegramRatesPresenter {
 
     // Timestamp
     const timestamp = rates.timestamp.toLocaleString('es-VE', {
+      timeZone: 'America/Caracas',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

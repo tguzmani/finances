@@ -19,6 +19,7 @@ import { TelegramRatesUpdate } from './rates/telegram-rates.update';
 import { TelegramRatesService } from './rates/telegram-rates.service';
 import { TelegramRatesPresenter } from './rates/telegram-rates.presenter';
 import { TelegramRatesScheduler } from './rates/telegram-rates.scheduler';
+import { TelegramScheduler } from './telegram.scheduler';
 import { TelegramAccountsUpdate } from './accounts/telegram-accounts.update';
 import { TelegramAccountsService } from './accounts/telegram-accounts.service';
 import { TelegramAccountsPresenter } from './accounts/telegram-accounts.presenter';
@@ -96,6 +97,7 @@ import * as https from 'https';
     TelegramRatesService,
     TelegramRatesPresenter,
     TelegramRatesScheduler,
+    TelegramScheduler,
     TelegramAccountsUpdate,
     TelegramAccountsService,
     TelegramAccountsPresenter,

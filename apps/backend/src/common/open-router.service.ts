@@ -29,19 +29,34 @@ export interface OpenRouterResponse {
   };
 }
 
+export interface OpenRouterCredits {
+  total_credits: number;
+  total_usage: number;
+  balance: number;
+}
+
 @Injectable()
 export class OpenRouterService {
   private readonly logger = new Logger(OpenRouterService.name);
-  private readonly API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+  private readonly API_BASE = 'https://openrouter.ai/api/v1';
+  private readonly API_URL = `${this.API_BASE}/chat/completions`;
+  private readonly CREDITS_URL = `${this.API_BASE}/credits`;
   private readonly DEFAULT_MODEL = 'google/gemini-2.5-flash-lite';
+  private readonly LOW_BALANCE_THRESHOLD = 1.5; // USD
+  private readonly apiKey: string | undefined;
+
+  constructor() {
+    this.apiKey = process.env.OPENROUTER_API_KEY;
+    if (!this.apiKey) {
+      this.logger.warn('OPENROUTER_API_KEY environment variable is not set');
+    }
+  }
 
   async chat(
     messages: OpenRouterMessage[],
     options: OpenRouterOptions = {},
   ): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-
-    if (!apiKey) {
+    if (!this.apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is not set');
     }
 
@@ -60,7 +75,7 @@ export class OpenRouterService {
         },
         {
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': process.env.APP_URL || 'https://localhost',
             'X-Title': 'Finances App',
@@ -120,5 +135,47 @@ export class OpenRouterService {
       this.logger.error(`Failed to parse JSON response: ${response}`);
       throw new Error(`Failed to parse LLM response as JSON: ${error.message}`);
     }
+  }
+
+  async getCredits(): Promise<OpenRouterCredits> {
+    if (!this.apiKey) {
+      throw new Error('OPENROUTER_API_KEY environment variable is not set');
+    }
+
+    try {
+      const response = await axios.get<{ data: OpenRouterCredits }>(
+        this.CREDITS_URL,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+          },
+          timeout: 10000,
+        },
+      );
+
+      return response.data.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        this.logger.error(
+          `OpenRouter Credits API error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
+        );
+        throw new Error(
+          `OpenRouter Credits API error: ${error.response?.data?.error?.message || error.message}`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  async checkBalance(): Promise<{ balance: number; isLow: boolean }> {
+    const credits = await this.getCredits();
+    const balance = credits.balance;
+    const isLow = balance < this.LOW_BALANCE_THRESHOLD;
+
+    if (isLow) {
+      this.logger.warn(`OpenRouter balance is low: $${balance.toFixed(2)}`);
+    }
+
+    return { balance, isLow };
   }
 }
