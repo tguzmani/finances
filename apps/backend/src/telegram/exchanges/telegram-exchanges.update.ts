@@ -498,7 +498,7 @@ export class TelegramExchangesUpdate {
     }
   }
 
-  private async startExchangeRegistration(ctx: SessionContext) {
+  async startExchangeRegistration(ctx: SessionContext) {
     try {
       // Get reviewed exchanges
       const reviewedExchanges = await this.telegramService.exchanges.getReviewedExchanges();

@@ -154,14 +154,25 @@ export class TelegramUpdate {
         return;
       }
 
-      // Build keyboard with only available options
-      const buttons = [];
-      if (reviewedTxCount > 0) {
-        buttons.push([Markup.button.callback(`💸 Transactions (${reviewedTxCount})`, 'register_start_transactions')]);
+      // If only transactions available, go directly to transaction registration
+      if (reviewedTxCount > 0 && reviewedExCount === 0) {
+        await ctx.reply('ℹ️ Only transactions available to register');
+        await this.transactionsUpdate.startTransactionRegistration(ctx);
+        return;
       }
-      if (reviewedExCount > 0) {
-        buttons.push([Markup.button.callback(`💱 Exchanges (${reviewedExCount})`, 'register_start_exchanges')]);
+
+      // If only exchanges available, go directly to exchange registration
+      if (reviewedExCount > 0 && reviewedTxCount === 0) {
+        await ctx.reply('ℹ️ Only exchanges available to register');
+        await this.exchangesUpdate.startExchangeRegistration(ctx);
+        return;
       }
+
+      // Both have items - show selection buttons
+      const buttons = [
+        [Markup.button.callback(`💸 Transactions (${reviewedTxCount})`, 'register_start_transactions')],
+        [Markup.button.callback(`💱 Exchanges (${reviewedExCount})`, 'register_start_exchanges')],
+      ];
 
       const keyboard = Markup.inlineKeyboard(buttons);
 

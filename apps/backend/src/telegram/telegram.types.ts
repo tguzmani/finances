@@ -1,4 +1,5 @@
 import { Context } from 'telegraf';
+import { PaymentMethod } from '../transactions/transaction.types';
 
 export interface StatusResponse {
   newBanescoTransactions: number;
@@ -51,6 +52,11 @@ export interface ReviewSession {
   // Registration with groups
   registerTransactionGroupIds?: number[];
   lastRegisteredGroupIds?: number[];
+  // Iterative registration flow
+  registerItems?: Array<{type: 'transaction' | 'group', id: number, data: any}>;
+  registerCurrentIndex?: number;
+  registerTotalCount?: number;
+  registerMessageId?: number; // For editing messages instead of sending new ones
   // Photo processing
   pendingPhotoFileId?: string;
   pendingBillData?: {
@@ -59,7 +65,7 @@ export interface ReviewSession {
     transactionId: string | null;
     currency: string;
     ocrText: string;
-    recipeName?: string;
+    paymentMethod: PaymentMethod | null;
   };
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;

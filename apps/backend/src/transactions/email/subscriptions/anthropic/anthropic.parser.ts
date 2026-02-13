@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TransactionPlatform, PaymentMethod } from '@prisma/client';
+import { TransactionPlatform, PaymentMethod, TransactionType } from '@prisma/client';
 import { ParsedTransaction } from '../../email.interfaces';
 
 @Injectable()
@@ -61,6 +61,7 @@ export class AnthropicParser {
         transactionId: `ANTHROPIC_${receiptNumber}`,
         platform: TransactionPlatform.BANK_OF_AMERICA,
         method: PaymentMethod.CREDIT_CARD,
+        type: TransactionType.EXPENSE,
         description: 'Claude Max',
       };
     } catch (error) {

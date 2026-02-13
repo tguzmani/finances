@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TransactionPlatform, PaymentMethod } from '@prisma/client';
+import { TransactionPlatform, PaymentMethod, TransactionType } from '@prisma/client';
 import { ParsedTransaction } from '../../email.interfaces';
 
 @Injectable()
@@ -49,6 +49,7 @@ export class GooglePlayParser {
         transactionId: `GOOGLEPLAY_${orderId}`,
         platform: TransactionPlatform.BANK_OF_AMERICA,
         method: PaymentMethod.CREDIT_CARD,
+        type: TransactionType.EXPENSE,
         description: serviceName,
       };
     } catch (error) {

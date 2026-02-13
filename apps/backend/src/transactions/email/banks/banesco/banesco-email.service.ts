@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionPlatform, PaymentMethod } from '@prisma/client';
+import { TransactionPlatform, PaymentMethod, TransactionType } from '@prisma/client';
 import { BaseEmailService } from '../../base-email.service';
 import { BankEmailConfig, IBankEmailService, ParsedTransaction, RawEmail } from '../../email.interfaces';
 import { BanescoParser } from './banesco.parser';
@@ -37,6 +37,7 @@ export class BanescoEmailService extends BaseEmailService implements IBankEmailS
         ...tx,
         platform: TransactionPlatform.BANESCO,
         method: PaymentMethod.DEBIT_CARD,
+        type: TransactionType.EXPENSE,
       }));
 
       transactions.push(...enriched);

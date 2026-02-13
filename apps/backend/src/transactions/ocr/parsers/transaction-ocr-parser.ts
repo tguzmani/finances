@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleVisionOcrService } from '../../../common/google-vision-ocr.service';
-import { TransactionRecipe } from './recipes/transaction-recipe.interface';
-import { PlazaRecipe } from './recipes/plaza.recipe';
-import { MiniReceiptRecipe } from './recipes/mini-receipt.recipe';
-import { PagoMovilRecipe } from './recipes/pago-movil.recipe';
+import { TransactionLlmParserService } from './transaction-llm-parser.service';
+import { PaymentMethod } from '../../transaction.types';
 
 export interface TransactionData {
   datetime: Date | null;
@@ -11,36 +9,23 @@ export interface TransactionData {
   transactionId: string | null;
   currency: string; // Always present (defaults to 'VES')
   ocrText: string; // Full OCR text for debugging
-  recipeName?: string; // Which recipe successfully parsed this
+  paymentMethod: PaymentMethod | null;
 }
 
 @Injectable()
 export class TransactionOcrParser {
   private readonly logger = new Logger(TransactionOcrParser.name);
-  private readonly recipes: TransactionRecipe[];
 
   constructor(
     private readonly ocrService: GoogleVisionOcrService,
-    private readonly plazaRecipe: PlazaRecipe,
-    private readonly miniReceiptRecipe: MiniReceiptRecipe,
-    private readonly pagoMovilRecipe: PagoMovilRecipe,
+    private readonly llmParser: TransactionLlmParserService,
   ) {
-    // Register recipes in priority order
-    // Most specific formats first (Pago Móvil has unique buttons)
-    this.recipes = [
-      pagoMovilRecipe,    // Pago Móvil specific (has "Descargar"/"Compartir" buttons)
-      plazaRecipe,        // Store receipts (Plaza-specific markers)
-      miniReceiptRecipe,  // Generic bill fallback
-    ];
-
-    this.logger.log(
-      `Initialized with ${this.recipes.length} recipe(s): ${this.recipes.map(r => r.name).join(', ')}`
-    );
+    this.logger.log('Initialized with LLM parser');
   }
 
   /**
    * Parse a transaction image (bill or Pago Móvil) and extract key information
-   * Tries each recipe in order until one succeeds
+   * Uses LLM to parse the OCR text
    * @param imageBuffer Image buffer of the transaction
    * @returns Extracted transaction data
    */
@@ -52,47 +37,43 @@ export class TransactionOcrParser {
 
     this.logger.log(`OCR Text:\n${ocrText}`);
 
-    // Try each recipe in order
-    for (const recipe of this.recipes) {
-      this.logger.log(`Checking recipe: ${recipe.name}`);
+    // Use LLM to parse the OCR text
+    const llmResult = await this.llmParser.parseOcrText(ocrText);
 
-      if (!recipe.canParse(ocrText)) {
-        this.logger.log(`Recipe ${recipe.name} cannot parse this text (failed canParse check)`);
-        continue;
-      }
-
-      this.logger.log(`Recipe ${recipe.name} accepted, attempting parse...`);
-
-      const result = recipe.parse(ocrText);
-
-      if (recipe.isValid(result)) {
-        this.logger.log(`✅ Recipe ${recipe.name} successfully extracted data`);
-        this.logger.log(
-          `Extracted: datetime=${result.datetime}, amount=${result.amount}, ` +
-          `transactionId=${result.transactionId || 'N/A'}, currency=${result.currency || 'VES'}`
-        );
-
-        return {
-          ...result,
-          currency: result.currency || 'VES', // Default to VES if not specified
-          ocrText,
-          recipeName: recipe.name,
-        };
-      }
-
-      this.logger.warn(`Recipe ${recipe.name} failed validation (missing required fundamentals)`);
+    // Check if LLM could parse anything meaningful
+    if (!llmResult.datetime && !llmResult.amount && !llmResult.transactionId) {
+      this.logger.error('LLM could not extract any data from this image');
+      return {
+        datetime: null,
+        amount: null,
+        transactionId: null,
+        currency: 'VES',
+        ocrText,
+        paymentMethod: null,
+      };
     }
 
-    // No recipe succeeded
-    this.logger.error('❌ No recipe could extract required data from this image');
+    // Parse datetime from string
+    const datetime = this.llmParser.parseDateTime(llmResult.datetime);
+
+    // Apply surcharge for Pago Móvil transactions
+    let amount = llmResult.amount;
+    if (llmResult.paymentMethod === PaymentMethod.PAGO_MOVIL && amount !== null) {
+      amount = this.llmParser.applyPagoMovilSurcharge(amount, llmResult.senderType);
+    }
+
+    this.logger.log(
+      `LLM extracted: datetime=${datetime}, amount=${amount}, ` +
+      `transactionId=${llmResult.transactionId || 'N/A'}, paymentMethod=${llmResult.paymentMethod}`
+    );
 
     return {
-      datetime: null,
-      amount: null,
-      transactionId: null,
-      currency: 'VES',
+      datetime,
+      amount,
+      transactionId: llmResult.transactionId,
+      currency: llmResult.currency || 'VES',
       ocrText,
-      recipeName: undefined,
+      paymentMethod: llmResult.paymentMethod,
     };
   }
 }

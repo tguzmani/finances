@@ -121,7 +121,7 @@ export class TransactionsService {
                 transactionId: tx.transactionId,
                 platform: tx.platform,
                 method: tx.method,
-                type: TransactionType.EXPENSE,
+                type: tx.type,
                 status: TransactionStatus.NEW,
                 description: tx.description,
               },

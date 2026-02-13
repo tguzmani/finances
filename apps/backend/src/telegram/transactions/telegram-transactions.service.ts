@@ -210,11 +210,57 @@ export class TelegramTransactionsService {
       amountText = `USD ${amount}`;
     }
 
+    // Type icon and label
+    const typeIcons: Record<string, string> = { 'EXPENSE': '💸', 'INCOME': '💰' };
+    const typeLabels: Record<string, string> = { 'EXPENSE': 'Expense', 'INCOME': 'Income' };
+    const typeIcon = typeIcons[transaction.type] || '💵';
+    const typeLabel = typeLabels[transaction.type] || transaction.type;
+
+    // Platform and method labels
+    const platformLabels: Record<string, string> = {
+      'BANESCO': 'Banesco',
+      'BANK_OF_AMERICA': 'Bank of America',
+      'BINANCE': 'Binance',
+      'WALLET': 'Wallet',
+      'CASH_BOX': 'Cash Box',
+    };
+    const methodLabels: Record<string, string> = {
+      'DEBIT_CARD': 'Debit Card',
+      'PAGO_MOVIL': 'Pago Móvil',
+      'ZELLE': 'Zelle',
+      'CREDIT_CARD': 'Credit Card',
+      'BINANCE_PAY': 'Binance Pay',
+      'DEPOSIT': 'Deposit',
+      'WITHDRAWAL': 'Withdrawal',
+    };
+    const platformLabel = platformLabels[transaction.platform] || transaction.platform;
+    const methodLabel = transaction.method ? methodLabels[transaction.method] || transaction.method : null;
+
+    // Status icon and label
+    const statusIcons: Record<string, string> = {
+      'NEW': '🆕',
+      'REJECTED': '❌',
+      'REGISTERED': '✅',
+      'REVIEWED': '✏️',
+    };
+    const statusLabels: Record<string, string> = {
+      'NEW': 'New',
+      'REVIEWED': 'Reviewed',
+      'REJECTED': 'Rejected',
+      'REGISTERED': 'Registered',
+    };
+    const statusIcon = statusIcons[transaction.status] || '';
+    const statusLabel = statusLabels[transaction.status] || transaction.status;
+
     return (
-      `<b>${transaction.description || 'Transaction'}</b>\n\n` +
+      `ID: ${transaction.id}\n` +
+      `<b>${typeIcon} ${transaction.description || 'Transaction'}</b>\n\n` +
       `${date}\n` +
       `Time: ${time}\n\n` +
-      amountText
+      amountText + `\n\n` +
+      `Type: ${typeIcon} ${typeLabel}\n` +
+      `Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n` +
+      `Status: ${statusIcon} ${statusLabel}`
     );
   }
 }

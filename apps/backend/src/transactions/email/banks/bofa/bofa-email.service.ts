@@ -7,7 +7,7 @@ import { BofaParser } from './bofa.parser';
 @Injectable()
 export class BofaEmailService extends BaseEmailService implements IBankEmailService {
   private readonly BOFA_SENDER = 'onlinebanking@ealerts.bankofamerica.com';
-  private readonly VALID_SUBJECTS = ['Zelle® payment of $'];
+  private readonly VALID_SUBJECTS = ['Zelle® payment of $', "We've credited your account"];
 
   constructor(private readonly bofaParser: BofaParser) {
     super(BofaEmailService.name);

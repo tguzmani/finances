@@ -1,4 +1,4 @@
-import { TransactionPlatform, PaymentMethod } from '@prisma/client';
+import { TransactionPlatform, PaymentMethod, TransactionType } from '@prisma/client';
 
 export interface RawEmail {
   subject: string;
@@ -14,6 +14,7 @@ export interface ParsedTransaction {
   transactionId: string;
   platform: TransactionPlatform;
   method: PaymentMethod;
+  type: TransactionType;
   description?: string;
 }
 

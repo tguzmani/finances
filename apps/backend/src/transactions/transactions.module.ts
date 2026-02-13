@@ -5,9 +5,7 @@ import { TransactionsScheduler } from './transactions.scheduler';
 import { TransactionsBinanceService } from './transactions-binance.service';
 import { TransactionsBinanceScheduler } from './transactions-binance.scheduler';
 import { TransactionOcrParser } from './ocr/parsers/transaction-ocr-parser';
-import { PlazaRecipe } from './ocr/parsers/recipes/plaza.recipe';
-import { MiniReceiptRecipe } from './ocr/parsers/recipes/mini-receipt.recipe';
-import { PagoMovilRecipe } from './ocr/parsers/recipes/pago-movil.recipe';
+import { TransactionLlmParserService } from './ocr/parsers/transaction-llm-parser.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { BanescoEmailService } from './email/banks/banesco/banesco-email.service';
 import { BanescoParser } from './email/banks/banesco/banesco.parser';
@@ -47,11 +45,9 @@ import { TransactionsSheetsService } from './transactions-sheets.service';
 
     CursorScheduler,
 
-    // OCR - Unified approach
+    // OCR - LLM-based parsing
     TransactionOcrParser,
-    PlazaRecipe,
-    MiniReceiptRecipe,
-    PagoMovilRecipe,
+    TransactionLlmParserService,
   ],
   exports: [
     TransactionsService,

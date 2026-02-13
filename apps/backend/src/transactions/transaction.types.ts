@@ -19,6 +19,7 @@ export enum TransactionPlatform {
 export enum PaymentMethod {
   DEBIT_CARD = 'DEBIT_CARD',
   PAGO_MOVIL = 'PAGO_MOVIL',
+  ELECTRONIC_TRANSFER = 'ELECTRONIC_TRANSFER',
   ZELLE = 'ZELLE',
   CREDIT_CARD = 'CREDIT_CARD',
   BINANCE_PAY = 'BINANCE_PAY',

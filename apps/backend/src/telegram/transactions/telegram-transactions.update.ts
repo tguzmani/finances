@@ -805,22 +805,24 @@ export class TelegramTransactionsUpdate {
 
       this.logger.log(`Parsed transaction: ${JSON.stringify(transactionData)}`);
 
-      // Handle based on which recipe succeeded
-      if (!transactionData.recipeName) {
-        // No recipe succeeded
+      const isDebugMode = process.env.DEBUG_OCR === 'true';
+
+      // Handle based on payment method detected
+      if (!transactionData.paymentMethod) {
+        // Could not determine payment method
         await ctx.reply(
           '❌ Could not recognize this image as a transaction.\n\n' +
           'Supported formats:\n' +
           '• Pago Móvil screenshots\n' +
-          '• Store receipts (Plaza, etc.)\n' +
-          '• Mini receipts\n\n' +
+          '• Bank transfers\n' +
+          '• Store receipts\n\n' +
           'Please try again with a clearer photo.'
         );
         return;
       }
 
-      // Show OCR text if enabled
-      if (process.env.SHOW_OCR_RESULT === 'true') {
+      // Show OCR text if debug mode is enabled
+      if (isDebugMode) {
         const ocrPreview = transactionData.ocrText.length > 4000
           ? transactionData.ocrText.substring(0, 4000) + '...'
           : transactionData.ocrText;
@@ -832,12 +834,12 @@ export class TelegramTransactionsUpdate {
         );
       }
 
-      if (transactionData.recipeName === 'pago-movil') {
-        // Pago Móvil: Create transaction directly
-        await this.handlePagoMovilTransaction(ctx, transactionData);
+      if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
+        // Pago Móvil: Show preview
+        await this.handlePagoMovilTransaction(ctx, transactionData, isDebugMode);
       } else {
-        // Bill/Receipt: Show preview with action buttons
-        await this.handleBillTransaction(ctx, transactionData);
+        // Bill/Receipt/Transfer: Show preview with action buttons
+        await this.handleBillTransaction(ctx, transactionData, isDebugMode);
       }
 
     } catch (error) {
@@ -1047,7 +1049,7 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  private async handlePagoMovilTransaction(ctx: SessionContext, transactionData: any) {
+  private async handlePagoMovilTransaction(ctx: SessionContext, transactionData: any, isDebugMode = false) {
     // Validate all required fields
     if (!transactionData.datetime || !transactionData.amount || !transactionData.transactionId) {
       this.logger.warn('Missing required Pago Móvil data');
@@ -1057,7 +1059,7 @@ export class TelegramTransactionsUpdate {
 
     this.logger.log(`Showing Pago Móvil preview: ${JSON.stringify(transactionData)}`);
 
-    // Format preview message with extracted data
+    // Format preview message with extracted data (display in Venezuela timezone)
     const dateStr = transactionData.datetime.toLocaleString('es-VE', {
       timeZone: 'America/Caracas',
       year: 'numeric',
@@ -1067,33 +1069,32 @@ export class TelegramTransactionsUpdate {
       minute: '2-digit',
     });
 
+    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Confirm to save:</i>';
+    const keyboard = isDebugMode ? [] : [[{ text: '✅ OK', callback_data: 'pago_movil_save' }]];
+
     // Show preview with confirmation button
     await ctx.reply(
       `💸 <b>Pago Móvil Data (Preview)</b>\n\n` +
       `📅 Date: ${dateStr}\n` +
       `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}\n` +
       `🔢 Reference: ${transactionData.transactionId}\n\n` +
-      `<i>Confirm to save:</i>`,
+      footerText,
       {
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ OK', callback_data: 'pago_movil_save' },
-            ],
-          ],
-        },
+        reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined,
       }
     );
 
-    // Store Pago Móvil data in session for confirmation
-    ctx.session.pendingBillData = transactionData;
+    // Store Pago Móvil data in session for confirmation (only if not debug mode)
+    if (!isDebugMode) {
+      ctx.session.pendingBillData = transactionData;
+    }
   }
 
-  private async handleBillTransaction(ctx: SessionContext, transactionData: any) {
-    // Format message with extracted data
+  private async handleBillTransaction(ctx: SessionContext, transactionData: any, isDebugMode = false) {
+    // Format message with extracted data (display in Venezuela timezone)
     const dateStr = transactionData.datetime
-      ? transactionData.datetime.toLocaleString('en-US', {
+      ? transactionData.datetime.toLocaleString('es-VE', {
           timeZone: 'America/Caracas',
           year: 'numeric',
           month: 'short',
@@ -1108,30 +1109,31 @@ export class TelegramTransactionsUpdate {
       : 'Not detected';
 
     const transactionIdStr = transactionData.transactionId || 'Not detected';
-    const recipeStr = transactionData.recipeName ? `\n🍳 Recipe: ${transactionData.recipeName}` : '';
+    const methodStr = transactionData.paymentMethod ? `\n💳 Method: ${transactionData.paymentMethod}` : '';
+
+    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Choose an action:</i>';
+    const keyboard = isDebugMode ? [] : [[
+      { text: '✅ OK', callback_data: 'bill_save' },
+      { text: '✏️ Enter Manually', callback_data: 'bill_manual' },
+    ]];
 
     // Send parsed data with action buttons
     await ctx.reply(
       `🧾 <b>Bill Data (Preview)</b>\n\n` +
       `📅 Date: ${dateStr}\n` +
       `💰 Amount: ${amountStr}\n` +
-      `🔢 Transaction ID: ${transactionIdStr}${recipeStr}\n\n` +
-      `<i>Choose an action:</i>`,
+      `🔢 Transaction ID: ${transactionIdStr}${methodStr}\n\n` +
+      footerText,
       {
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ OK', callback_data: 'bill_save' },
-              { text: '✏️ Enter Manually', callback_data: 'bill_manual' },
-            ],
-          ],
-        },
+        reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined,
       }
     );
 
-    // Store bill data in session for later use
-    ctx.session.pendingBillData = transactionData;
+    // Store bill data in session for later use (only if not debug mode)
+    if (!isDebugMode) {
+      ctx.session.pendingBillData = transactionData;
+    }
   }
 
   private async downloadImage(fileId: string, ctx: SessionContext): Promise<Buffer> {
@@ -1416,7 +1418,7 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  private async startTransactionRegistration(ctx: SessionContext) {
+  async startTransactionRegistration(ctx: SessionContext) {
     try {
       const result = await this.telegramService.transactions.getRegistrationDataWithGroups();
 
@@ -1434,21 +1436,21 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
-      // Store in session
-      ctx.session.registerTransactionIds = result.singleTransactions.map(t => t.id);
-      ctx.session.registerTransactionGroupIds = result.groups.map(g => g.id);
+      // Store exchange rate in session
       ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
       // Combine transactions and groups into a single chronologically ordered list
-      const combinedItems: Array<{type: 'transaction' | 'group', date: Date, data: any}> = [
+      const combinedItems: Array<{type: 'transaction' | 'group', date: Date, id: number, data: any}> = [
         ...result.singleTransactions.map(tx => ({
           type: 'transaction' as const,
           date: new Date(tx.date),
+          id: tx.id,
           data: tx,
         })),
         ...result.groupsWithDates.map(item => ({
           type: 'group' as const,
           date: item.date,
+          id: item.group.id,
           data: item.group,
         })),
       ];
@@ -1456,39 +1458,55 @@ export class TelegramTransactionsUpdate {
       // Sort by date (oldest first)
       combinedItems.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-      // Show all items in chronological order
-      for (const item of combinedItems) {
-        if (item.type === 'transaction') {
-          await this.showTransactionForRegister(ctx, item.data, result.exchangeRate || 0);
-        } else {
-          await this.showGroupForRegister(ctx, item.data, result.exchangeRate || 0);
-        }
-      }
+      // Store items in session for iterative flow
+      ctx.session.registerItems = combinedItems.map(item => ({
+        type: item.type,
+        id: item.id,
+        data: item.data,
+      }));
+      ctx.session.registerCurrentIndex = 0;
+      ctx.session.registerTotalCount = combinedItems.length;
 
-      // Show final commit button
-      const totalCount = result.singleTransactions.length + result.groups.length;
-      const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Commit', 'register_tx_confirm')],
-      ]);
-
-      await ctx.reply(
-        `<b>Ready to register:</b>\n` +
-        `- ${result.singleTransactions.length} single(s)\n` +
-        `- ${result.groups.length} group(s)\n\n` +
-        `Total: ${totalCount} item(s)\n\n` +
-        `Click Commit to complete the registration.`,
-        {
-          parse_mode: 'HTML',
-          ...keyboard,
-        }
-      );
+      // Show first item
+      await this.showCurrentRegisterItem(ctx);
     } catch (error) {
       this.logger.error(`Error starting transaction registration: ${error.message}`);
       await ctx.reply('Error starting registration.');
     }
   }
 
-  private async showTransactionForRegister(ctx: SessionContext, transaction: any, exchangeRate: number) {
+  private async showCurrentRegisterItem(ctx: SessionContext, editMode = false) {
+    const items = ctx.session.registerItems || [];
+    const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+    const totalCount = ctx.session.registerTotalCount ?? 0;
+    const exchangeRate = ctx.session.registerTransactionExchangeRate || 0;
+
+    // Check if we've finished all items
+    if (currentIndex >= items.length) {
+      const completionMessage = `✅ <b>Registration Complete!</b>\n\n` +
+        `All ${totalCount} item(s) have been processed.`;
+
+      if (editMode) {
+        await ctx.editMessageText(completionMessage, { parse_mode: 'HTML' });
+      } else {
+        await ctx.reply(completionMessage, { parse_mode: 'HTML' });
+      }
+      this.baseHandler.clearSession(ctx);
+      return;
+    }
+
+    const item = items[currentIndex];
+    const progress = `(${currentIndex + 1}/${totalCount})`;
+
+    // Show item details
+    if (item.type === 'transaction') {
+      await this.showTransactionForRegisterIterative(ctx, item.data, exchangeRate, progress, editMode);
+    } else {
+      await this.showGroupForRegisterIterative(ctx, item.data, exchangeRate, progress, editMode);
+    }
+  }
+
+  private async showTransactionForRegisterIterative(ctx: SessionContext, transaction: any, exchangeRate: number, progress: string, editMode = false) {
     try {
       const message = this.telegramService.transactions.formatTransactionForRegister(transaction, exchangeRate);
 
@@ -1497,11 +1515,9 @@ export class TelegramTransactionsUpdate {
       let excelFormula: string;
 
       if (transaction.currency === 'VES') {
-        // For VES, divide by exchange rate
         usdAmount = (amount / exchangeRate).toFixed(2);
         excelFormula = `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`;
       } else {
-        // For non-VES (USD, USDT, etc.), use amount directly
         usdAmount = amount.toFixed(2);
         excelFormula = amount.toFixed(2);
       }
@@ -1515,40 +1531,51 @@ export class TelegramTransactionsUpdate {
       });
       const dateFormatted = `${day}-${monthShort}`;
 
-      const keyboard = {
-        inline_keyboard: [
-          [
-            {
-              text: 'Copy Date',
-              copy_text: { text: dateFormatted }
-            } as any
-          ],
-          [
-            {
-              text: 'Copy Description',
-              copy_text: { text: transaction.description || 'No description' }
-            } as any
-          ],
-          [
-            {
-              text: `${usdAmount} USD`,
-              copy_text: { text: excelFormula }
-            } as any
-          ]
-        ]
-      };
+      // Show Commit if REVIEWED, Revert if already REGISTERED
+      const isRegistered = transaction.status === TransactionStatus.REGISTERED;
+      const actionButton = isRegistered
+        ? { text: '↩️ Revert', callback_data: 'register_item_revert' }
+        : { text: '✅ Commit', callback_data: 'register_item_commit' };
 
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        reply_markup: keyboard as any,
-      });
+      // Build keyboard rows
+      const keyboardRows: any[][] = [
+        [{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any],
+        [{ text: 'Copy Description', copy_text: { text: transaction.description || 'No description' } } as any],
+        [{ text: `${usdAmount} USD`, copy_text: { text: excelFormula } } as any],
+        [actionButton],
+      ];
+
+      // Add Undo button if not on first item
+      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+      if (currentIndex > 0) {
+        keyboardRows.push([{ text: '⬅️ Undo', callback_data: 'register_item_undo' }]);
+      }
+
+      // Always add Cancel button
+      keyboardRows.push([{ text: '❌ Cancel', callback_data: 'register_item_cancel' }]);
+
+      const keyboard = { inline_keyboard: keyboardRows };
+
+      const fullMessage = `<b>Transaction ${progress}</b>\n\n${message}`;
+
+      if (editMode) {
+        await ctx.editMessageText(fullMessage, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard as any,
+        });
+      } else {
+        await ctx.reply(fullMessage, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard as any,
+        });
+      }
     } catch (error) {
       this.logger.error(`Error showing transaction for register: ${error.message}`);
       await ctx.reply('Error displaying transaction.');
     }
   }
 
-  private async showGroupForRegister(ctx: SessionContext, group: TransactionGroup & { transactions: Transaction[] }, exchangeRate: number) {
+  private async showGroupForRegisterIterative(ctx: SessionContext, group: TransactionGroup & { transactions: Transaction[] }, exchangeRate: number, progress: string, editMode = false) {
     try {
       const calculation = await this.transactionGroupsService.calculateGroupAmount(group.id, exchangeRate);
       const groupDate = await this.transactionGroupsService.calculateGroupDate(group.id);
@@ -1556,29 +1583,219 @@ export class TelegramTransactionsUpdate {
       // Use presenter to format the message
       const message = this.groupsPresenter.formatGroupForDisplay(group, calculation, groupDate, exchangeRate);
 
-      // If it's a NEUTRAL group, no buttons
-      if (!calculation.hasMonetaryValue || calculation.type === 'NEUTRAL') {
-        await ctx.reply(message, { parse_mode: 'HTML' });
-        return;
+      // Build keyboard with Commit/Revert buttons
+      const buttons: any[][] = [];
+
+      // If it's a group with monetary value, add copy buttons
+      if (calculation.hasMonetaryValue && calculation.type !== 'NEUTRAL') {
+        const dateFormatted = `${groupDate.getUTCDate()}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
+        buttons.push([{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any]);
+        buttons.push([{ text: 'Copy Description', copy_text: { text: group.description } } as any]);
+        buttons.push([{ text: `${calculation.totalAmount.toFixed(2)} USD`, copy_text: { text: calculation.excelFormula } } as any]);
       }
 
-      // Copy buttons for groups with monetary value
-      const dateFormatted = `${groupDate.getUTCDate()}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
-      const keyboard = {
-        inline_keyboard: [
-          [{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any],
-          [{ text: 'Copy Description', copy_text: { text: group.description } } as any],
-          [{ text: `${calculation.totalAmount.toFixed(2)} USD`, copy_text: { text: calculation.excelFormula } } as any],
-        ]
-      };
+      // Show Commit if NEW, Revert if already REGISTERED
+      const isRegistered = group.status === TransactionGroupStatus.REGISTERED;
+      const actionButton = isRegistered
+        ? { text: '↩️ Revert', callback_data: 'register_item_revert' }
+        : { text: '✅ Commit', callback_data: 'register_item_commit' };
+      buttons.push([actionButton]);
 
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        reply_markup: keyboard as any,
-      });
+      // Add Undo button if not on first item
+      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+      if (currentIndex > 0) {
+        buttons.push([{ text: '⬅️ Undo', callback_data: 'register_item_undo' }]);
+      }
+
+      // Always add Cancel button
+      buttons.push([{ text: '❌ Cancel', callback_data: 'register_item_cancel' }]);
+
+      const fullMessage = `<b>Group ${progress}</b>\n\n${message}`;
+
+      if (editMode) {
+        await ctx.editMessageText(fullMessage, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buttons } as any,
+        });
+      } else {
+        await ctx.reply(fullMessage, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buttons } as any,
+        });
+      }
     } catch (error) {
       this.logger.error(`Error showing group for register: ${error.message}`);
       await ctx.reply('Error displaying group.');
+    }
+  }
+
+  @Action('register_item_commit')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterItemCommit(@Ctx() ctx: SessionContext) {
+    try {
+      const items = ctx.session.registerItems || [];
+      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+
+      if (currentIndex >= items.length) {
+        await ctx.answerCbQuery('No item to commit');
+        return;
+      }
+
+      const item = items[currentIndex];
+
+      // Mark as REGISTERED
+      if (item.type === 'transaction') {
+        await this.transactionsService.update(item.id, {
+          status: TransactionStatus.REGISTERED,
+        });
+        // Update the cached data as well
+        item.data.status = TransactionStatus.REGISTERED;
+      } else {
+        await this.transactionGroupsService.update(item.id, {
+          status: TransactionGroupStatus.REGISTERED,
+        });
+        // Update the cached data as well
+        item.data.status = TransactionGroupStatus.REGISTERED;
+      }
+
+      await ctx.answerCbQuery(`✅ ${item.type === 'transaction' ? 'Transaction' : 'Group'} committed`);
+
+      // Move to next item and edit the same message
+      ctx.session.registerCurrentIndex = currentIndex + 1;
+      await this.showCurrentRegisterItem(ctx, true);
+    } catch (error) {
+      this.logger.error(`Error committing item: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error committing item.');
+    }
+  }
+
+  @Action('register_item_revert')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterItemRevert(@Ctx() ctx: SessionContext) {
+    try {
+      const items = ctx.session.registerItems || [];
+      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+
+      if (currentIndex >= items.length) {
+        await ctx.answerCbQuery('No item to revert');
+        return;
+      }
+
+      const item = items[currentIndex];
+
+      // Mark as REVIEWED (revert from ready-to-register state)
+      if (item.type === 'transaction') {
+        await this.transactionsService.update(item.id, {
+          status: TransactionStatus.REVIEWED,
+        });
+        // Update the cached data as well
+        item.data.status = TransactionStatus.REVIEWED;
+      } else {
+        await this.transactionGroupsService.update(item.id, {
+          status: TransactionGroupStatus.NEW,
+        });
+        // Update the cached data as well
+        item.data.status = TransactionGroupStatus.NEW;
+      }
+
+      await ctx.answerCbQuery(`↩️ ${item.type === 'transaction' ? 'Transaction' : 'Group'} reverted`);
+
+      // Move to next item and edit the same message
+      ctx.session.registerCurrentIndex = currentIndex + 1;
+      await this.showCurrentRegisterItem(ctx, true);
+    } catch (error) {
+      this.logger.error(`Error reverting item: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error reverting item.');
+    }
+  }
+
+  @Action('register_item_undo')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterItemUndo(@Ctx() ctx: SessionContext) {
+    try {
+      const items = ctx.session.registerItems || [];
+      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
+
+      if (currentIndex <= 0) {
+        await ctx.answerCbQuery('Nothing to undo');
+        return;
+      }
+
+      // Go back to previous item
+      const previousIndex = currentIndex - 1;
+      const previousItem = items[previousIndex];
+
+      // Revert previous item's status
+      if (previousItem.type === 'transaction') {
+        await this.transactionsService.update(previousItem.id, {
+          status: TransactionStatus.REVIEWED,
+        });
+        // Update the cached data as well
+        previousItem.data.status = TransactionStatus.REVIEWED;
+      } else {
+        await this.transactionGroupsService.update(previousItem.id, {
+          status: TransactionGroupStatus.NEW,
+        });
+        // Update the cached data as well
+        previousItem.data.status = TransactionGroupStatus.NEW;
+      }
+
+      await ctx.answerCbQuery(`⬅️ Undone: ${previousItem.type === 'transaction' ? 'Transaction' : 'Group'}`);
+
+      // Move back and edit the message
+      ctx.session.registerCurrentIndex = previousIndex;
+      await this.showCurrentRegisterItem(ctx, true);
+    } catch (error) {
+      this.logger.error(`Error undoing item: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error undoing item.');
+    }
+  }
+
+  @Action('register_item_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterItemCancel(@Ctx() ctx: SessionContext) {
+    try {
+      const items = ctx.session.registerItems || [];
+
+      // Revert all items that were registered during this flow back to reviewed
+      let revertedCount = 0;
+      for (const item of items) {
+        if (item.type === 'transaction') {
+          // Check if it was registered (from cached data)
+          if (item.data.status === TransactionStatus.REGISTERED) {
+            await this.transactionsService.update(item.id, {
+              status: TransactionStatus.REVIEWED,
+            });
+            revertedCount++;
+          }
+        } else {
+          // Check if group was registered
+          if (item.data.status === TransactionGroupStatus.REGISTERED) {
+            await this.transactionGroupsService.update(item.id, {
+              status: TransactionGroupStatus.NEW,
+            });
+            revertedCount++;
+          }
+        }
+      }
+
+      await ctx.answerCbQuery('Registration canceled');
+
+      // Edit message with cancellation
+      await ctx.editMessageText(
+        `❌ <b>Registration Canceled</b>\n\n` +
+        `${revertedCount} item(s) reverted to review.`,
+        { parse_mode: 'HTML' }
+      );
+
+      this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error canceling registration: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error canceling registration.');
     }
   }
 }
