@@ -60,11 +60,13 @@ model Exchange {
 }
 
 model ExchangeRate {
-  id    Int      @id @default(autoincrement())
-  date  DateTime @default(now())
-  value Decimal  @db.Decimal(10, 2)
+  id     Int                 @id @default(autoincrement())
+  date   DateTime            @default(now())
+  value  Decimal             @db.Decimal(10, 2)
+  source ExchangeRateSource  @default(INTERNAL)
 
   @@index([date])
+  @@index([source])
   @@map("exchange_rates")
 }
 
@@ -118,4 +120,10 @@ enum ExchangeStatus {
 enum TradeType {
   BUY
   SELL
+}
+
+enum ExchangeRateSource {
+  INTERNAL
+  BINANCE_P2P
+  BCV
 }

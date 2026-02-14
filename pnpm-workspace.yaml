@@ -2,6 +2,7 @@ autoInstallPeers: true
 
 ignoredBuiltDependencies:
   - '@swc/core'
+  - canvas
   - less
   - unrs-resolver
 

@@ -18,18 +18,18 @@ export class TelegramRatesPresenter {
     message += this.formatRate('🟢 Binance VES/USDT', rates.binanceVesUsdt, 'Bs/USDT');
     message += this.formatRate('📈 Internal Rate', rates.internalRate, 'Bs/USD');
 
-    // Discounts section - organized by currency
+    // Discounts section - organized by source
     message += '\n<b>Discounts:</b>\n';
 
-    // USD discounts
-    message += '<b>USD:</b>\n';
-    message += this.formatDiscount('  🔹 BCV vs Internal Rate', discounts.bcvUsdVsInternal);
-    message += this.formatDiscount('  🔹 BCV vs Binance', discounts.bcvUsdVsBinance);
+    // Internal Rate discounts
+    message += '<b>Internal Rate:</b>\n';
+    message += this.formatDiscount('  🔹 BCV USD vs Internal', discounts.bcvUsdVsInternal);
+    message += this.formatDiscount('  🔹 BCV EUR vs Internal', discounts.bcvEurVsInternal);
 
-    // EUR discounts
-    message += '\n<b>EUR:</b>\n';
-    message += this.formatDiscount('  🔹 BCV vs Internal Rate', discounts.bcvEurVsInternal);
-    message += this.formatDiscount('  🔹 BCV vs Binance', discounts.bcvEurVsBinance);
+    // Binance discounts
+    message += '\n<b>Binance:</b>\n';
+    message += this.formatDiscount('  🔹 BCV USD vs Binance', discounts.bcvUsdVsBinance);
+    message += this.formatDiscount('  🔹 BCV EUR vs Binance', discounts.bcvEurVsBinance);
 
     // Timestamp
     const timestamp = rates.timestamp.toLocaleString('es-VE', {

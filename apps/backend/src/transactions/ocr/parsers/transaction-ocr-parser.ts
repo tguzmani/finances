@@ -27,9 +27,10 @@ export class TransactionOcrParser {
    * Parse a transaction image (bill or Pago Móvil) and extract key information
    * Uses LLM to parse the OCR text
    * @param imageBuffer Image buffer of the transaction
+   * @param userCaption Optional user-provided caption with additional instructions
    * @returns Extracted transaction data
    */
-  async parseTransaction(imageBuffer: Buffer): Promise<TransactionData> {
+  async parseTransaction(imageBuffer: Buffer, userCaption?: string): Promise<TransactionData> {
     this.logger.log('Parsing transaction image...');
 
     // Extract text using Google Cloud Vision (structured text detection)
@@ -38,7 +39,7 @@ export class TransactionOcrParser {
     this.logger.log(`OCR Text:\n${ocrText}`);
 
     // Use LLM to parse the OCR text
-    const llmResult = await this.llmParser.parseOcrText(ocrText);
+    const llmResult = await this.llmParser.parseOcrText(ocrText, userCaption);
 
     // Check if LLM could parse anything meaningful
     if (!llmResult.datetime && !llmResult.amount && !llmResult.transactionId) {

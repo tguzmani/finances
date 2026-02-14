@@ -12,16 +12,6 @@ export class TelegramExchangesService {
     private readonly presenter: TelegramExchangesPresenter,
   ) {}
 
-  async getNextForReview() {
-    return this.exchangesService.getNextPendingReview();
-  }
-
-  async getPendingReviewCount(): Promise<number> {
-    return this.exchangesService.countByStatus([
-      ExchangeStatus.COMPLETED,
-      ExchangeStatus.PENDING,
-    ]);
-  }
 
   async getRecentExchangesList(showAll = false): Promise<string> {
     try {
@@ -40,10 +30,6 @@ export class TelegramExchangesService {
       this.logger.error(`Failed to get exchanges list: ${error.message}`);
       throw new Error('Error getting exchanges');
     }
-  }
-
-  formatExchangeForReview(exchange: Exchange): string {
-    return this.presenter.formatForReview(exchange);
   }
 
   // Register flow methods

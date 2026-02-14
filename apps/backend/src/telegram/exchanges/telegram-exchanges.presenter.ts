@@ -11,43 +11,6 @@ interface RegisterMetrics {
 
 @Injectable()
 export class TelegramExchangesPresenter {
-  formatForReview(exchange: Exchange): string {
-    const exchangeDate = new Date(exchange.binanceCreatedAt);
-
-    const dateString = exchangeDate.toLocaleDateString('es-VE', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'UTC'
-    });
-
-    const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
-
-    const time = exchangeDate.toLocaleTimeString('es-VE', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'UTC'
-    });
-
-    const tradeType = exchange.tradeType === 'SELL' ? 'Sell' : 'Buy';
-    const icon = exchange.tradeType === 'SELL' ? '💵' : '🪙';
-    const last4Digits = exchange.orderNumber.slice(-4);
-
-    return (
-      `<b>Exchange Review</b>\n` +
-      `\n` +
-      `${icon} <b>${tradeType}: ${exchange.asset} ${Number(exchange.amountGross).toFixed(2)}</b>\n` +
-      `→ ${exchange.fiatSymbol} ${Number(exchange.fiatAmount).toFixed(2)}\n` +
-      `Rate: ${Number(exchange.exchangeRate).toFixed(2)}\n` +
-      `Order: ${last4Digits}\n` +
-      `${date}\n` +
-      `Time: ${time}\n` +
-      (exchange.counterparty ? `Counterparty: ${exchange.counterparty}\n` : '')
-    );
-  }
-
   formatRecentList(exchanges: Exchange[]): string {
     if (exchanges.length === 0) {
       return '📭 No exchanges recorded.';

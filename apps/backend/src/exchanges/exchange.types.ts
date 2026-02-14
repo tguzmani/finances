@@ -17,6 +17,7 @@ export enum TradeType {
 export interface SyncResult {
   exchangesFetched: number;
   exchangesCreated: number;
+  exchangesUpdated: number;
   exchangesSkipped: number;
   transactionsCreated: number;
   errors: string[];

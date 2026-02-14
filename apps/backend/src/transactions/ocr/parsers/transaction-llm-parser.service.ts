@@ -36,6 +36,11 @@ Rules:
   - If it's clearly a store receipt (has FACTURA, RIF, IVA) but payment method unclear, default to "DEBIT_CARD"
 - senderType: "RIF" if contains J-XXXXXXXX, "cedula" if contains V-XXXXXXXX
 
+User Instructions:
+- If the user provides additional instructions, follow them to help locate the correct data in the OCR text
+- User instructions may clarify which field contains the amount, where to find the date, etc.
+- Example: "amount is the second PTO INTEGRADO" means look for the second occurrence of "PTO INTEGRADO" in the text
+
 If a field cannot be determined, use null.`;
 
 @Injectable()
@@ -47,14 +52,22 @@ export class TransactionLlmParserService {
 
   constructor(private readonly openRouter: OpenRouterService) {}
 
-  async parseOcrText(ocrText: string): Promise<LlmParsedTransaction> {
+  async parseOcrText(ocrText: string, userCaption?: string): Promise<LlmParsedTransaction> {
     this.logger.log('Parsing OCR text with LLM...');
 
     try {
+      // Build user message with OCR text and optional caption
+      let userMessage = `OCR Text:\n"""\n${ocrText}\n"""`;
+
+      if (userCaption) {
+        userMessage += `\n\nUser Instructions:\n"""\n${userCaption}\n"""`;
+        this.logger.log(`User provided caption: ${userCaption}`);
+      }
+
       const result = await this.openRouter.chatJson<LlmParsedTransaction>(
         [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `OCR Text:\n"""\n${ocrText}\n"""` },
+          { role: 'user', content: userMessage },
         ],
         { temperature: 0.1, maxTokens: 300 },
       );

@@ -688,12 +688,6 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
-    // Handle review by ID for exchange flow - delegate to exchanges handler
-    if (ctx.session.reviewOneMode === 'waiting_for_ex_id') {
-      await this.exchangesUpdate.handleReviewOneExchangeIdPublic(ctx);
-      return;
-    }
-
     // Handle review by ID for transaction flow
     if (ctx.session.reviewOneMode === 'waiting_for_tx_id') {
       await this.handleReviewOneTransactionId(ctx);
@@ -794,6 +788,12 @@ export class TelegramTransactionsUpdate {
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
       this.logger.log(`Photo received: ${photo.file_id}`);
 
+      // Extract caption if present
+      const caption = 'caption' in ctx.message ? ctx.message.caption : undefined;
+      if (caption) {
+        this.logger.log(`Photo caption: ${caption}`);
+      }
+
       await ctx.reply('📸 Processing image with OCR...');
 
       // Download and process image directly
@@ -801,7 +801,7 @@ export class TelegramTransactionsUpdate {
 
       // Parse with unified OCR parser
       this.logger.log('Parsing transaction with Google Vision...');
-      const transactionData = await this.transactionOcrParser.parseTransaction(imageBuffer);
+      const transactionData = await this.transactionOcrParser.parseTransaction(imageBuffer, caption);
 
       this.logger.log(`Parsed transaction: ${JSON.stringify(transactionData)}`);
 
@@ -1416,6 +1416,10 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error showing previous transaction: ${error.message}`);
       await ctx.reply('Error loading previous transaction.');
     }
+  }
+
+  async startTransactionReview(ctx: SessionContext) {
+    await this.showNextTransaction(ctx);
   }
 
   async startTransactionRegistration(ctx: SessionContext) {

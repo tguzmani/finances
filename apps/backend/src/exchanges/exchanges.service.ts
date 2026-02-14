@@ -4,7 +4,7 @@ import { ExchangesBinanceService } from './exchanges-binance.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
 import { SyncResult, TradeType } from './exchange.types';
-import { Prisma, ExchangeStatus } from '@prisma/client';
+import { Prisma, ExchangeStatus, ExchangeRateSource } from '@prisma/client';
 
 @Injectable()
 export class ExchangesService {
@@ -73,6 +73,7 @@ export class ExchangesService {
     const result: SyncResult = {
       exchangesFetched: 0,
       exchangesCreated: 0,
+      exchangesUpdated: 0,
       exchangesSkipped: 0,
       transactionsCreated: 0,
       errors: [],
@@ -81,6 +82,49 @@ export class ExchangesService {
     try {
       const trades = await this.binanceApi.getP2PHistory(tradeType, limit);
       result.exchangesFetched = trades.length;
+
+      // Create a Map of Binance trades by orderNumber for quick lookup
+      const tradesMap = new Map(trades.map(trade => [trade.orderNumber, trade]));
+
+      // Check for PENDING exchanges that might need status updates
+      const pendingExchanges = await this.prisma.exchange.findMany({
+        where: { status: ExchangeStatus.PENDING },
+      });
+
+      this.logger.log(`Found ${pendingExchanges.length} PENDING exchanges to check`);
+
+      // Update PENDING exchanges if their status changed in Binance
+      for (const pendingExchange of pendingExchanges) {
+        const binanceTrade = tradesMap.get(pendingExchange.orderNumber);
+
+        if (binanceTrade) {
+          const binanceStatus = this.mapBinanceStatus(binanceTrade.orderStatus);
+
+          // If Binance shows COMPLETED, mark as REVIEWED (skip manual review)
+          // Otherwise, update to the new status from Binance
+          const newStatus = binanceStatus === ExchangeStatus.COMPLETED
+            ? ExchangeStatus.REVIEWED
+            : binanceStatus;
+
+          if (newStatus !== pendingExchange.status) {
+            try {
+              await this.prisma.exchange.update({
+                where: { id: pendingExchange.id },
+                data: { status: newStatus },
+              });
+
+              result.exchangesUpdated++;
+              this.logger.log(
+                `Updated exchange ${pendingExchange.orderNumber}: ${pendingExchange.status} → ${newStatus}`
+              );
+            } catch (err) {
+              const errorMsg = `Failed to update exchange ${pendingExchange.orderNumber}: ${(err as Error).message}`;
+              this.logger.error(errorMsg);
+              result.errors.push(errorMsg);
+            }
+          }
+        }
+      }
 
       for (const trade of trades) {
         try {
@@ -137,7 +181,7 @@ export class ExchangesService {
     }
 
     this.logger.log(
-      `Sync complete: ${result.exchangesCreated} created, ${result.exchangesSkipped} skipped, ${result.transactionsCreated} transactions created`
+      `Sync complete: ${result.exchangesCreated} created, ${result.exchangesUpdated} updated, ${result.exchangesSkipped} skipped, ${result.transactionsCreated} transactions created`
     );
 
     return result;
@@ -163,22 +207,7 @@ export class ExchangesService {
     });
   }
 
-  async getNextPendingReview() {
-    return this.prisma.exchange.findFirst({
-      where: {
-        status: {
-          in: [ExchangeStatus.COMPLETED, ExchangeStatus.PENDING],
-        },
-      },
-      orderBy: { binanceCreatedAt: 'desc' },
-    });
-  }
 
-  async countByStatus(statuses: ExchangeStatus[]): Promise<number> {
-    return this.prisma.exchange.count({
-      where: { status: { in: statuses } },
-    });
-  }
 
   // Business logic methods
   calculateRegisterMetrics(exchanges: any[]) {
@@ -213,7 +242,10 @@ export class ExchangesService {
 
       // Save exchange rate
       await tx.exchangeRate.create({
-        data: { value: wavg },
+        data: {
+          value: wavg,
+          source: ExchangeRateSource.INTERNAL
+        },
       });
     });
 
@@ -237,7 +269,10 @@ export class ExchangesService {
 
     // Save new rate
     await this.prisma.exchangeRate.create({
-      data: { value: roundedWavg },
+      data: {
+        value: roundedWavg,
+        source: ExchangeRateSource.INTERNAL
+      },
     });
 
     this.logger.log(`Saved new exchange rate: ${roundedWavg} VES/USD`);

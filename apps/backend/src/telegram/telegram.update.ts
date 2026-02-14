@@ -57,7 +57,7 @@ export class TelegramUpdate {
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
       '/groups - View unregistered groups\n' +
-      '/review - Review pending items\n' +
+      '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
@@ -196,36 +196,23 @@ export class TelegramUpdate {
       // Clear any previous session state
       this.baseHandler.clearSession(ctx);
 
-      // Get counts
-      const [transactionsCount, exchangesCount] = await Promise.all([
-        this.telegramService.transactions.getPendingReviewCount(),
-        this.telegramService.exchanges.getPendingReviewCount(),
-      ]);
+      // Get count for transactions only
+      const transactionsCount = await this.telegramService.transactions.getPendingReviewCount();
 
       // If nothing to review, show message
-      if (transactionsCount === 0 && exchangesCount === 0) {
+      if (transactionsCount === 0) {
         await ctx.reply('✅ Nothing to review right now');
         return;
       }
 
-      // Build keyboard with only available options
-      const buttons = [];
-      if (transactionsCount > 0) {
-        buttons.push([Markup.button.callback(`💸 Transactions (${transactionsCount})`, 'review_start_transactions')]);
-      }
-      if (exchangesCount > 0) {
-        buttons.push([Markup.button.callback(`💱 Exchanges (${exchangesCount})`, 'review_start_exchanges')]);
-      }
+      // Directly start transaction review (no need for selection since only transactions)
+      ctx.session.reviewType = 'transactions';
 
-      const keyboard = Markup.inlineKeyboard(buttons);
+      // Initialize progress tracking
+      this.baseHandler.initializeReviewProgress(ctx, transactionsCount);
 
-      await ctx.reply(
-        '<b>What would you like to review?</b>',
-        {
-          parse_mode: 'HTML',
-          ...keyboard,
-        }
-      );
+      // Start transaction review flow
+      await this.transactionsUpdate.startTransactionReview(ctx);
     } catch (error) {
       await ctx.reply('Error starting review process.');
     }
@@ -237,20 +224,14 @@ export class TelegramUpdate {
     try {
       // Clear any previous session state
       this.baseHandler.clearSession(ctx);
-      ctx.session.reviewOneMode = 'selecting';
 
-      const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('💸 Transaction', 'review_one_transaction')],
-        [Markup.button.callback('💱 Exchange', 'review_one_exchange')],
-        [Markup.button.callback('🚫 Cancel', 'review_cancel')],
-      ]);
+      // Directly prompt for transaction ID (no need for selection since only transactions)
+      ctx.session.reviewOneMode = 'waiting_for_tx_id';
+      ctx.session.reviewOneType = 'transaction';
 
       await ctx.reply(
-        '<b>Review by ID</b>\n\nWhat would you like to review?',
-        {
-          parse_mode: 'HTML',
-          ...keyboard,
-        }
+        '🔢 Please enter the Transaction ID:',
+        { reply_markup: { force_reply: true } }
       );
     } catch (error) {
       await ctx.reply('Error starting review by ID.');
@@ -267,8 +248,6 @@ export class TelegramUpdate {
 
       if (reviewType === 'transactions') {
         await this.transactionsUpdate.showPreviousTransactionPublic(ctx);
-      } else if (reviewType === 'exchanges') {
-        await this.exchangesUpdate.showPreviousExchangePublic(ctx);
       } else {
         await ctx.answerCbQuery('No active review');
       }

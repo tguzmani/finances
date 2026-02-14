@@ -45,6 +45,7 @@ export class ExchangesScheduler {
         `[CRON] Sync completed in ${duration}ms - ` +
         `Fetched: ${result.exchangesFetched}, ` +
         `Created: ${result.exchangesCreated}, ` +
+        `Updated: ${result.exchangesUpdated}, ` +
         `Skipped: ${result.exchangesSkipped}, ` +
         `Transactions: ${result.transactionsCreated}, ` +
         `Errors: ${result.errors.length}`
