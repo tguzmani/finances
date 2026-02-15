@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
 import { TelegramRatesService } from './telegram-rates.service';
+import { ExchangeRateChartService } from '../../exchanges/exchange-rate-chart.service';
 
 @Injectable()
 export class TelegramRatesScheduler {
@@ -12,6 +13,7 @@ export class TelegramRatesScheduler {
   constructor(
     @InjectBot() private readonly bot: Telegraf,
     private readonly ratesService: TelegramRatesService,
+    private readonly chartService: ExchangeRateChartService,
   ) {
     // Get chatId from environment variable (same as notification listener)
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
@@ -38,11 +40,16 @@ export class TelegramRatesScheduler {
 
       this.logger.log('Sending scheduled daily exchange rates...');
 
-      const message = await this.ratesService.getRatesMessage();
+      const [message, chartBuffer] = await Promise.all([
+        this.ratesService.getRatesMessage(),
+        this.chartService.generateRatesChart(30),
+      ]);
 
-      await this.bot.telegram.sendMessage(this.chatId, message, {
-        parse_mode: 'HTML',
-      });
+      await this.bot.telegram.sendPhoto(
+        this.chatId,
+        { source: chartBuffer },
+        { caption: message, parse_mode: 'HTML' },
+      );
 
       this.logger.log(`✅ Daily exchange rates sent successfully to chat ${this.chatId}`);
     } catch (error) {

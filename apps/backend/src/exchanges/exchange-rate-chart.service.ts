@@ -86,11 +86,13 @@ export class ExchangeRateChartService {
               })),
               borderColor: this.COLORS.binance,
               backgroundColor: this.COLORS.binance + '20',
-              borderWidth: 2,
-              tension: 0.4,
-              pointRadius: 0, // No points for high-frequency data
-              pointHoverRadius: 5,
+              borderWidth: 3,
+              tension: 0.3,
+              pointRadius: 5,
+              pointHoverRadius: 7,
               pointBackgroundColor: this.COLORS.binance,
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
             },
             {
               label: 'BCV Official',
