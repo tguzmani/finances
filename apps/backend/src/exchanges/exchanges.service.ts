@@ -146,7 +146,11 @@ export class ExchangesService {
           const exchangeRate = parseFloat(trade.unitPrice);
 
           // Map Binance status to our enum
-          const status = this.mapBinanceStatus(trade.orderStatus);
+          // COMPLETED from Binance → REVIEWED (skip manual review)
+          const mappedStatus = this.mapBinanceStatus(trade.orderStatus);
+          const status = mappedStatus === ExchangeStatus.COMPLETED
+            ? ExchangeStatus.REVIEWED
+            : mappedStatus;
 
           // Create Exchange
           await this.prisma.exchange.create({
