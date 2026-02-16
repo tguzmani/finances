@@ -350,8 +350,11 @@ export class TelegramManualTransactionUpdate {
         t.groupId === null
       );
 
-      if (available.length === 0) {
-        await ctx.reply('No other transactions available for grouping.');
+      // Get existing groups to append to
+      const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
+
+      if (available.length === 0 && existingGroups.length === 0) {
+        await ctx.reply('No other transactions or groups available for grouping.');
         this.baseHandler.clearSession(ctx);
         return;
       }
@@ -359,6 +362,21 @@ export class TelegramManualTransactionUpdate {
       // Build buttons (no text list)
       const buttons = [];
 
+      // Show existing groups first
+      for (const group of existingGroups) {
+        const memberCount = group.transactions.length;
+        const desc = group.description;
+        const maxDescLength = 40;
+        const truncatedDesc = desc.length > maxDescLength
+          ? desc.substring(0, maxDescLength) + '...'
+          : desc;
+        const buttonText = `📦 ${truncatedDesc} (${memberCount} txns)`;
+        buttons.push([
+          Markup.button.callback(buttonText, `manual_group_add_to_${group.id}`)
+        ]);
+      }
+
+      // Then show individual ungrouped transactions
       for (const tx of available) {
         const amount = Number(tx.amount).toFixed(2);
         const desc = tx.description || 'No description';
@@ -379,7 +397,7 @@ export class TelegramManualTransactionUpdate {
 
       buttons.push([Markup.button.callback('❌ Cancel', 'manual_group_cancel')]);
 
-      await ctx.reply('<b>Select transaction to group with:</b>', {
+      await ctx.reply('<b>Select transaction or group:</b>', {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons),
       });
@@ -387,6 +405,50 @@ export class TelegramManualTransactionUpdate {
       this.logger.error(`Error in manual connect group: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error loading transactions.');
+      this.baseHandler.clearSession(ctx);
+    }
+  }
+
+  @Action(/^manual_group_add_to_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleManualGroupAddTo(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^manual_group_add_to_(\d+)$/);
+      if (!match) {
+        return;
+      }
+
+      const groupId = parseInt(match[1]);
+      const txId = ctx.session.currentTransactionId;
+
+      if (!txId) {
+        await ctx.reply('⚠️ Transaction not found.');
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+
+      // Add transaction to the existing group
+      await this.transactionGroupsService.addTransactionToGroup(txId, groupId);
+
+      const group = await this.transactionGroupsService.findOne(groupId);
+      const count = await this.transactionGroupsService.getGroupMemberCount(groupId);
+
+      await ctx.reply(
+        `✅ Transaction added to group: "${group.description}"\n` +
+        `Group now contains ${count} transactions.`
+      );
+
+      this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      this.logger.error(`Error adding to group: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error adding transaction to group.');
       this.baseHandler.clearSession(ctx);
     }
   }
@@ -523,13 +585,14 @@ export class TelegramManualTransactionUpdate {
       { parse_mode: 'HTML' }
     );
 
-    // Check if there are other REVIEWED transactions to connect to a group
+    // Check if there are other REVIEWED transactions or existing groups to connect to
     const allTransactions = await this.transactionsService.findAll({});
     const otherReviewedTransactions = allTransactions.filter(t =>
       t.status === 'REVIEWED' &&
       t.id !== transaction.id &&
       t.groupId === null
     );
+    const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
 
     // Clear manual transaction flow state (but keep currentTransactionId if grouping)
     ctx.session.manualTransactionState = undefined;
@@ -541,7 +604,7 @@ export class TelegramManualTransactionUpdate {
     ctx.session.manualTransactionDescription = undefined;
     ctx.session.manualTransactionDate = undefined;
 
-    if (otherReviewedTransactions.length > 0) {
+    if (otherReviewedTransactions.length > 0 || existingGroups.length > 0) {
       // Store the created transaction ID in session for grouping
       ctx.session.currentTransactionId = transaction.id;
 

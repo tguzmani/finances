@@ -202,22 +202,33 @@ export class TransactionGroupsService {
   }
 
   private buildExcelFormula(transactions: Transaction[], exchangeRate?: number, groupCurrency?: string): string {
-    const terms: string[] = [];
+    const types = new Set(transactions.map(t => t.type));
+    const isMixedTypes = types.size > 1;
 
-    for (const tx of transactions) {
-      const amount = Number(tx.amount).toFixed(2);
-      const sign = tx.type === 'INCOME' ? '+' : '-';
-      terms.push(`${sign}${amount}`);
+    if (isMixedTypes) {
+      // Mixed income + expense: use signs and abs
+      const terms: string[] = [];
+      for (const tx of transactions) {
+        const amount = Number(tx.amount).toFixed(2);
+        const sign = tx.type === 'INCOME' ? '+' : '-';
+        terms.push(`${sign}${amount}`);
+      }
+      const sumExpr = terms.join('');
+
+      if (exchangeRate && groupCurrency === 'VES') {
+        return `=abs((${sumExpr})/${exchangeRate.toFixed(2)})`;
+      }
+      return `=abs(${sumExpr})`;
+    } else {
+      // Pure income or pure expense: all positive, no abs
+      const terms = transactions.map(tx => Number(tx.amount).toFixed(2));
+      const sumExpr = terms.join('+');
+
+      if (exchangeRate && groupCurrency === 'VES') {
+        return `=(${sumExpr})/${exchangeRate.toFixed(2)}`;
+      }
+      return `=${sumExpr}`;
     }
-
-    const sumExpr = terms.join('');
-
-    // Only divide by exchange rate if ALL transactions are VES (not mixed, not USD)
-    if (exchangeRate && groupCurrency === 'VES') {
-      return `=abs((${sumExpr})/${exchangeRate.toFixed(2)})`;
-    }
-
-    return `=abs(${sumExpr})`;
   }
 
   // ==================== Validation ====================

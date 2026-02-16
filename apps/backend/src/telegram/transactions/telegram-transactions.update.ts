@@ -476,14 +476,32 @@ export class TelegramTransactionsUpdate {
         t.groupId === null
       );
 
-      if (available.length === 0) {
-        await ctx.reply('No other transactions available for grouping.');
+      // Get existing groups to append to
+      const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
+
+      if (available.length === 0 && existingGroups.length === 0) {
+        await ctx.reply('No other transactions or groups available for grouping.');
         return;
       }
 
       // Build buttons (no text list)
       const buttons = [];
 
+      // Show existing groups first
+      for (const group of existingGroups) {
+        const memberCount = group.transactions.length;
+        const desc = group.description;
+        const maxDescLength = 40;
+        const truncatedDesc = desc.length > maxDescLength
+          ? desc.substring(0, maxDescLength) + '...'
+          : desc;
+        const buttonText = `📦 ${truncatedDesc} (${memberCount} txns)`;
+        buttons.push([
+          Markup.button.callback(buttonText, `group_add_to_${group.id}`)
+        ]);
+      }
+
+      // Then show individual ungrouped transactions
       for (const tx of available) {
         const amount = Number(tx.amount).toFixed(2);
         const desc = tx.description || 'No description';
@@ -504,7 +522,7 @@ export class TelegramTransactionsUpdate {
 
       buttons.push([Markup.button.callback('❌ Cancel', 'group_cancel')]);
 
-      await ctx.reply('<b>Select transaction to group with:</b>', {
+      await ctx.reply('<b>Select transaction or group:</b>', {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons),
       });
@@ -512,6 +530,58 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error handling group transaction: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error loading transactions for grouping.');
+    }
+  }
+
+  @Action(/^group_add_to_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleGroupAddTo(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^group_add_to_(\d+)$/);
+      if (!match) {
+        return;
+      }
+
+      const groupId = parseInt(match[1]);
+      const txId = ctx.session.currentTransactionId;
+
+      if (!txId) {
+        await ctx.reply('⚠️ No active transaction.');
+        return;
+      }
+
+      // Add transaction to the existing group
+      await this.transactionGroupsService.addTransactionToGroup(txId, groupId);
+
+      const group = await this.transactionGroupsService.findOne(groupId);
+      const count = await this.transactionGroupsService.getGroupMemberCount(groupId);
+
+      // Mark current transaction as REVIEWED since it's been grouped
+      await this.transactionsService.update(txId, {
+        status: TransactionStatus.REVIEWED,
+      });
+
+      await ctx.reply(
+        `✅ Transaction added to group: "${group.description}"\n` +
+        `Group now contains ${count} transactions.`
+      );
+
+      // Continue review
+      if (ctx.session.reviewSingleItem) {
+        this.baseHandler.clearSession(ctx);
+      } else {
+        await this.showNextTransaction(ctx);
+      }
+    } catch (error) {
+      this.logger.error(`Error adding to group: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error adding transaction to group.');
     }
   }
 
