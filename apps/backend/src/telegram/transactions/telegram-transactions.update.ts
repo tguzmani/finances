@@ -791,6 +791,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Handle review by ID for exchange flow
+    if (ctx.session.reviewOneMode === 'waiting_for_ex_id') {
+      await this.exchangesUpdate.handleReviewOneExchangeId(ctx);
+      return;
+    }
+
     // Handle group description input
     if (ctx.session.waitingForGroupDescription) {
       try {

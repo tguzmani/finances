@@ -225,14 +225,38 @@ export class TelegramUpdate {
       // Clear any previous session state
       this.baseHandler.clearSession(ctx);
 
-      // Directly prompt for transaction ID (no need for selection since only transactions)
-      ctx.session.reviewOneMode = 'waiting_for_tx_id';
-      ctx.session.reviewOneType = 'transaction';
+      // Get counts
+      const [txCount, exCount] = await Promise.all([
+        this.telegramService.transactions.getPendingReviewCount(),
+        this.telegramService.exchanges.getReviewedExchanges().then(exs => exs.length),
+      ]);
 
-      await ctx.reply(
-        '🔢 Please enter the Transaction ID:',
-        { reply_markup: { force_reply: true } }
-      );
+      // If only transactions, go directly
+      if (txCount > 0 && exCount === 0) {
+        ctx.session.reviewOneMode = 'waiting_for_tx_id';
+        ctx.session.reviewOneType = 'transaction';
+        await ctx.reply('🔢 Please enter the Transaction ID:', { reply_markup: { force_reply: true } });
+        return;
+      }
+
+      // If only exchanges, go directly
+      if (exCount > 0 && txCount === 0) {
+        ctx.session.reviewOneMode = 'waiting_for_ex_id';
+        ctx.session.reviewOneType = 'exchange';
+        await ctx.reply('🔢 Please enter the Exchange ID:', { reply_markup: { force_reply: true } });
+        return;
+      }
+
+      // Show selection buttons (both available or neither - still allow both)
+      const buttons = [
+        [Markup.button.callback(`💸 Transaction${txCount > 0 ? ` (${txCount} pending)` : ''}`, 'review_one_transaction')],
+        [Markup.button.callback(`💱 Exchange${exCount > 0 ? ` (${exCount} reviewed)` : ''}`, 'review_one_exchange')],
+      ];
+
+      await ctx.reply('<b>What would you like to review?</b>', {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(buttons),
+      });
     } catch (error) {
       await ctx.reply('Error starting review by ID.');
     }
