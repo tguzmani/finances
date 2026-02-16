@@ -397,13 +397,17 @@ export class TelegramTransactionsUpdate {
         await this.telegramService.transactions.registerTransactions(transactionIds);
       }
 
-      // Register groups (NEW → REGISTERED)
+      // Register groups (NEW → REGISTERED) and their transactions
       if (groupIds.length > 0) {
-        await Promise.all(
-          groupIds.map(id =>
-            this.transactionGroupsService.update(id, { status: TransactionGroupStatus.REGISTERED })
-          )
-        );
+        for (const groupId of groupIds) {
+          await this.transactionGroupsService.update(groupId, { status: TransactionGroupStatus.REGISTERED });
+          const group = await this.transactionGroupsService.findOneWithTransactions(groupId);
+          for (const tx of group.transactions) {
+            await this.transactionsService.update(tx.id, {
+              status: TransactionStatus.REGISTERED,
+            });
+          }
+        }
       }
 
       // Store IDs in session for undo
@@ -456,13 +460,17 @@ export class TelegramTransactionsUpdate {
         );
       }
 
-      // Revert groups back to NEW status
+      // Revert groups back to NEW status and their transactions to REVIEWED
       if (groupIds.length > 0) {
-        await Promise.all(
-          groupIds.map(id =>
-            this.transactionGroupsService.update(id, { status: TransactionGroupStatus.NEW })
-          )
-        );
+        for (const groupId of groupIds) {
+          await this.transactionGroupsService.update(groupId, { status: TransactionGroupStatus.NEW });
+          const group = await this.transactionGroupsService.findOneWithTransactions(groupId);
+          for (const tx of group.transactions) {
+            await this.transactionsService.update(tx.id, {
+              status: TransactionStatus.REVIEWED,
+            });
+          }
+        }
       }
 
       await ctx.reply(
@@ -1798,6 +1806,13 @@ export class TelegramTransactionsUpdate {
         await this.transactionGroupsService.update(item.id, {
           status: TransactionGroupStatus.REGISTERED,
         });
+        // Also mark all transactions in the group as REGISTERED
+        const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
+        for (const tx of group.transactions) {
+          await this.transactionsService.update(tx.id, {
+            status: TransactionStatus.REGISTERED,
+          });
+        }
         // Update the cached data as well
         item.data.status = TransactionGroupStatus.REGISTERED;
       }
@@ -1839,6 +1854,13 @@ export class TelegramTransactionsUpdate {
         await this.transactionGroupsService.update(item.id, {
           status: TransactionGroupStatus.NEW,
         });
+        // Also revert all transactions in the group to REVIEWED
+        const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
+        for (const tx of group.transactions) {
+          await this.transactionsService.update(tx.id, {
+            status: TransactionStatus.REVIEWED,
+          });
+        }
         // Update the cached data as well
         item.data.status = TransactionGroupStatus.NEW;
       }
@@ -1882,6 +1904,13 @@ export class TelegramTransactionsUpdate {
         await this.transactionGroupsService.update(previousItem.id, {
           status: TransactionGroupStatus.NEW,
         });
+        // Also revert all transactions in the group to REVIEWED
+        const group = await this.transactionGroupsService.findOneWithTransactions(previousItem.id);
+        for (const tx of group.transactions) {
+          await this.transactionsService.update(tx.id, {
+            status: TransactionStatus.REVIEWED,
+          });
+        }
         // Update the cached data as well
         previousItem.data.status = TransactionGroupStatus.NEW;
       }
@@ -1921,6 +1950,13 @@ export class TelegramTransactionsUpdate {
             await this.transactionGroupsService.update(item.id, {
               status: TransactionGroupStatus.NEW,
             });
+            // Also revert all transactions in the group to REVIEWED
+            const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
+            for (const tx of group.transactions) {
+              await this.transactionsService.update(tx.id, {
+                status: TransactionStatus.REVIEWED,
+              });
+            }
             revertedCount++;
           }
         }
