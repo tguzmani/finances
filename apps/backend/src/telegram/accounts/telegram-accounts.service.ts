@@ -5,6 +5,8 @@ import { TelegramAccountsPresenter } from './telegram-accounts.presenter';
 import { ExchangesSheetsService } from '../../exchanges/exchanges-sheets.service';
 import { TransactionsSheetsService } from '../../transactions/transactions-sheets.service';
 import { TransactionData } from '../../transactions/interfaces/transaction-data.interface';
+import { TransactionsService } from '../../transactions/transactions.service';
+import { ExchangesService } from '../../exchanges/exchanges.service';
 
 @Injectable()
 export class TelegramAccountsService {
@@ -15,8 +17,67 @@ export class TelegramAccountsService {
     private readonly accountsSheetsService: AccountsSheetsService,
     private readonly exchangesSheetsService: ExchangesSheetsService,
     private readonly transactionsSheetsService: TransactionsSheetsService,
+    private readonly transactionsService: TransactionsService,
+    private readonly exchangesService: ExchangesService,
     private readonly presenter: TelegramAccountsPresenter,
   ) {}
+
+  async getBanescoStatusMessage(): Promise<string> {
+    try {
+      const [sheetsBalance, allTransactions, allExchanges] = await Promise.all([
+        this.accountsSheetsService.getBanescoBalance(),
+        this.transactionsService.findAll({}),
+        this.exchangesService.findAll({}),
+      ]);
+
+      // Pending BANESCO transactions (NEW or REVIEWED)
+      const pendingBanescoTxs = allTransactions.filter(t =>
+        t.platform === 'BANESCO' &&
+        (t.status === 'NEW' || t.status === 'REVIEWED')
+      );
+
+      let transactionsNet = 0;
+      for (const tx of pendingBanescoTxs) {
+        const amount = Number(tx.amount);
+        if (tx.type === 'INCOME') {
+          transactionsNet += amount;
+        } else {
+          transactionsNet -= amount;
+        }
+      }
+
+      // Pending exchanges (not REGISTERED, REJECTED, CANCELLED, FAILED)
+      const pendingExchanges = allExchanges.filter(e =>
+        e.status !== 'REGISTERED' &&
+        e.status !== 'REJECTED' &&
+        e.status !== 'CANCELLED' &&
+        e.status !== 'FAILED'
+      );
+
+      let exchangesNet = 0;
+      for (const ex of pendingExchanges) {
+        const fiat = Number(ex.fiatAmount);
+        if (ex.tradeType === 'SELL') {
+          exchangesNet += fiat; // Selling crypto → VES comes into Banesco
+        } else {
+          exchangesNet -= fiat; // Buying crypto → VES goes out of Banesco
+        }
+      }
+
+      const pendingTotal = transactionsNet + exchangesNet;
+      const estimatedBalance = sheetsBalance + pendingTotal;
+
+      return this.presenter.formatBanescoStatus(
+        sheetsBalance,
+        estimatedBalance,
+        pendingBanescoTxs.length,
+        pendingExchanges.length,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to get Banesco status: ${error.message}`);
+      throw error;
+    }
+  }
 
   async getStablecoinBalanceMessage(): Promise<string> {
     try {

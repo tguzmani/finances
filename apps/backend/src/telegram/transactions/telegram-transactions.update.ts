@@ -15,6 +15,7 @@ import { TelegramAccountsUpdate } from '../accounts/telegram-accounts.update';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
+import { DateParserService } from '../../common/date-parser.service';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -32,6 +33,7 @@ export class TelegramTransactionsUpdate {
     private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly groupsPresenter: TelegramGroupsPresenter,
+    private readonly dateParser: DateParserService,
   ) { }
 
   @Command('transactions')
@@ -152,6 +154,31 @@ export class TelegramTransactionsUpdate {
       await ctx.reply(
         '✏️ Please type a description for this transaction:',
         { reply_markup: { force_reply: true } }
+      );
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('review_date')
+  @UseGuards(TelegramAuthGuard)
+  async handleDateChange(@Ctx() ctx: SessionContext) {
+    try {
+      const transactionId = ctx.session.currentTransactionId;
+
+      if (!transactionId) {
+        await ctx.answerCbQuery('No active transaction');
+        return;
+      }
+
+      ctx.session.waitingForDateChange = true;
+      ctx.session.waitingForDescription = false;
+
+      await ctx.answerCbQuery();
+      await ctx.reply(
+        '📅 <b>Enter new date/time</b>\n\n' +
+        'You can use natural language (e.g. "ayer 2pm", "Feb 10 3:30 PM", "hace 2 horas")',
+        { parse_mode: 'HTML', reply_markup: { force_reply: true } }
       );
     } catch (error) {
       await ctx.answerCbQuery('Error');
@@ -813,6 +840,42 @@ export class TelegramTransactionsUpdate {
       }
     }
 
+    // Handle date change input
+    if (ctx.session.waitingForDateChange && ctx.session.currentTransactionId) {
+      try {
+        const input = ctx.message.text.trim();
+        const parsedDate = this.dateParser.parseVenezuelaDate(input);
+
+        if (!parsedDate) {
+          await ctx.reply('❌ Invalid date format. Please try again.');
+          return;
+        }
+
+        await this.transactionsService.update(ctx.session.currentTransactionId, {
+          date: parsedDate,
+        });
+
+        const formatted = parsedDate.toLocaleString('en-US', {
+          timeZone: 'America/Caracas',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        await ctx.reply(`✅ Date updated to: ${formatted}`);
+        ctx.session.waitingForDateChange = false;
+        ctx.session.waitingForDescription = true;
+        return;
+      } catch (error) {
+        this.logger.error(`Error updating date: ${error.message}`);
+        await ctx.reply('Error updating date. Please try again.');
+        ctx.session.waitingForDateChange = false;
+        return;
+      }
+    }
+
     // Only process if we're waiting for a description
     if (!ctx.session.waitingForDescription || !ctx.session.currentTransactionId) {
       return;
@@ -1374,9 +1437,10 @@ export class TelegramTransactionsUpdate {
         ]);
       }
 
-      // Add Change Name button
+      // Add Change Name and Change Date buttons
       buttons.push([
         Markup.button.callback('✏️ Change Name', 'review_name'),
+        Markup.button.callback('📅 Change Date', 'review_date'),
       ]);
 
       const keyboard = Markup.inlineKeyboard(buttons);

@@ -3,6 +3,19 @@ import { StablecoinOverview } from '../../accounts/interfaces/binance-account.in
 
 @Injectable()
 export class TelegramAccountsPresenter {
+  formatBanescoStatus(
+    sheetsBalance: number,
+    estimatedBalance: number,
+    pendingTxCount: number,
+    pendingExchangeCount: number,
+  ): string {
+    let message = '<b>🏦 Banesco</b>\n\n';
+    message += `Sheets Balance: <b>${sheetsBalance.toFixed(2)} VES</b>\n`;
+    message += `Estimated Balance: <b>${estimatedBalance.toFixed(2)} VES</b>\n\n`;
+    message += `<i>${pendingTxCount} pending transactions, ${pendingExchangeCount} pending exchanges</i>`;
+    return message;
+  }
+
   formatStablecoinOverview(overview: StablecoinOverview, sheetsBalance: number): string {
     let message = '<b>Binance Stablecoin Balance</b>\n\n';
 

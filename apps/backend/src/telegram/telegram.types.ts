@@ -67,6 +67,8 @@ export interface ReviewSession {
     ocrText: string;
     paymentMethod: PaymentMethod | null;
   };
+  // Date change flow (review)
+  waitingForDateChange?: boolean;
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;
 }

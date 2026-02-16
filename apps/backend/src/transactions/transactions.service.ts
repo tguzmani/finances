@@ -67,6 +67,10 @@ export class TransactionsService {
       data.description = dto.description;
     }
 
+    if (dto.date !== undefined) {
+      data.date = dto.date;
+    }
+
     return this.prisma.transaction.update({
       where: { id },
       data,

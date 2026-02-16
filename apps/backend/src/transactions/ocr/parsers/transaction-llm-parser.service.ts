@@ -24,7 +24,7 @@ Return ONLY valid JSON with this exact structure:
 }
 
 Rules:
-- datetime: Parse DD/MM/YYYY format (Venezuelan standard). If time is missing, use 00:00:00
+- datetime: Parse DD/MM/YYYY format (Venezuelan standard). Always output in 24-hour format. Convert AM/PM times to 24h (e.g., 06:48 PM → 18:48:00, 12:30 AM → 00:30:00). If time is missing, use 00:00:00
 - amount: Parse Venezuelan number format (1.234,56 = 1234.56). Return the TOTAL amount (look for "TOTAL")
 - transactionId: Look for "Referencia", "Factura", "Nro", "Ticket"
 - paymentMethod: Determine based on these markers:

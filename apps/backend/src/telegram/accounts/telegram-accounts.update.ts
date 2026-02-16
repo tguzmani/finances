@@ -18,6 +18,7 @@ export class TelegramAccountsUpdate {
       this.logger.log('Handling /accounts command');
 
       const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🏦 Banesco', 'accounts_banesco')],
         [Markup.button.callback('Binance Stablecoin', 'accounts_binance_stablecoin')],
         [Markup.button.callback('Update Banesco', 'accounts_update_banesco')],
       ]);
@@ -29,6 +30,21 @@ export class TelegramAccountsUpdate {
     } catch (error) {
       this.logger.error(`Error in /accounts command: ${error.message}`);
       await ctx.reply('Error loading accounts menu. Please try again.');
+    }
+  }
+
+  @Action('accounts_banesco')
+  @UseGuards(TelegramAuthGuard)
+  async handleBanesco(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      await ctx.reply('Fetching Banesco status...');
+
+      const message = await this.accountsService.getBanescoStatusMessage();
+      await ctx.reply(message, { parse_mode: 'HTML' });
+    } catch (error) {
+      this.logger.error(`Error fetching Banesco status: ${error.message}`);
+      await ctx.reply('Error fetching Banesco status. Please try again.');
     }
   }
 
