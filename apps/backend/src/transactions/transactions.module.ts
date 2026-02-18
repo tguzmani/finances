@@ -18,6 +18,7 @@ import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parse
 import { CursorScheduler } from './email/subscriptions/cursor/cursor.scheduler';
 import { CommonModule } from '../common/common.module';
 import { TransactionsSheetsService } from './transactions-sheets.service';
+import { TransactionSearchService } from './transaction-search.service';
 
 @Module({
   imports: [CommonModule],
@@ -48,11 +49,15 @@ import { TransactionsSheetsService } from './transactions-sheets.service';
     // OCR - LLM-based parsing
     TransactionOcrParser,
     TransactionLlmParserService,
+
+    // Search
+    TransactionSearchService,
   ],
   exports: [
     TransactionsService,
     TransactionOcrParser,
     TransactionsSheetsService,
+    TransactionSearchService,
   ],
 })
 export class TransactionsModule {

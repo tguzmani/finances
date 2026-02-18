@@ -13,6 +13,7 @@ import { TelegramBaseHandler } from './telegram-base.handler';
 import { TransactionGroupsService } from '../transaction-groups/transaction-groups.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
+import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 
 @Update()
 export class TelegramUpdate {
@@ -29,6 +30,7 @@ export class TelegramUpdate {
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly groupsPresenter: TelegramGroupsPresenter,
+    private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
   ) { }
 
   @Command('start')
@@ -56,6 +58,7 @@ export class TelegramUpdate {
       '/rates - View exchange rates and discounts\n' +
       '/transactions - View recent expenses\n' +
       '/exchanges - View recent exchanges\n' +
+      '/group - Create or manage groups\n' +
       '/groups - View unregistered groups\n' +
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
@@ -63,6 +66,12 @@ export class TelegramUpdate {
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
+  }
+
+  @Command('group')
+  @UseGuards(TelegramAuthGuard)
+  async handleGroup(@Ctx() ctx: SessionContext) {
+    await this.groupFlowUpdate.startGroupFlow(ctx);
   }
 
   @Command('groups')
@@ -225,32 +234,25 @@ export class TelegramUpdate {
       // Clear any previous session state
       this.baseHandler.clearSession(ctx);
 
-      // Get counts
-      const [txCount, exCount] = await Promise.all([
-        this.telegramService.transactions.getPendingReviewCount(),
-        this.telegramService.exchanges.getReviewedExchanges().then(exs => exs.length),
-      ]);
+      // Transaction search is always available (searches any status)
+      // Only check if there are exchanges to offer that option too
+      const exCount = await this.telegramService.exchanges.getReviewedExchanges().then(exs => exs.length);
 
-      // If only transactions, go directly
-      if (txCount > 0 && exCount === 0) {
-        ctx.session.reviewOneMode = 'waiting_for_tx_id';
+      if (exCount === 0) {
+        // No exchanges — go directly to transaction search
+        ctx.session.reviewOneMode = 'waiting_for_tx_search';
         ctx.session.reviewOneType = 'transaction';
-        await ctx.reply('🔢 Please enter the Transaction ID:', { reply_markup: { force_reply: true } });
+        await ctx.reply(
+          '🔍 <b>Search transaction</b>\n\n<i>Type name, amount, date, platform, or any combination</i>',
+          { parse_mode: 'HTML', reply_markup: { force_reply: true } },
+        );
         return;
       }
 
-      // If only exchanges, go directly
-      if (exCount > 0 && txCount === 0) {
-        ctx.session.reviewOneMode = 'waiting_for_ex_id';
-        ctx.session.reviewOneType = 'exchange';
-        await ctx.reply('🔢 Please enter the Exchange ID:', { reply_markup: { force_reply: true } });
-        return;
-      }
-
-      // Show selection buttons (both available or neither - still allow both)
+      // Exchanges available — show selection buttons
       const buttons = [
-        [Markup.button.callback(`💸 Transaction${txCount > 0 ? ` (${txCount} pending)` : ''}`, 'review_one_transaction')],
-        [Markup.button.callback(`💱 Exchange${exCount > 0 ? ` (${exCount} reviewed)` : ''}`, 'review_one_exchange')],
+        [Markup.button.callback('💸 Transaction', 'review_one_transaction')],
+        [Markup.button.callback(`💱 Exchange (${exCount} reviewed)`, 'review_one_exchange')],
       ];
 
       await ctx.reply('<b>What would you like to review?</b>', {

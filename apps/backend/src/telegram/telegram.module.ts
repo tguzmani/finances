@@ -14,6 +14,7 @@ import { TelegramNotificationListener } from './listeners/telegram-notification.
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
+import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramRatesUpdate } from './rates/telegram-rates.update';
 import { TelegramRatesService } from './rates/telegram-rates.service';
@@ -92,6 +93,7 @@ import * as https from 'https';
     TelegramBaseHandler,
     TelegramTransactionsUpdate,
     TelegramManualTransactionUpdate,
+    TelegramGroupFlowUpdate,
     TelegramExchangesUpdate,
     TelegramRatesUpdate,
     TelegramRatesService,

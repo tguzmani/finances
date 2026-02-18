@@ -8,6 +8,7 @@ import { SessionContext } from '../telegram.types';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { TransactionStatus, TransactionType, TransactionPlatform, PaymentMethod } from '../../transactions/transaction.types';
 import { TransactionOcrParser } from '../../transactions/ocr/parsers/transaction-ocr-parser';
+import { TransactionSearchService } from '../../transactions/transaction-search.service';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
@@ -15,6 +16,7 @@ import { TelegramAccountsUpdate } from '../accounts/telegram-accounts.update';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
+import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { DateParserService } from '../../common/date-parser.service';
 import axios from 'axios';
 import * as https from 'https';
@@ -27,12 +29,14 @@ export class TelegramTransactionsUpdate {
     private readonly telegramService: TelegramService,
     private readonly transactionsService: TransactionsService,
     private readonly transactionOcrParser: TransactionOcrParser,
+    private readonly transactionSearchService: TransactionSearchService,
     private readonly baseHandler: TelegramBaseHandler,
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly groupsPresenter: TelegramGroupsPresenter,
+    private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly dateParser: DateParserService,
   ) { }
 
@@ -73,12 +77,12 @@ export class TelegramTransactionsUpdate {
   async handleReviewOneTransaction(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery();
-      ctx.session.reviewOneMode = 'waiting_for_tx_id';
+      ctx.session.reviewOneMode = 'waiting_for_tx_search';
       ctx.session.reviewOneType = 'transaction';
 
       await ctx.reply(
-        '🔢 Please enter the Transaction ID:',
-        { reply_markup: { force_reply: true } }
+        '🔍 <b>Search transaction</b>\n\n<i>Type name, amount, date, platform, or any combination</i>',
+        { parse_mode: 'HTML', reply_markup: { force_reply: true } },
       );
     } catch (error) {
       await ctx.answerCbQuery('Error');
@@ -779,6 +783,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // /group flow - description input
+    if (ctx.session.groupFlowWaitingForDescription) {
+      await this.groupFlowUpdate.handleDescriptionInput(ctx);
+      return;
+    }
+
     // Banesco balance update flow - delegate to accounts handler
     if (ctx.session.waitingForBanescoAmount) {
       await this.accountsUpdate.handleBanescoAmountInput(ctx);
@@ -793,9 +803,9 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
-    // Handle review by ID for transaction flow
-    if (ctx.session.reviewOneMode === 'waiting_for_tx_id') {
-      await this.handleReviewOneTransactionId(ctx);
+    // Handle search for transaction flow
+    if (ctx.session.reviewOneMode === 'waiting_for_tx_search') {
+      await this.handleTransactionSearch(ctx);
       return;
     }
 
@@ -1398,80 +1408,138 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  private async handleReviewOneTransactionId(ctx: SessionContext) {
-    if (!('text' in ctx.message)) {
-      return;
-    }
-
+  @Action(/^search_tx_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleSearchSelectTransaction(@Ctx() ctx: SessionContext) {
     try {
-      const idStr = ctx.message.text.trim();
-      const id = parseInt(idStr, 10);
+      await ctx.answerCbQuery();
 
-      if (isNaN(id)) {
-        await ctx.reply('❌ Invalid ID. Please enter a numeric ID.');
-        return;
-      }
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
 
-      // Fetch transaction
-      const transaction = await this.transactionsService.findOne(id);
+      const match = ctx.callbackQuery.data.match(/^search_tx_(\d+)$/);
+      if (!match) return;
+
+      const transactionId = parseInt(match[1], 10);
+      const transaction = await this.transactionsService.findOne(transactionId);
 
       if (!transaction) {
-        await ctx.reply(`❌ Transaction with ID ${id} not found.`);
+        await ctx.reply('❌ Transaction not found.');
         return;
       }
 
-      // Clear review one mode and set up normal review mode
-      ctx.session.reviewOneMode = undefined;
-      ctx.session.reviewOneType = undefined;
-      ctx.session.reviewType = 'transactions';
-      ctx.session.reviewSingleItem = true; // Mark as single item review
-      ctx.session.currentTransactionId = transaction.id;
-      ctx.session.waitingForDescription = true;
+      await this.showTransactionForReviewOne(ctx, transaction);
+    } catch (error) {
+      this.logger.error(`Error selecting search result: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('❌ Error loading transaction.');
+    }
+  }
 
-      const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
+  @Action('search_tx_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handleSearchCancel(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Cancelled');
+      this.baseHandler.clearSession(ctx);
+      await ctx.reply('🚫 Search cancelled.');
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
 
-      // Check if transaction has a group
-      const hasGroup = transaction.groupId !== null;
+  private async handleTransactionSearch(ctx: SessionContext) {
+    if (!('text' in ctx.message)) return;
 
-      const buttons = [];
+    try {
+      const searchText = ctx.message.text.trim();
 
-      // Only Reject button (no Skip for review_one)
-      buttons.push([
-        Markup.button.callback('❌ Reject', 'review_reject'),
-      ]);
+      await ctx.reply('🔍 Searching...');
 
-      // Add Group or Ungroup button
-      if (hasGroup) {
-        buttons.push([
-          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
-        ]);
-      } else {
-        buttons.push([
-          Markup.button.callback('📎 Group', 'group_transaction'),
-        ]);
+      // Parse search query with LLM
+      const criteria = await this.transactionSearchService.parseSearchQuery(searchText);
+
+      // Only search NEW and REVIEWED transactions for /review_one
+      criteria.statusIn = [TransactionStatus.NEW, TransactionStatus.REVIEWED];
+
+      // Search transactions
+      const results = await this.transactionsService.searchTransactions(criteria);
+
+      if (results.length === 0) {
+        await ctx.reply('❌ No transactions found. Try a different search.');
+        return;
       }
 
-      // Add Change Name and Change Date buttons
-      buttons.push([
-        Markup.button.callback('✏️ Change Name', 'review_name'),
-        Markup.button.callback('📅 Change Date', 'review_date'),
-      ]);
+      if (results.length === 1) {
+        // Single result - go directly to review
+        await this.showTransactionForReviewOne(ctx, results[0]);
+        return;
+      }
 
-      const keyboard = Markup.inlineKeyboard(buttons);
+      // Multiple results - show buttons
+      const buttons = results.map(tx => {
+        const amount = Number(tx.amount).toFixed(2);
+        const desc = tx.description || 'No description';
+        const maxLen = 40;
+        const truncated = desc.length > maxLen ? desc.substring(0, maxLen) + '...' : desc;
+        return [Markup.button.callback(`${truncated} - ${amount} ${tx.currency}`, `search_tx_${tx.id}`)];
+      });
+
+      buttons.push([Markup.button.callback('❌ Cancel', 'search_tx_cancel')]);
 
       await ctx.reply(
-        `<b>Transaction ID: ${id}</b>\n\n` +
-        message +
-        '\n\n💬 <i>Type a description or use the buttons below:</i>',
-        {
-          parse_mode: 'HTML',
-          ...keyboard,
-        }
+        `🔍 Found ${results.length} transaction(s):`,
+        { ...Markup.inlineKeyboard(buttons) },
       );
     } catch (error) {
-      this.logger.error(`Error loading transaction by ID: ${error.message}`);
-      await ctx.reply('❌ Error loading transaction. Please try again.');
+      this.logger.error(`Error searching transactions: ${error.message}`);
+      await ctx.reply('❌ Error searching. Please try again.');
     }
+  }
+
+  private async showTransactionForReviewOne(ctx: SessionContext, transaction: Transaction) {
+    ctx.session.reviewOneMode = undefined;
+    ctx.session.reviewOneType = undefined;
+    ctx.session.reviewType = 'transactions';
+    ctx.session.reviewSingleItem = true;
+    ctx.session.currentTransactionId = transaction.id;
+    ctx.session.waitingForDescription = true;
+
+    const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
+
+    const hasGroup = transaction.groupId !== null;
+
+    const buttons = [];
+
+    buttons.push([
+      Markup.button.callback('❌ Reject', 'review_reject'),
+    ]);
+
+    if (hasGroup) {
+      buttons.push([
+        Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
+      ]);
+    } else {
+      buttons.push([
+        Markup.button.callback('📎 Group', 'group_transaction'),
+      ]);
+    }
+
+    buttons.push([
+      Markup.button.callback('✏️ Change Name', 'review_name'),
+      Markup.button.callback('📅 Change Date', 'review_date'),
+    ]);
+
+    const keyboard = Markup.inlineKeyboard(buttons);
+
+    await ctx.reply(
+      `<b>Transaction ID: ${transaction.id}</b>\n\n` +
+      message +
+      '\n\n💬 <i>Type a description or use the buttons below:</i>',
+      {
+        parse_mode: 'HTML',
+        ...keyboard,
+      },
+    );
   }
 
   public async showPreviousTransactionPublic(ctx: SessionContext) {

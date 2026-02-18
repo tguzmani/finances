@@ -23,7 +23,7 @@ export interface ReviewSession {
   registerTransactionIndex?: number;
   registerTransactionExchangeRate?: number;
   // Review by ID flow
-  reviewOneMode?: 'selecting' | 'waiting_for_tx_id' | 'waiting_for_ex_id';
+  reviewOneMode?: 'selecting' | 'waiting_for_tx_id' | 'waiting_for_ex_id' | 'waiting_for_tx_search';
   reviewOneType?: 'transaction' | 'exchange';
   reviewSingleItem?: boolean; // True when reviewing a single item via /review_one
   // Go Back functionality
@@ -69,6 +69,10 @@ export interface ReviewSession {
   };
   // Date change flow (review)
   waitingForDateChange?: boolean;
+  // /group command flow
+  groupFlowGroupId?: number;
+  groupFlowWaitingForDescription?: boolean;
+  groupFlowTransactionIds?: number[];
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;
 }
@@ -84,6 +88,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'rates', description: 'View exchange rates' },
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
+  { command: 'group', description: 'Create or manage groups' },
   { command: 'groups', description: 'View unregistered groups' },
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },

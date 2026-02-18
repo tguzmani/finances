@@ -5,6 +5,7 @@ import { TransactionsBinanceService } from './transactions-binance.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
+import { TransactionSearchCriteria } from './transaction-search.service';
 import { Prisma, TransactionPlatform, PaymentMethod, Transaction } from '@prisma/client';
 
 @Injectable()
@@ -53,6 +54,47 @@ export class TransactionsService {
   async findByTransactionId(transactionId: string) {
     return this.prisma.transaction.findUnique({
       where: { transactionId },
+    });
+  }
+
+  async searchTransactions(criteria: TransactionSearchCriteria): Promise<Transaction[]> {
+    const where: Prisma.TransactionWhereInput = {};
+
+    if (criteria.description) {
+      where.description = { contains: criteria.description, mode: 'insensitive' };
+    }
+
+    if (criteria.dateFrom || criteria.dateTo) {
+      where.date = {};
+      if (criteria.dateFrom) where.date.gte = new Date(criteria.dateFrom + 'T00:00:00Z');
+      if (criteria.dateTo) where.date.lte = new Date(criteria.dateTo + 'T23:59:59Z');
+    }
+
+    if (criteria.amountMin != null || criteria.amountMax != null) {
+      where.amount = {};
+      if (criteria.amountMin != null) where.amount.gte = criteria.amountMin;
+      if (criteria.amountMax != null) where.amount.lte = criteria.amountMax;
+    }
+
+    if (criteria.platform) {
+      where.platform = criteria.platform as TransactionPlatform;
+    }
+
+    if (criteria.statusIn) {
+      where.status = { in: criteria.statusIn as TransactionStatus[] };
+    } else if (criteria.status) {
+      where.status = criteria.status as TransactionStatus;
+    }
+
+    if (criteria.method) {
+      where.method = criteria.method as PaymentMethod;
+    }
+
+    return this.prisma.transaction.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      take: 10,
+      include: { group: true },
     });
   }
 
