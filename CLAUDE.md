@@ -2,6 +2,7 @@
 
 ## Build & Run
 
+- **Build**: `pnpm build`
 - **Build/serve**: `pnpm serve` (runs `nx serve backend`)
 - **Debug mode**: `pnpm serve:debug`
 - **Prisma generate**: `pnpm prisma:generate`

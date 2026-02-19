@@ -18,8 +18,7 @@ export class TelegramAccountsUpdate {
       this.logger.log('Handling /accounts command');
 
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🏦 Banesco', 'accounts_banesco')],
-        [Markup.button.callback('Binance Stablecoin', 'accounts_binance_stablecoin')],
+        [Markup.button.callback('💰 Balances', 'accounts_balances')],
         [Markup.button.callback('Update Banesco', 'accounts_update_banesco')],
       ]);
 
@@ -33,33 +32,30 @@ export class TelegramAccountsUpdate {
     }
   }
 
-  @Action('accounts_banesco')
+  @Action('accounts_balances')
   @UseGuards(TelegramAuthGuard)
-  async handleBanesco(@Ctx() ctx: SessionContext) {
+  async handleBalances(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery();
-      await ctx.reply('Fetching Banesco status...');
+      const loadingMsg = await ctx.reply('Fetching balances...');
 
-      const message = await this.accountsService.getBanescoStatusMessage();
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      const message = await this.accountsService.getAllBalancesMessage();
+      const sentMsg = await ctx.reply(message, { parse_mode: 'HTML' });
+
+      // Delete loading message
+      try {
+        await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id);
+      } catch (e) { /* loading message may already be deleted */ }
+
+      // Auto-delete balance message after 60 seconds (sensitive info)
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(sentMsg.chat.id, sentMsg.message_id);
+        } catch (e) { /* message may already be deleted */ }
+      }, 60_000);
     } catch (error) {
-      this.logger.error(`Error fetching Banesco status: ${error.message}`);
-      await ctx.reply('Error fetching Banesco status. Please try again.');
-    }
-  }
-
-  @Action('accounts_binance_stablecoin')
-  @UseGuards(TelegramAuthGuard)
-  async handleBinanceStablecoin(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-      await ctx.reply('Fetching Binance stablecoin balance...');
-
-      const message = await this.accountsService.getStablecoinBalanceMessage();
-      await ctx.reply(message, { parse_mode: 'HTML' });
-    } catch (error) {
-      this.logger.error(`Error fetching stablecoin balance: ${error.message}`);
-      await ctx.reply('Error fetching balance. Please try again.');
+      this.logger.error(`Error fetching balances: ${error.message}`);
+      await ctx.reply('Error fetching balances. Please try again.');
     }
   }
 
@@ -90,20 +86,20 @@ export class TelegramAccountsUpdate {
       const amount = parseFloat(text.replace(/,/g, ''));
 
       if (isNaN(amount) || amount < 0) {
-        await ctx.reply('❌ Invalid amount. Please enter a valid positive number.');
+        await ctx.reply('Invalid amount. Please enter a valid positive number.');
         return;
       }
 
       ctx.session.waitingForBanescoAmount = false;
 
-      await ctx.reply('⏳ Updating Banesco balance...');
+      await ctx.reply('Updating Banesco balance...');
 
       const result = await this.accountsService.adjustBanescoBalance(amount);
       await ctx.reply(result.message);
     } catch (error) {
       ctx.session.waitingForBanescoAmount = false;
       this.logger.error(`Error updating Banesco balance: ${error.message}`);
-      await ctx.reply('❌ Error updating balance. Please try again.');
+      await ctx.reply('Error updating balance. Please try again.');
     }
   }
 }
