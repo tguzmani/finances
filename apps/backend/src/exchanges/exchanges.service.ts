@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExchangesBinanceService } from './exchanges-binance.service';
+import { ExchangesSheetsService } from './exchanges-sheets.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
 import { SyncResult, TradeType } from './exchange.types';
@@ -12,7 +13,8 @@ export class ExchangesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly binanceApi: ExchangesBinanceService
+    private readonly binanceApi: ExchangesBinanceService,
+    private readonly sheetsService: ExchangesSheetsService,
   ) {}
 
   async findAll(query: QueryExchangesDto) {
@@ -254,6 +256,8 @@ export class ExchangesService {
     });
 
     this.logger.log(`Registered ${exchangeIds.length} exchanges with WAVG ${wavg}`);
+
+    await this.sheetsService.updateBsDollarRate(wavg);
   }
 
   async updateExchangeRateOnly(wavg: number): Promise<{updated: boolean, value: number}> {
@@ -280,6 +284,9 @@ export class ExchangesService {
     });
 
     this.logger.log(`Saved new exchange rate: ${roundedWavg} VES/USD`);
+
+    await this.sheetsService.updateBsDollarRate(roundedWavg);
+
     return { updated: true, value: roundedWavg };
   }
 }

@@ -30,4 +30,14 @@ export class ExchangesSheetsService {
       throw error;
     }
   }
+
+  async updateBsDollarRate(rate: number): Promise<void> {
+    try {
+      await this.sheetsRepository.updateSheetValues(this.BS_DOLLAR_RATE_CELL, [[rate]]);
+      this.logger.log(`Updated Bs/$ rate in Sheets (${this.BS_DOLLAR_RATE_CELL}): ${rate}`);
+    } catch (error) {
+      this.logger.error(`Failed to update Bs/$ rate in Sheets: ${error.message}`);
+      throw error;
+    }
+  }
 }
