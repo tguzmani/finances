@@ -8,6 +8,7 @@ export enum TransactionStatus {
 export enum TransactionType {
   EXPENSE = 'EXPENSE',
   INCOME = 'INCOME',
+  TRANSFER = 'TRANSFER',
 }
 
 export enum TransactionPlatform {

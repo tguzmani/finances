@@ -39,6 +39,9 @@ export class TelegramManualTransactionUpdate {
                 { text: '💸 Expense', callback_data: 'manual_type_EXPENSE' },
               ],
               [
+                { text: '🔄 Transfer', callback_data: 'manual_type_TRANSFER' },
+              ],
+              [
                 { text: '🚫 Cancel', callback_data: 'manual_cancel' },
               ],
             ],
@@ -58,14 +61,19 @@ export class TelegramManualTransactionUpdate {
   async handleManualType(@Ctx() ctx: SessionContext) {
     try {
       const match = (ctx as any).match as RegExpMatchArray;
-      const type = match[1] as 'INCOME' | 'EXPENSE';
+      const type = match[1] as 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
       await ctx.answerCbQuery();
 
       ctx.session.manualTransactionType = type;
       ctx.session.manualTransactionState = 'waiting_account';
 
-      const typeLabel = type === 'INCOME' ? '💰 Income' : '💸 Expense';
+      const typeLabels: Record<string, string> = {
+        'INCOME': '💰 Income',
+        'EXPENSE': '💸 Expense',
+        'TRANSFER': '🔄 Transfer',
+      };
+      const typeLabel = typeLabels[type] || type;
 
       await ctx.editMessageText(
         `➕ <b>Manual Transaction Entry</b>\n\n` +
@@ -574,7 +582,8 @@ export class TelegramManualTransactionUpdate {
     });
 
     // Format success message
-    const typeIcon = transaction.type === 'INCOME' ? '💰' : '💸';
+    const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸', 'TRANSFER': '🔄' };
+    const typeIcon = typeIcons[transaction.type] || '💸';
     const platformLabel = this.getPlatformLabel(transaction.platform);
     const methodLabel = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
     const dateStr = new Date(transaction.date).toLocaleString('en-US', {
@@ -645,8 +654,12 @@ export class TelegramManualTransactionUpdate {
     const parts: string[] = [];
 
     if (ctx.session.manualTransactionType) {
-      const typeLabel = ctx.session.manualTransactionType === 'INCOME' ? '💰 Income' : '💸 Expense';
-      parts.push(`Type: ${typeLabel}`);
+      const typeLabels: Record<string, string> = {
+        'INCOME': '💰 Income',
+        'EXPENSE': '💸 Expense',
+        'TRANSFER': '🔄 Transfer',
+      };
+      parts.push(`Type: ${typeLabels[ctx.session.manualTransactionType] || ctx.session.manualTransactionType}`);
     }
 
     if (ctx.session.manualTransactionPlatform) {
@@ -686,6 +699,7 @@ export class TelegramManualTransactionUpdate {
     const labels: Record<string, string> = {
       'DEBIT_CARD': 'Debit Card',
       'PAGO_MOVIL': 'Pago Móvil',
+      'ELECTRONIC_TRANSFER': 'Electronic Transfer',
       'ZELLE': 'Zelle',
       'CREDIT_CARD': 'Credit Card',
       'BINANCE_PAY': 'Binance Pay',

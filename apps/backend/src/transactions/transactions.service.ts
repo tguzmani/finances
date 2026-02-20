@@ -6,7 +6,7 @@ import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
 import { TransactionSearchCriteria } from './transaction-search.service';
-import { Prisma, TransactionPlatform, PaymentMethod, Transaction } from '@prisma/client';
+import { Prisma, TransactionPlatform, PaymentMethod, Transaction, TransactionType as PrismaTransactionType } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -111,6 +111,10 @@ export class TransactionsService {
 
     if (dto.date !== undefined) {
       data.date = dto.date;
+    }
+
+    if (dto.amount !== undefined) {
+      data.amount = dto.amount;
     }
 
     return this.prisma.transaction.update({
@@ -307,7 +311,7 @@ export class TransactionsService {
   getAvailablePaymentMethods(platform: TransactionPlatform): PaymentMethod[] {
     switch (platform) {
       case TransactionPlatform.BANESCO:
-        return [PaymentMethod.DEBIT_CARD, PaymentMethod.PAGO_MOVIL];
+        return [PaymentMethod.DEBIT_CARD, PaymentMethod.PAGO_MOVIL, PaymentMethod.ELECTRONIC_TRANSFER];
       case TransactionPlatform.BANK_OF_AMERICA:
         return [PaymentMethod.DEBIT_CARD, PaymentMethod.CREDIT_CARD, PaymentMethod.ZELLE];
       case TransactionPlatform.BINANCE:
@@ -324,7 +328,7 @@ export class TransactionsService {
    * Create manual transaction
    */
   async createManualTransaction(data: {
-    type: TransactionType;
+    type: PrismaTransactionType;
     platform: TransactionPlatform;
     currency: string;
     amount: number;

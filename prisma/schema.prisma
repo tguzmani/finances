@@ -85,6 +85,7 @@ enum TransactionGroupStatus {
 enum TransactionType {
   EXPENSE
   INCOME
+  TRANSFER
 }
 
 enum TransactionPlatform {
@@ -98,6 +99,7 @@ enum TransactionPlatform {
 enum PaymentMethod {
   DEBIT_CARD
   PAGO_MOVIL
+  ELECTRONIC_TRANSFER
   ZELLE
   CREDIT_CARD
   BINANCE_PAY

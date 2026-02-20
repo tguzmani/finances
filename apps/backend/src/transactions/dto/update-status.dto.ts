@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, IsDate } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsDate, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionStatus } from '../transaction.types';
 
@@ -15,4 +15,8 @@ export class UpdateTransactionDto {
   @IsDate()
   @Type(() => Date)
   date?: Date;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
 }

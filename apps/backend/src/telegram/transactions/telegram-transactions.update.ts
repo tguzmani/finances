@@ -18,6 +18,7 @@ import { TransactionGroupStatus } from '../../transaction-groups/transaction-gro
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { DateParserService } from '../../common/date-parser.service';
+import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -38,6 +39,7 @@ export class TelegramTransactionsUpdate {
     private readonly groupsPresenter: TelegramGroupsPresenter,
     private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly dateParser: DateParserService,
+    private readonly journalEntryService: JournalEntryService,
   ) { }
 
   @Command('transactions')
@@ -182,6 +184,30 @@ export class TelegramTransactionsUpdate {
       await ctx.reply(
         '📅 <b>Enter new date/time</b>\n\n' +
         'You can use natural language (e.g. "ayer 2pm", "Feb 10 3:30 PM", "hace 2 horas")',
+        { parse_mode: 'HTML', reply_markup: { force_reply: true } }
+      );
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('review_amount')
+  @UseGuards(TelegramAuthGuard)
+  async handleAmountChange(@Ctx() ctx: SessionContext) {
+    try {
+      const transactionId = ctx.session.currentTransactionId;
+
+      if (!transactionId) {
+        await ctx.answerCbQuery('No active transaction');
+        return;
+      }
+
+      ctx.session.waitingForAmountChange = true;
+      ctx.session.waitingForDescription = false;
+
+      await ctx.answerCbQuery();
+      await ctx.reply(
+        '💲 <b>Enter new amount</b>',
         { parse_mode: 'HTML', reply_markup: { force_reply: true } }
       );
     } catch (error) {
@@ -900,6 +926,34 @@ export class TelegramTransactionsUpdate {
       }
     }
 
+    // Handle amount change input
+    if (ctx.session.waitingForAmountChange && ctx.session.currentTransactionId) {
+      try {
+        const input = ctx.message.text.trim();
+        const amount = parseFloat(input.replace(/,/g, ''));
+
+        if (isNaN(amount) || amount <= 0) {
+          await ctx.reply('❌ Invalid amount. Please enter a positive number.');
+          return;
+        }
+
+        await this.transactionsService.update(ctx.session.currentTransactionId, {
+          amount,
+        });
+
+        const transaction = await this.transactionsService.findOne(ctx.session.currentTransactionId);
+        await ctx.reply(`✅ Amount updated to: ${transaction.currency} ${amount.toFixed(2)}`);
+        ctx.session.waitingForAmountChange = false;
+        ctx.session.waitingForDescription = true;
+        return;
+      } catch (error) {
+        this.logger.error(`Error updating amount: ${error.message}`);
+        await ctx.reply('Error updating amount. Please try again.');
+        ctx.session.waitingForAmountChange = false;
+        return;
+      }
+    }
+
     // Only process if we're waiting for a description
     if (!ctx.session.waitingForDescription || !ctx.session.currentTransactionId) {
       return;
@@ -1527,6 +1581,7 @@ export class TelegramTransactionsUpdate {
     buttons.push([
       Markup.button.callback('✏️ Change Name', 'review_name'),
       Markup.button.callback('📅 Change Date', 'review_date'),
+      Markup.button.callback('💲 Change Amount', 'review_amount'),
     ]);
 
     const keyboard = Markup.inlineKeyboard(buttons);
@@ -1762,7 +1817,7 @@ export class TelegramTransactionsUpdate {
         [{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any],
         [{ text: 'Copy Description', copy_text: { text: transaction.description || 'No description' } } as any],
         [{ text: `${usdAmount} USD`, copy_text: { text: excelFormula } } as any],
-        [actionButton],
+        [actionButton, { text: '📒 Journal Entry', callback_data: `journal_entry_${transaction.id}` }],
       ];
 
       // Add Undo button if not on first item
@@ -1992,6 +2047,29 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error undoing item: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error undoing item.');
+    }
+  }
+
+  @Action(/^journal_entry_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleJournalEntry(@Ctx() ctx: SessionContext) {
+    try {
+      const match = (ctx.callbackQuery as any).data.match(/^journal_entry_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      await ctx.answerCbQuery('Generating journal entry...');
+
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction) {
+        await ctx.reply('Transaction not found.');
+        return;
+      }
+
+      await this.journalEntryService.createJournalEntry(transaction);
+      await ctx.reply('✅ Journal entry inserted in Sheets');
+    } catch (error) {
+      this.logger.error(`Error generating journal entry: ${error.message}`);
+      await ctx.reply(`❌ Error generating journal entry: ${error.message}`);
     }
   }
 

@@ -28,6 +28,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { JournalEntryModule } from '../journal-entry/journal-entry.module';
 import { CommonModule } from '../common/common.module';
 import * as https from 'https';
 
@@ -77,6 +78,7 @@ import * as https from 'https';
     ExchangesModule,         // Para usar ExchangesService
     TransactionGroupsModule, // Para usar TransactionGroupsService
     AccountsModule,          // Para usar BinanceAccountService
+    JournalEntryModule,      // Para usar JournalEntryService
     CommonModule,            // Para usar DateParserService
   ],
   providers: [

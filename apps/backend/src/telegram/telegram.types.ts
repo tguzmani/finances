@@ -38,7 +38,7 @@ export interface ReviewSession {
   lastRegisteredWavg?: number;
   // Manual transaction entry flow
   manualTransactionState?: 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date';
-  manualTransactionType?: 'INCOME' | 'EXPENSE';
+  manualTransactionType?: 'INCOME' | 'EXPENSE' | 'TRANSFER';
   manualTransactionPlatform?: string;
   manualTransactionCurrency?: string;
   manualTransactionMethod?: string;
@@ -67,8 +67,9 @@ export interface ReviewSession {
     ocrText: string;
     paymentMethod: PaymentMethod | null;
   };
-  // Date change flow (review)
+  // Date/amount change flow (review)
   waitingForDateChange?: boolean;
+  waitingForAmountChange?: boolean;
   // /group command flow
   groupFlowGroupId?: number;
   groupFlowWaitingForDescription?: boolean;
