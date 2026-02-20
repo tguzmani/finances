@@ -77,6 +77,45 @@ export class JournalEntryService {
     this.logger.log(`Journal entry inserted for transaction ${transaction.id}`);
   }
 
+  async createExchangeJournalEntry(sumFormula: string, wavg: number): Promise<void> {
+    const nextRow = await this.getNextRow();
+
+    const dateFormatted = this.formatDate(new Date());
+
+    // Row 1 (Debit): Banesco receives the money
+    const row1 = [
+      dateFormatted,
+      'Binance a Banesco',
+      'Banesco',
+      '',
+      sumFormula,
+      '',
+      '',
+      '',
+      '',
+      '',
+    ];
+
+    // Row 2 (Credit): Binance sends the money, Haber references Debe with formula
+    const row2 = [
+      '',
+      '',
+      '',
+      'Binance',
+      '',
+      `=F${nextRow}`,
+      '',
+      '',
+      '',
+      '',
+    ];
+
+    const range = `Libro!B${nextRow}:K${nextRow + 1}`;
+    this.logger.log(`Inserting exchange journal entry at ${range}`);
+    await this.sheetsRepository.updateSheetValues(range, [row1, row2]);
+    this.logger.log(`Exchange journal entry inserted: Binance a Banesco`);
+  }
+
   private async getNextRow(): Promise<number> {
     const values = await this.sheetsRepository.getSheetValues(this.LEDGER_RANGE);
     const existingRows = values || [];

@@ -18,6 +18,7 @@ export interface ReviewSession {
   waitingForDescription?: boolean;
   registerExchangeIds?: number[];
   registerWavg?: number;
+  registerSumFormula?: string;
   // Transaction registration flow
   registerTransactionIds?: number[];
   registerTransactionIndex?: number;

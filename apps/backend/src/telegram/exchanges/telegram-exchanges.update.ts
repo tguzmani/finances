@@ -7,6 +7,7 @@ import { SessionContext } from '../telegram.types';
 import { ExchangesService } from '../../exchanges/exchanges.service';
 import { ExchangeStatus } from '@prisma/client';
 import { TelegramBaseHandler } from '../telegram-base.handler';
+import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 
 @Update()
 export class TelegramExchangesUpdate {
@@ -16,6 +17,7 @@ export class TelegramExchangesUpdate {
     private readonly telegramService: TelegramService,
     private readonly exchangesService: ExchangesService,
     private readonly baseHandler: TelegramBaseHandler,
+    private readonly journalEntryService: JournalEntryService,
   ) { }
 
   @Command('exchanges')
@@ -171,6 +173,46 @@ export class TelegramExchangesUpdate {
     }
   }
 
+
+  @Action('register_journal_entry')
+  @UseGuards(TelegramAuthGuard)
+  async handleRegisterJournalEntry(@Ctx() ctx: SessionContext) {
+    try {
+      const wavg = ctx.session.registerWavg;
+      const sumFormula = ctx.session.registerSumFormula;
+
+      if (!wavg || !sumFormula) {
+        await ctx.answerCbQuery('Session expired. Please run /register again.');
+        return;
+      }
+
+      await ctx.answerCbQuery('Creating journal entry...');
+
+      // 1. Create journal entry in Google Sheets
+      await this.journalEntryService.createExchangeJournalEntry(sumFormula, wavg);
+
+      // 2. Update exchange rate in DB + Google Sheets
+      const result = await this.telegramService.exchanges.updateExchangeRateOnly(wavg);
+
+      const rateMsg = result.updated
+        ? `Exchange rate updated: ${result.value} VES/USD`
+        : `Exchange rate unchanged: ${result.value} VES/USD`;
+
+      await ctx.reply(
+        `📒 <b>Journal Entry Created!</b>\n\n` +
+        `Description: Binance a Banesco\n` +
+        `Amount: ${sumFormula}\n` +
+        `${rateMsg}`,
+        { parse_mode: 'HTML' }
+      );
+
+      // Don't clear session - user might still want to register
+    } catch (error) {
+      this.logger.error(`Error creating exchange journal entry: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+      await ctx.reply('Error creating journal entry. Please try again.');
+    }
+  }
 
   // ==================== Review One Exchange ====================
 
@@ -331,6 +373,7 @@ export class TelegramExchangesUpdate {
       // Store in session for Register action
       ctx.session.registerExchangeIds = reviewedExchanges.map(e => e.id);
       ctx.session.registerWavg = metrics.wavg;
+      ctx.session.registerSumFormula = metrics.sumFormula;
 
       // Format message
       const message = this.telegramService.exchanges.formatRegisterSummary({
@@ -360,6 +403,10 @@ export class TelegramExchangesUpdate {
             } as any
           ],
           [
+            {
+              text: '📒 Journal Entry',
+              callback_data: 'register_journal_entry'
+            },
             {
               text: '📊 Update Exchange Rate',
               callback_data: 'register_update_rate_only'
