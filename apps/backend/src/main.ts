@@ -4,6 +4,10 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Ensure SIGTERM/SIGINT trigger onModuleDestroy hooks (stops bot polling cleanly)
+  app.enableShutdownHooks();
+
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT || 3000;
