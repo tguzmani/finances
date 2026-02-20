@@ -3,6 +3,7 @@ import { BinanceAccountService } from '../../accounts/accounts-binance.service';
 import { AccountsSheetsService } from '../../accounts/accounts-sheets.service';
 import { BanescoAccountService } from '../../accounts/accounts-banesco.service';
 import { CashAccountService } from '../../accounts/accounts-cash.service';
+import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TelegramAccountsPresenter } from './telegram-accounts.presenter';
 
 @Injectable()
@@ -14,19 +15,23 @@ export class TelegramAccountsService {
     private readonly accountsSheetsService: AccountsSheetsService,
     private readonly banescoAccountService: BanescoAccountService,
     private readonly cashAccountService: CashAccountService,
+    private readonly exchangeRateService: ExchangeRateService,
     private readonly presenter: TelegramAccountsPresenter,
   ) {}
 
   async getAllBalancesMessage(): Promise<string> {
     try {
-      const [banesco, stablecoinOverview, sheetsBalance, wallet, cashBox, bofaCreditCard] = await Promise.all([
+      const [banesco, stablecoinOverview, sheetsBalance, wallet, cashBox, bofaCreditCard, latestRate] = await Promise.all([
         this.banescoAccountService.getBanescoStatus(),
         this.binanceAccountService.getStablecoinOverview(),
         this.accountsSheetsService.getBinanceStablecoinBalance(),
         this.cashAccountService.getWalletStatus(),
         this.cashAccountService.getCashBoxStatus(),
         this.cashAccountService.getBofaCreditCardStatus(),
+        this.exchangeRateService.findLatest(),
       ]);
+
+      const exchangeRate = latestRate ? Number(latestRate.value) : null;
 
       return this.presenter.formatAllBalances(
         banesco,
@@ -34,6 +39,7 @@ export class TelegramAccountsService {
         wallet,
         cashBox,
         bofaCreditCard,
+        exchangeRate,
       );
     } catch (error) {
       this.logger.error(`Failed to get all balances: ${error.message}`);

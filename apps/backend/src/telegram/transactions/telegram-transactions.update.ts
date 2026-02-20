@@ -1038,7 +1038,7 @@ export class TelegramTransactionsUpdate {
       await ctx.reply(
         `✅ <b>Transaction saved!</b>\n\n` +
         `Amount: ${billData.currency} ${billData.amount.toFixed(2)}\n` +
-        `Date: ${billData.datetime.toLocaleString('es-VE')}\n` +
+        `Date: ${billData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}\n` +
         `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
         `<i>Status: Unreviewed</i>`,
         { parse_mode: 'HTML' }
@@ -1163,7 +1163,7 @@ export class TelegramTransactionsUpdate {
           `✅ <b>Pago Móvil Transaction Saved!</b>\n\n` +
           `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}\n` +
           `Reference: ${pagoMovilData.transactionId}\n` +
-          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE')}`,
+          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`,
           { parse_mode: 'HTML' }
         );
 

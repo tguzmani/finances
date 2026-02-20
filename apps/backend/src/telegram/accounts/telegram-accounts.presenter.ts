@@ -47,13 +47,22 @@ export class TelegramAccountsPresenter {
     wallet: CashAccountStatus,
     cashBox: CashAccountStatus,
     bofaCreditCard: CashAccountStatus,
+    exchangeRate: number | null,
   ): string {
     let message = '<b>💰 All Balances</b>\n\n';
 
     // Banesco
     message += '<b>🏦 Banesco</b>\n';
-    message += `Sheets: <b>${banesco.sheetsBalance.toFixed(2)} VES</b>\n`;
-    message += `Estimated: <b>${banesco.estimatedBalance.toFixed(2)} VES</b>\n`;
+    message += `Sheets: <b>${banesco.sheetsBalance.toFixed(2)} VES</b>`;
+    if (exchangeRate) {
+      message += ` (~${(banesco.sheetsBalance / exchangeRate).toFixed(2)} USD)`;
+    }
+    message += '\n';
+    message += `Estimated: <b>${banesco.estimatedBalance.toFixed(2)} VES</b>`;
+    if (exchangeRate) {
+      message += ` (~${(banesco.estimatedBalance / exchangeRate).toFixed(2)} USD)`;
+    }
+    message += '\n';
     message += `<i>${banesco.pendingTxCount} pending tx, ${banesco.pendingExchangeCount} pending exchanges</i>\n\n`;
 
     // Binance Stablecoin
