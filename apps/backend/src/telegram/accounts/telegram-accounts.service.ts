@@ -4,6 +4,7 @@ import { AccountsSheetsService } from '../../accounts/accounts-sheets.service';
 import { BanescoAccountService } from '../../accounts/accounts-banesco.service';
 import { CashAccountService } from '../../accounts/accounts-cash.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { ExchangesBcvService } from '../../exchanges/exchanges-bcv.service';
 import { TelegramAccountsPresenter } from './telegram-accounts.presenter';
 
 @Injectable()
@@ -16,12 +17,13 @@ export class TelegramAccountsService {
     private readonly banescoAccountService: BanescoAccountService,
     private readonly cashAccountService: CashAccountService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly bcvService: ExchangesBcvService,
     private readonly presenter: TelegramAccountsPresenter,
   ) {}
 
   async getAllBalancesMessage(): Promise<string> {
     try {
-      const [banesco, stablecoinOverview, sheetsBalance, wallet, cashBox, bofaCreditCard, latestRate] = await Promise.all([
+      const [banesco, stablecoinOverview, sheetsBalance, wallet, cashBox, bofaCreditCard, latestRate, bcvUsd, bcvEur] = await Promise.all([
         this.banescoAccountService.getBanescoStatus(),
         this.binanceAccountService.getStablecoinOverview(),
         this.accountsSheetsService.getBinanceStablecoinBalance(),
@@ -29,6 +31,8 @@ export class TelegramAccountsService {
         this.cashAccountService.getCashBoxStatus(),
         this.cashAccountService.getBofaCreditCardStatus(),
         this.exchangeRateService.findLatest(),
+        this.bcvService.getUsdExchangeRate(),
+        this.bcvService.getEurExchangeRate(),
       ]);
 
       const exchangeRate = latestRate ? Number(latestRate.value) : null;
@@ -40,6 +44,7 @@ export class TelegramAccountsService {
         cashBox,
         bofaCreditCard,
         exchangeRate,
+        { bcvUsd, bcvEur },
       );
     } catch (error) {
       this.logger.error(`Failed to get all balances: ${error.message}`);

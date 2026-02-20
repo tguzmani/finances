@@ -48,6 +48,7 @@ export class TelegramAccountsPresenter {
     cashBox: CashAccountStatus,
     bofaCreditCard: CashAccountStatus,
     exchangeRate: number | null,
+    bcvRates?: { bcvUsd: number | null; bcvEur: number | null },
   ): string {
     let message = '<b>💰 All Balances</b>\n\n';
 
@@ -63,6 +64,12 @@ export class TelegramAccountsPresenter {
       message += ` (~${(banesco.estimatedBalance / exchangeRate).toFixed(2)} USD)`;
     }
     message += '\n';
+    if (bcvRates?.bcvUsd) {
+      message += `BCV USD: ~${(banesco.estimatedBalance / bcvRates.bcvUsd).toFixed(2)} USD\n`;
+    }
+    if (bcvRates?.bcvEur) {
+      message += `BCV EUR: ~${(banesco.estimatedBalance / bcvRates.bcvEur).toFixed(2)} EUR\n`;
+    }
     message += `<i>${banesco.pendingTxCount} pending tx, ${banesco.pendingExchangeCount} pending exchanges</i>\n\n`;
 
     // Binance Stablecoin
