@@ -11,6 +11,9 @@ export class TelegramBotInit implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     try {
+      // Clear any lingering polling connections from previous instances
+      await this.bot.telegram.deleteWebhook({ drop_pending_updates: false });
+
       await this.bot.telegram.setMyCommands(
         BOT_COMMANDS.map(cmd => ({
           command: cmd.command,
