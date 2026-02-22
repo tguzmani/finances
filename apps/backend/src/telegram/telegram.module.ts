@@ -16,6 +16,9 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
+import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
+import { TelegramConvertService } from './exchanges/convert/telegram-convert.service';
+import { TelegramConvertPresenter } from './exchanges/convert/telegram-convert.presenter';
 import { TelegramRatesUpdate } from './rates/telegram-rates.update';
 import { TelegramRatesService } from './rates/telegram-rates.service';
 import { TelegramRatesPresenter } from './rates/telegram-rates.presenter';
@@ -117,6 +120,9 @@ import * as https from 'https';
     TelegramExpensesUpdate,
     TelegramExpensesService,
     TelegramExpensesPresenter,
+    TelegramConvertUpdate,
+    TelegramConvertService,
+    TelegramConvertPresenter,
   ],
   exports: [TelegramService],
 })
