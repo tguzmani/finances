@@ -9,6 +9,7 @@ import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { ExpensesModule } from '../expenses/expenses.module';
 
 const isTelegramEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
 
@@ -21,6 +22,7 @@ const isTelegramEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
     ExchangesModule,
     TransactionGroupsModule,
     AccountsModule,
+    ExpensesModule,
     ...(isTelegramEnabled ? [TelegramModule] : []),
   ],
   controllers: [AppController],

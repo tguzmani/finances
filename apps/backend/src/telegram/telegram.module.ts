@@ -29,6 +29,10 @@ import { ExchangesModule } from '../exchanges/exchanges.module';
 import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { AccountsModule } from '../accounts/accounts.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
+import { ExpensesModule } from '../expenses/expenses.module';
+import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
+import { TelegramExpensesService } from './expenses/telegram-expenses.service';
+import { TelegramExpensesPresenter } from './expenses/telegram-expenses.presenter';
 import { CommonModule } from '../common/common.module';
 import * as https from 'https';
 
@@ -41,8 +45,12 @@ import * as https from 'https';
         const enabled = process.env.TELEGRAM_BOT_ENABLED;
 
         if (enabled !== 'true') {
-          logger.warn('⚠️  Telegram bot is disabled via TELEGRAM_BOT_ENABLED env var');
-          throw new Error('Telegram bot is disabled via TELEGRAM_BOT_ENABLED env var');
+          logger.warn(
+            '⚠️  Telegram bot is disabled via TELEGRAM_BOT_ENABLED env var',
+          );
+          throw new Error(
+            'Telegram bot is disabled via TELEGRAM_BOT_ENABLED env var',
+          );
         }
 
         if (!token) {
@@ -74,12 +82,13 @@ import * as https from 'https';
         };
       },
     }),
-    TransactionsModule,      // Para usar TransactionsService
-    ExchangesModule,         // Para usar ExchangesService
+    TransactionsModule, // Para usar TransactionsService
+    ExchangesModule, // Para usar ExchangesService
     TransactionGroupsModule, // Para usar TransactionGroupsService
-    AccountsModule,          // Para usar BinanceAccountService
-    JournalEntryModule,      // Para usar JournalEntryService
-    CommonModule,            // Para usar DateParserService
+    AccountsModule, // Para usar BinanceAccountService
+    JournalEntryModule, // Para usar JournalEntryService
+    ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
+    CommonModule, // Para usar DateParserService
   ],
   providers: [
     TelegramUpdate,
@@ -105,6 +114,9 @@ import * as https from 'https';
     TelegramAccountsUpdate,
     TelegramAccountsService,
     TelegramAccountsPresenter,
+    TelegramExpensesUpdate,
+    TelegramExpensesService,
+    TelegramExpensesPresenter,
   ],
   exports: [TelegramService],
 })

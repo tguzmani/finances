@@ -324,6 +324,28 @@ export class TransactionsService {
     }
   }
 
+  async getUnregisteredExpenditure(): Promise<{ currency: string; net: number }[]> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        status: { in: [TransactionStatus.NEW, TransactionStatus.REVIEWED] },
+      },
+      select: { amount: true, currency: true, type: true },
+    });
+
+    const byCurrency = new Map<string, number>();
+    for (const tx of transactions) {
+      const amount = Number(tx.amount);
+      const current = byCurrency.get(tx.currency) || 0;
+      if (tx.type === TransactionType.EXPENSE) {
+        byCurrency.set(tx.currency, current + amount);
+      } else {
+        byCurrency.set(tx.currency, current - amount);
+      }
+    }
+
+    return Array.from(byCurrency.entries()).map(([currency, net]) => ({ currency, net }));
+  }
+
   /**
    * Create manual transaction
    */
