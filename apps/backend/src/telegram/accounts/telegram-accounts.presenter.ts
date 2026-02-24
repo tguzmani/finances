@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { StablecoinOverview } from '../../accounts/interfaces/binance-account.interface';
+import { BinanceStablecoinStatus, StablecoinOverview } from '../../accounts/interfaces/binance-account.interface';
 import { BanescoStatus } from '../../accounts/accounts-banesco.service';
 import { CashAccountStatus } from '../../accounts/accounts-cash.service';
 
@@ -43,7 +43,7 @@ export class TelegramAccountsPresenter {
 
   formatAllBalances(
     banesco: BanescoStatus,
-    stablecoin: { overview: StablecoinOverview; sheetsBalance: number },
+    binanceStatus: BinanceStablecoinStatus,
     wallet: CashAccountStatus,
     cashBox: CashAccountStatus,
     bofaCreditCard: CashAccountStatus,
@@ -74,19 +74,21 @@ export class TelegramAccountsPresenter {
 
     // Binance Stablecoin
     message += '<b>💱 Binance Stablecoin</b>\n';
-    for (const asset of stablecoin.overview.assets) {
+    for (const asset of binanceStatus.overview.assets) {
       const { funding, earn } = asset.breakdown;
       message += `<b>${asset.asset}:</b> ${asset.totalBalance.toFixed(2)}\n`;
       if (funding > 0 || earn > 0) {
         message += `  Funding: ${funding.toFixed(2)} | Earn: ${earn.toFixed(2)}\n`;
       }
     }
-    const binanceTotal = stablecoin.overview.totalBalance;
+    const binanceTotal = binanceStatus.overview.totalBalance;
     message += `<b>Binance Total:</b> ${binanceTotal.toFixed(2)} USD\n`;
-    message += `<b>Internal Balance:</b> ${stablecoin.sheetsBalance.toFixed(2)} USD\n`;
-    const diff = Math.abs(binanceTotal - stablecoin.sheetsBalance);
-    const inFavourOf = binanceTotal > stablecoin.sheetsBalance ? 'Binance' : 'Internal';
-    message += `<b>Difference:</b> ${diff.toFixed(2)} USD in favour of ${inFavourOf}\n\n`;
+    message += `Sheets: <b>${binanceStatus.sheetsBalance.toFixed(2)} USD</b>\n`;
+    message += `Estimated: <b>${binanceStatus.estimatedBalance.toFixed(2)} USD</b>\n`;
+    const diff = Math.abs(binanceTotal - binanceStatus.estimatedBalance);
+    const inFavourOf = binanceTotal > binanceStatus.estimatedBalance ? 'Binance' : 'Internal';
+    message += `<b>Difference:</b> ${diff.toFixed(2)} USD in favour of ${inFavourOf}\n`;
+    message += `<i>${binanceStatus.pendingExchangeCount} pending exchanges</i>\n\n`;
 
     // Wallet
     message += '<b>👛 Wallet</b>\n';

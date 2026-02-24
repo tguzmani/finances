@@ -7,6 +7,7 @@ interface ConversionResult {
   outputCurrency: string;
   rateUsed: number;
   rateName: string;
+  vesAmount: number | null;
   rates: {
     internalRate: number | null;
     bcvUsd: number | null;
@@ -17,11 +18,14 @@ interface ConversionResult {
 @Injectable()
 export class TelegramConvertPresenter {
   formatConversion(result: ConversionResult): string {
-    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, rates } = result;
+    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, rates } = result;
 
     let message = '<b>💱 Conversion</b>\n\n';
-    message += `${this.formatNumber(inputAmount)} ${inputCurrency} = <b>${this.formatNumber(outputAmount)} ${outputCurrency}</b>\n\n`;
-    message += `<i>Rate used: ${rateName} @ ${this.formatNumber(rateUsed)}</i>\n`;
+    message += `${this.formatNumber(inputAmount)} ${inputCurrency} = <b>${this.formatNumber(outputAmount)} ${outputCurrency}</b>\n`;
+    if (vesAmount !== null) {
+      message += `${this.formatNumber(inputAmount)} ${inputCurrency} = <b>${this.formatNumber(vesAmount)} VES</b>\n`;
+    }
+    message += `\n<i>Rate used: ${rateName} @ ${this.formatNumber(rateUsed)}</i>\n`;
     message += `<i>Internal rate: ${rates.internalRate ? this.formatNumber(rates.internalRate) : 'N/A'}</i>`;
 
     return message;

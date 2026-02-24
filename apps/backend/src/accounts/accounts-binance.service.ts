@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BinanceApiClient } from '../common/binance-api';
+import { ExchangesService } from '../exchanges/exchanges.service';
+import { AccountsSheetsService } from './accounts-sheets.service';
 import {
   AssetBalance,
+  BinanceStablecoinStatus,
   StablecoinOverview,
 } from './interfaces/binance-account.interface';
 
@@ -9,7 +12,11 @@ import {
 export class BinanceAccountService {
   private readonly logger = new Logger(BinanceAccountService.name);
 
-  constructor(private readonly binanceApi: BinanceApiClient) {}
+  constructor(
+    private readonly binanceApi: BinanceApiClient,
+    private readonly exchangesService: ExchangesService,
+    private readonly accountsSheetsService: AccountsSheetsService,
+  ) {}
 
   private safeFloat(value: unknown): number {
     if (typeof value === 'number') return value;
@@ -88,6 +95,38 @@ export class BinanceAccountService {
     return {
       assets,
       totalBalance: Math.round(totalBalance * 10000) / 10000,
+    };
+  }
+
+  async getBinanceStablecoinStatus(): Promise<BinanceStablecoinStatus> {
+    const [overview, sheetsBalance, allExchanges] = await Promise.all([
+      this.getStablecoinOverview(),
+      this.accountsSheetsService.getBinanceStablecoinBalance(),
+      this.exchangesService.findAll({}),
+    ]);
+
+    const pendingExchanges = allExchanges.filter(e =>
+      e.status !== 'REGISTERED' &&
+      e.status !== 'REJECTED' &&
+      e.status !== 'CANCELLED' &&
+      e.status !== 'FAILED'
+    );
+
+    let exchangesNet = 0;
+    for (const ex of pendingExchanges) {
+      const amount = Number(ex.amount);
+      if (ex.tradeType === 'BUY') {
+        exchangesNet += amount; // Buying crypto → stablecoins enter Binance
+      } else {
+        exchangesNet -= amount; // Selling crypto → stablecoins leave Binance
+      }
+    }
+
+    return {
+      sheetsBalance,
+      estimatedBalance: sheetsBalance + exchangesNet,
+      pendingExchangeCount: pendingExchanges.length,
+      overview,
     };
   }
 }

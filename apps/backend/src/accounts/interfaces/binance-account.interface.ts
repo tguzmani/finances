@@ -11,3 +11,10 @@ export interface StablecoinOverview {
   assets: AssetBalance[];
   totalBalance: number;
 }
+
+export interface BinanceStablecoinStatus {
+  sheetsBalance: number;
+  estimatedBalance: number;
+  pendingExchangeCount: number;
+  overview: StablecoinOverview;
+}

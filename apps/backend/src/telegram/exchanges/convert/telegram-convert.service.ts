@@ -11,6 +11,7 @@ interface ConversionResult {
   outputCurrency: string;
   rateUsed: number;
   rateName: string;
+  vesAmount: number | null;
   rates: RatesSnapshot;
 }
 
@@ -80,6 +81,7 @@ export class TelegramConvertService {
           outputCurrency: 'USD',
           rateUsed: internalRate,
           rateName: 'Internal',
+          vesAmount: null,
           rates,
         };
       }
@@ -87,6 +89,7 @@ export class TelegramConvertService {
       case 'USD': {
         if (!bcvUsd) return null;
         const outputAmount = (amount * bcvUsd) / internalRate;
+        const vesAmount = amount * bcvUsd;
         return {
           inputAmount: amount,
           inputCurrency: currency,
@@ -94,6 +97,7 @@ export class TelegramConvertService {
           outputCurrency: 'USD',
           rateUsed: bcvUsd,
           rateName: 'BCV USD',
+          vesAmount,
           rates,
         };
       }
@@ -101,6 +105,7 @@ export class TelegramConvertService {
       case 'EUR': {
         if (!bcvEur) return null;
         const outputAmount = (amount * bcvEur) / internalRate;
+        const vesAmount = amount * bcvEur;
         return {
           inputAmount: amount,
           inputCurrency: currency,
@@ -108,6 +113,7 @@ export class TelegramConvertService {
           outputCurrency: 'USD',
           rateUsed: bcvEur,
           rateName: 'BCV EUR',
+          vesAmount,
           rates,
         };
       }

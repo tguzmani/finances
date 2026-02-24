@@ -2057,16 +2057,14 @@ export class TelegramTransactionsUpdate {
       const match = (ctx.callbackQuery as any).data.match(/^journal_entry_(\d+)$/);
       const transactionId = parseInt(match[1], 10);
 
-      await ctx.answerCbQuery('Generating journal entry...');
-
       const transaction = await this.transactionsService.findOne(transactionId);
       if (!transaction) {
-        await ctx.reply('Transaction not found.');
+        await ctx.answerCbQuery('Transaction not found.');
         return;
       }
 
       await this.journalEntryService.createJournalEntry(transaction);
-      await ctx.reply('✅ Journal entry inserted in Sheets');
+      await ctx.answerCbQuery('✅ Journal entry inserted in Sheets');
     } catch (error) {
       this.logger.error(`Error generating journal entry: ${error.message}`);
       await ctx.reply(`❌ Error generating journal entry: ${error.message}`);

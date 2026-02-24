@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BinanceAccountService } from '../../accounts/accounts-binance.service';
-import { AccountsSheetsService } from '../../accounts/accounts-sheets.service';
 import { BanescoAccountService } from '../../accounts/accounts-banesco.service';
 import { CashAccountService } from '../../accounts/accounts-cash.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
@@ -13,7 +12,6 @@ export class TelegramAccountsService {
 
   constructor(
     private readonly binanceAccountService: BinanceAccountService,
-    private readonly accountsSheetsService: AccountsSheetsService,
     private readonly banescoAccountService: BanescoAccountService,
     private readonly cashAccountService: CashAccountService,
     private readonly exchangeRateService: ExchangeRateService,
@@ -23,10 +21,9 @@ export class TelegramAccountsService {
 
   async getAllBalancesMessage(): Promise<string> {
     try {
-      const [banesco, stablecoinOverview, sheetsBalance, wallet, cashBox, bofaCreditCard, latestRate, bcvUsd, bcvEur] = await Promise.all([
+      const [banesco, binanceStatus, wallet, cashBox, bofaCreditCard, latestRate, bcvUsd, bcvEur] = await Promise.all([
         this.banescoAccountService.getBanescoStatus(),
-        this.binanceAccountService.getStablecoinOverview(),
-        this.accountsSheetsService.getBinanceStablecoinBalance(),
+        this.binanceAccountService.getBinanceStablecoinStatus(),
         this.cashAccountService.getWalletStatus(),
         this.cashAccountService.getCashBoxStatus(),
         this.cashAccountService.getBofaCreditCardStatus(),
@@ -39,7 +36,7 @@ export class TelegramAccountsService {
 
       return this.presenter.formatAllBalances(
         banesco,
-        { overview: stablecoinOverview, sheetsBalance },
+        binanceStatus,
         wallet,
         cashBox,
         bofaCreditCard,
