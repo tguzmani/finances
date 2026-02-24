@@ -16,6 +16,7 @@ import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
+import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 
 @Update()
 export class TelegramUpdate {
@@ -35,6 +36,7 @@ export class TelegramUpdate {
     private readonly groupsPresenter: TelegramGroupsPresenter,
     private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly convertUpdate: TelegramConvertUpdate,
+    private readonly equityUpdate: TelegramEquityUpdate,
   ) { }
 
   @Command('start')
@@ -63,6 +65,7 @@ export class TelegramUpdate {
       '/rates - View exchange rates and discounts\n' +
       '/transactions - View recent expenses\n' +
       '/convert - Convert between currencies\n' +
+      '/equity - View equity (net worth) and chart\n' +
       '/exchanges - View recent exchanges\n' +
       '/group - Create or manage groups\n' +
       '/groups - View unregistered groups\n' +
@@ -148,6 +151,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleConvert(@Ctx() ctx: SessionContext) {
     await this.convertUpdate.handleConvert(ctx);
+  }
+
+  @Command('equity')
+  @UseGuards(TelegramAuthGuard)
+  async handleEquity(@Ctx() ctx: SessionContext) {
+    await this.equityUpdate.handleEquity(ctx);
   }
 
   @Command('sync')

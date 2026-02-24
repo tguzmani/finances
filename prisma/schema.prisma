@@ -129,3 +129,21 @@ enum ExchangeRateSource {
   BINANCE_P2P
   BCV
 }
+
+model EquitySnapshot {
+  id     Int        @id @default(autoincrement())
+  date   DateTime   @default(now())
+  name   EquityName
+  amount Decimal    @db.Decimal(14, 2)
+
+  @@index([date])
+  @@index([name])
+  @@map("equity_snapshots")
+}
+
+enum EquityName {
+  EQUITY_SIMPLE
+  EQUITY_FULL_INVESTMENT
+  EQUITY_CRYPTO_INVESTMENT
+  EQUITY_FIAT_INVESTMENT
+}

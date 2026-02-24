@@ -37,6 +37,11 @@ import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramExpensesService } from './expenses/telegram-expenses.service';
 import { TelegramExpensesPresenter } from './expenses/telegram-expenses.presenter';
 import { CommonModule } from '../common/common.module';
+import { EquityModule } from '../equity/equity.module';
+import { TelegramEquityUpdate } from './equity/telegram-equity.update';
+import { TelegramEquityService } from './equity/telegram-equity.service';
+import { TelegramEquityPresenter } from './equity/telegram-equity.presenter';
+import { TelegramEquityScheduler } from './equity/telegram-equity.scheduler';
 import * as https from 'https';
 
 @Module({
@@ -91,6 +96,7 @@ import * as https from 'https';
     AccountsModule, // Para usar BinanceAccountService
     JournalEntryModule, // Para usar JournalEntryService
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
+    EquityModule, // Para usar EquityService, EquityChartService
     CommonModule, // Para usar DateParserService
   ],
   providers: [
@@ -123,6 +129,10 @@ import * as https from 'https';
     TelegramConvertUpdate,
     TelegramConvertService,
     TelegramConvertPresenter,
+    TelegramEquityUpdate,
+    TelegramEquityService,
+    TelegramEquityPresenter,
+    TelegramEquityScheduler,
   ],
   exports: [TelegramService],
 })
