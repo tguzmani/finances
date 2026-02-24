@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExchangeRatesAggregatorService, RatesSnapshot } from '../../../exchanges/exchange-rates-aggregator.service';
+import { BanescoAccountService } from '../../../accounts/accounts-banesco.service';
 import { TelegramConvertPresenter } from './telegram-convert.presenter';
 
 type Currency = 'VES' | 'USD' | 'EUR';
 
-interface ConversionResult {
+export interface ConversionResult {
   inputAmount: number;
   inputCurrency: Currency;
   outputAmount: number;
@@ -13,6 +14,11 @@ interface ConversionResult {
   rateName: string;
   vesAmount: number | null;
   rates: RatesSnapshot;
+  banescoAvailability?: {
+    available: boolean;
+    differenceVes: number;
+    differenceUsd: number;
+  };
 }
 
 @Injectable()
@@ -21,6 +27,7 @@ export class TelegramConvertService {
 
   constructor(
     private readonly ratesAggregator: ExchangeRatesAggregatorService,
+    private readonly banescoService: BanescoAccountService,
     private readonly presenter: TelegramConvertPresenter,
   ) {}
 
@@ -38,6 +45,34 @@ export class TelegramConvertService {
 
     if (!result) {
       return this.presenter.formatMissingRate(currency);
+    }
+
+    // Check Banesco availability
+    try {
+      const vesNeeded = result.vesAmount ?? result.inputAmount;
+      const banescoStatus = await this.banescoService.getBanescoStatus();
+      const difference = banescoStatus.estimatedBalance - vesNeeded;
+
+      if (difference >= 0) {
+        // Available — use internal rate for the remaining difference
+        const diffUsd = rates.internalRate ? difference / rates.internalRate : 0;
+        result.banescoAvailability = {
+          available: true,
+          differenceVes: difference,
+          differenceUsd: diffUsd,
+        };
+      } else {
+        // Not available — use binance rate for the shortfall
+        const shortfall = Math.abs(difference);
+        const diffUsd = rates.binanceVesUsdt ? shortfall / rates.binanceVesUsdt : 0;
+        result.banescoAvailability = {
+          available: false,
+          differenceVes: shortfall,
+          differenceUsd: diffUsd,
+        };
+      }
+    } catch (error) {
+      this.logger.warn(`Could not check Banesco availability: ${error.message}`);
     }
 
     return this.presenter.formatConversion(result);

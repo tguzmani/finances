@@ -75,6 +75,8 @@ export interface ReviewSession {
   groupFlowGroupId?: number;
   groupFlowWaitingForDescription?: boolean;
   groupFlowTransactionIds?: number[];
+  // Notification edit flow
+  notificationTransactionId?: number;
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;
 }

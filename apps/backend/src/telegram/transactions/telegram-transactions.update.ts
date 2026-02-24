@@ -280,24 +280,27 @@ export class TelegramTransactionsUpdate {
       // Verify transaction exists
       const transaction = await this.transactionsService.findOne(transactionId);
       if (!transaction) {
-        await ctx.reply('❌ Transaction not found');
+        await ctx.editMessageText('❌ Transaction not found', { parse_mode: 'HTML' });
         return;
       }
 
       // Set session state for text input
       ctx.session.currentTransactionId = transactionId;
+      ctx.session.notificationTransactionId = transactionId;
       ctx.session.waitingForDescription = true;
       ctx.session.reviewSingleItem = true; // Important: close session after
 
-      // Ask for description
-      await ctx.reply(
-        '✏️ Please type a description for this transaction:',
-        { reply_markup: { force_reply: true } }
+      // Edit the notification message to show we're waiting for input
+      const currentText = 'message' in ctx.callbackQuery && 'text' in ctx.callbackQuery.message
+        ? ctx.callbackQuery.message.text
+        : '';
+      await ctx.editMessageText(
+        currentText + '\n\n✏️ <i>Type a description for this transaction:</i>',
+        { parse_mode: 'HTML' },
       );
     } catch (error) {
       this.logger.error(`Error handling notification name: ${error.message}`);
       await ctx.answerCbQuery('Error');
-      await ctx.reply('❌ Error processing action');
     }
   }
 
@@ -318,7 +321,7 @@ export class TelegramTransactionsUpdate {
       // Verify transaction exists
       const transaction = await this.transactionsService.findOne(transactionId);
       if (!transaction) {
-        await ctx.reply('❌ Transaction not found');
+        await ctx.editMessageText('❌ Transaction not found', { parse_mode: 'HTML' });
         return;
       }
 
@@ -327,14 +330,20 @@ export class TelegramTransactionsUpdate {
         status: TransactionStatus.REJECTED,
       });
 
-      await ctx.reply('❌ Transaction rejected');
+      // Edit the notification message to show rejection
+      const currentText = 'message' in ctx.callbackQuery && 'text' in ctx.callbackQuery.message
+        ? ctx.callbackQuery.message.text
+        : '';
+      await ctx.editMessageText(
+        currentText + '\n\n❌ <b>Rejected</b>',
+        { parse_mode: 'HTML' },
+      );
 
       // Clear session (single item, no continuation)
       this.baseHandler.clearSession(ctx);
     } catch (error) {
       this.logger.error(`Error handling notification reject: ${error.message}`);
       await ctx.answerCbQuery('Error');
-      await ctx.reply('❌ Error processing action');
     }
   }
 
