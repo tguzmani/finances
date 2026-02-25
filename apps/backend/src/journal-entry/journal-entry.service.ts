@@ -43,13 +43,13 @@ export class JournalEntryService {
 
     const dateFormatted = this.formatDate(transaction.date);
 
-    // Row 1: Date | Description | Debe.1 | (empty) | Debe | (empty) | Category | Subcategory | (empty) | (empty)
+    // Row 1: Date | Description | Debe.1 | (empty) | Debe (=ref to Haber) | (empty) | Category | Subcategory | (empty) | (empty)
     const row1 = [
       dateFormatted,
       transaction.description || '',
       classification.debit_account,
       '',
-      debeValue,
+      `=G${nextRow + 1}`,
       '',
       classification.category,
       classification.subcategory,
@@ -57,14 +57,14 @@ export class JournalEntryService {
       '',
     ];
 
-    // Row 2: (empty) | (empty) | (empty) | Haber.1 | (empty) | Haber (=formula) | (empty) ...
+    // Row 2: (empty) | (empty) | (empty) | Haber.1 | (empty) | Haber (actual value) | (empty) ...
     const row2 = [
       '',
       '',
       '',
       classification.credit_account,
       '',
-      `=F${nextRow}`,
+      debeValue,
       '',
       '',
       '',
@@ -82,13 +82,13 @@ export class JournalEntryService {
 
     const dateFormatted = this.formatDate(new Date());
 
-    // Row 1 (Debit): Banesco receives the money
+    // Row 1 (Debit): Banesco receives the money, Debe references Haber
     const row1 = [
       dateFormatted,
       'Binance a Banesco',
       'Banesco',
       '',
-      sumFormula,
+      `=G${nextRow + 1}`,
       '',
       '',
       '',
@@ -96,14 +96,14 @@ export class JournalEntryService {
       '',
     ];
 
-    // Row 2 (Credit): Binance sends the money, Haber references Debe with formula
+    // Row 2 (Credit): Binance sends the money, Haber has the actual value
     const row2 = [
       '',
       '',
       '',
       'Binance',
       '',
-      `=F${nextRow}`,
+      sumFormula,
       '',
       '',
       '',

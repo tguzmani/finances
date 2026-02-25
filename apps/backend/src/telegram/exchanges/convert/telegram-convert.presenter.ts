@@ -6,7 +6,7 @@ export class TelegramConvertPresenter {
   formatConversion(result: ConversionResult): string {
     const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, rates, banescoAvailability } = result;
 
-    const rateLabel = inputCurrency === 'VES' ? '' : ` ${rateName.replace('BCV ', '')}`;
+    const rateLabel = inputCurrency === 'VES' ? '' : ' BCV';
     const outLabel = inputCurrency === 'VES' ? '' : ' Internal';
 
     let message = '<b>💱 Conversion</b>\n\n';

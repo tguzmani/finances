@@ -7,6 +7,7 @@ import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { DateParserService } from '../../common/date-parser.service';
+import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 
 @Update()
 export class TelegramManualTransactionUpdate {
@@ -17,6 +18,7 @@ export class TelegramManualTransactionUpdate {
     private readonly baseHandler: TelegramBaseHandler,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly dateParser: DateParserService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) {
     this.logger.log('TelegramManualTransactionUpdate instantiated');
   }
@@ -84,10 +86,10 @@ export class TelegramManualTransactionUpdate {
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '🏦 Bank of America', callback_data: 'manual_account_BANK_OF_AMERICA' },
+                { text: '🏦 Banesco', callback_data: 'manual_account_BANESCO' },
               ],
               [
-                { text: '🏦 Banesco', callback_data: 'manual_account_BANESCO' },
+                { text: '🏦 Bank of America', callback_data: 'manual_account_BANK_OF_AMERICA' },
               ],
               [
                 { text: '💱 Binance', callback_data: 'manual_account_BINANCE' },
@@ -614,10 +616,21 @@ export class TelegramManualTransactionUpdate {
     ctx.session.manualTransactionDescription = undefined;
     ctx.session.manualTransactionDate = undefined;
 
+    let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
+    if (transaction.currency === 'VES') {
+      try {
+        const latestRate = await this.exchangeRateService.findLatest();
+        if (latestRate) {
+          const usd = Number(transaction.amount) / Number(latestRate.value);
+          amountLine += ` (${usd.toFixed(2)} USD)`;
+        }
+      } catch (e) { /* rate unavailable */ }
+    }
+
     const successMessage =
       `✅ <b>Transaction Created!</b>\n\n` +
       `${typeIcon} <b>${description}</b>\n\n` +
-      `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}\n` +
+      `${amountLine}\n` +
       `Account: ${platformLabel}\n` +
       `Method: ${methodLabel}\n` +
       `Date: ${dateStr}\n` +

@@ -56,19 +56,19 @@ export class TelegramAccountsPresenter {
     message += '<b>🏦 Banesco</b>\n';
     message += `Sheets: <b>${banesco.sheetsBalance.toFixed(2)} VES</b>`;
     if (exchangeRate) {
-      message += ` (~${(banesco.sheetsBalance / exchangeRate).toFixed(2)} USD)`;
+      message += ` (${(banesco.sheetsBalance / exchangeRate).toFixed(2)} USD)`;
     }
     message += '\n';
     message += `Estimated: <b>${banesco.estimatedBalance.toFixed(2)} VES</b>`;
     if (exchangeRate) {
-      message += ` (~${(banesco.estimatedBalance / exchangeRate).toFixed(2)} USD)`;
+      message += ` (${(banesco.estimatedBalance / exchangeRate).toFixed(2)} USD)`;
     }
     message += '\n';
     if (bcvRates?.bcvUsd) {
-      message += `BCV USD: ~${(banesco.estimatedBalance / bcvRates.bcvUsd).toFixed(2)} USD\n`;
+      message += `BCV USD: ${(banesco.estimatedBalance / bcvRates.bcvUsd).toFixed(2)} USD\n`;
     }
     if (bcvRates?.bcvEur) {
-      message += `BCV EUR: ~${(banesco.estimatedBalance / bcvRates.bcvEur).toFixed(2)} EUR\n`;
+      message += `BCV EUR: ${(banesco.estimatedBalance / bcvRates.bcvEur).toFixed(2)} EUR\n`;
     }
     message += `<i>${banesco.pendingTxCount} pending tx, ${banesco.pendingExchangeCount} pending exchanges</i>\n\n`;
 

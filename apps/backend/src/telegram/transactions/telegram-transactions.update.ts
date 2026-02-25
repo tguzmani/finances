@@ -19,6 +19,7 @@ import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
+import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -40,6 +41,7 @@ export class TelegramTransactionsUpdate {
     private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly dateParser: DateParserService,
     private readonly journalEntryService: JournalEntryService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) { }
 
   @Command('transactions')
@@ -129,16 +131,95 @@ export class TelegramTransactionsUpdate {
       });
 
       await ctx.answerCbQuery('Transaction rejected');
-      await ctx.reply(`❌ Transaction rejected${ungroupedMessage}`);
 
-      // If single item review, end the flow. Otherwise show next
+      // If single item review, edit the message to show rejected status with undo
       if (ctx.session.reviewSingleItem) {
+        const rejectedTx = await this.transactionsService.findOne(transactionId);
+        const message = await this.telegramService.transactions.formatTransactionForReview(rejectedTx);
+
+        await ctx.editMessageText(
+          `<b>Transaction ID: ${transactionId}</b>\n\n` +
+          message +
+          ungroupedMessage +
+          '\n\n❌ <b>Rejected</b>',
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '↩️ Undo', callback_data: `review_undo_reject_${transactionId}` }],
+              ],
+            },
+          },
+        );
         this.baseHandler.clearSession(ctx);
       } else {
+        await ctx.reply(`❌ Transaction rejected${ungroupedMessage}`);
         await this.showNextTransaction(ctx);
       }
     } catch (error) {
       await ctx.answerCbQuery('Error rejecting transaction');
+    }
+  }
+
+  @Action(/^review_undo_reject_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleUndoReject(@Ctx() ctx: SessionContext) {
+    try {
+      const match = (ctx as any).match as RegExpMatchArray;
+      const transactionId = parseInt(match[1]);
+
+      await this.transactionsService.update(transactionId, {
+        status: TransactionStatus.REVIEWED,
+      });
+
+      const transaction = await this.transactionsService.findOne(transactionId);
+
+      await ctx.answerCbQuery('Rejection undone');
+
+      // Re-display the transaction with full review buttons
+      ctx.session.reviewSingleItem = true;
+      ctx.session.currentTransactionId = transaction.id;
+      ctx.session.waitingForDescription = true;
+      ctx.session.reviewType = 'transactions';
+
+      const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
+
+      const hasGroup = transaction.groupId !== null;
+      const buttons = [];
+
+      buttons.push([
+        Markup.button.callback('❌ Reject', 'review_reject'),
+      ]);
+
+      if (hasGroup) {
+        buttons.push([
+          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
+        ]);
+      } else {
+        buttons.push([
+          Markup.button.callback('📎 Group', 'group_transaction'),
+        ]);
+      }
+
+      buttons.push([
+        Markup.button.callback('✏️ Change Name', 'review_name'),
+        Markup.button.callback('📅 Change Date', 'review_date'),
+        Markup.button.callback('💲 Change Amount', 'review_amount'),
+      ]);
+
+      const keyboard = Markup.inlineKeyboard(buttons);
+
+      await ctx.editMessageText(
+        `<b>Transaction ID: ${transaction.id}</b>\n\n` +
+        message +
+        '\n\n💬 <i>Type a description or use the buttons below:</i>',
+        {
+          parse_mode: 'HTML',
+          ...keyboard,
+        },
+      );
+    } catch (error) {
+      await ctx.answerCbQuery('Error undoing rejection');
     }
   }
 
@@ -1098,9 +1179,11 @@ export class TelegramTransactionsUpdate {
         date: billData.datetime,
       });
 
+      const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
+
       await ctx.reply(
         `✅ <b>Transaction saved!</b>\n\n` +
-        `Amount: ${billData.currency} ${billData.amount.toFixed(2)}\n` +
+        `Amount: ${billData.currency} ${billData.amount.toFixed(2)}${usdSuffix}\n` +
         `Date: ${billData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}\n` +
         `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
         `<i>Status: Unreviewed</i>`,
@@ -1222,9 +1305,11 @@ export class TelegramTransactionsUpdate {
           transactionId: pagoMovilData.transactionId,
         });
 
+        const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);
+
         await ctx.reply(
           `✅ <b>Pago Móvil Transaction Saved!</b>\n\n` +
-          `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}\n` +
+          `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}${pmUsdSuffix}\n` +
           `Reference: ${pagoMovilData.transactionId}\n` +
           `Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`,
           { parse_mode: 'HTML' }
@@ -1289,6 +1374,8 @@ export class TelegramTransactionsUpdate {
       minute: '2-digit',
     });
 
+    const usdSuffix = await this.formatVesUsdSuffix(transactionData.currency, transactionData.amount);
+
     const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Confirm to save:</i>';
     const keyboard = isDebugMode ? [] : [[{ text: '✅ OK', callback_data: 'pago_movil_save' }]];
 
@@ -1296,7 +1383,7 @@ export class TelegramTransactionsUpdate {
     await ctx.reply(
       `💸 <b>Pago Móvil Data (Preview)</b>\n\n` +
       `📅 Date: ${dateStr}\n` +
-      `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}\n` +
+      `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}${usdSuffix}\n` +
       `🔢 Reference: ${transactionData.transactionId}\n\n` +
       footerText,
       {
@@ -1324,9 +1411,13 @@ export class TelegramTransactionsUpdate {
         })
       : 'Not detected';
 
-    const amountStr = transactionData.amount !== null
-      ? `${transactionData.currency} ${transactionData.amount.toFixed(2)}`
-      : 'Not detected';
+    let amountStr: string;
+    if (transactionData.amount !== null) {
+      const usdSuffix = await this.formatVesUsdSuffix(transactionData.currency, transactionData.amount);
+      amountStr = `${transactionData.currency} ${transactionData.amount.toFixed(2)}${usdSuffix}`;
+    } else {
+      amountStr = 'Not detected';
+    }
 
     const transactionIdStr = transactionData.transactionId || 'Not detected';
     const methodStr = transactionData.paymentMethod ? `\n💳 Method: ${transactionData.paymentMethod}` : '';
@@ -2130,5 +2221,17 @@ export class TelegramTransactionsUpdate {
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error canceling registration.');
     }
+  }
+
+  private async formatVesUsdSuffix(currency: string, amount: number): Promise<string> {
+    if (currency !== 'VES') return '';
+    try {
+      const latestRate = await this.exchangeRateService.findLatest();
+      if (latestRate) {
+        const usd = amount / Number(latestRate.value);
+        return ` (${usd.toFixed(2)} USD)`;
+      }
+    } catch (e) { /* rate unavailable */ }
+    return '';
   }
 }

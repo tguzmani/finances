@@ -88,7 +88,7 @@ export class ExchangeRateChartService {
               backgroundColor: this.COLORS.binance + '20',
               borderWidth: 3,
               tension: 0.3,
-              pointRadius: 5,
+              pointRadius: binanceRates.map((_, i) => i % 6 === 0 ? 5 : 0),
               pointHoverRadius: 7,
               pointBackgroundColor: this.COLORS.binance,
               pointBorderColor: '#fff',
@@ -149,9 +149,9 @@ export class ExchangeRateChartService {
               time: {
                 unit: days <= 7 ? 'day' : 'day',
                 displayFormats: {
-                  day: 'MMM D',
+                  day: 'ddd M/D',
                 },
-                tooltipFormat: 'MMM D, YYYY HH:mm',
+                tooltipFormat: 'ddd M/D/YYYY HH:mm',
               },
               grid: {
                 color: this.COLORS.grid,
