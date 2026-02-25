@@ -3,6 +3,7 @@ import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { JournalEntryLlmService } from './journal-entry-llm.service';
+import { JournalEntryCacheService } from './journal-entry-cache.service';
 
 @Injectable()
 export class JournalEntryService {
@@ -13,6 +14,7 @@ export class JournalEntryService {
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly llmService: JournalEntryLlmService,
+    private readonly cacheService: JournalEntryCacheService,
   ) {}
 
   async createJournalEntry(transaction: Transaction): Promise<void> {
@@ -34,12 +36,31 @@ export class JournalEntryService {
       ? `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`
       : `$${amount.toFixed(2)}`;
 
-    const classification = await this.llmService.classify(
-      transaction.description || 'No description',
-      usdAmount,
-      transaction.type,
-      transaction.platform,
-    );
+    // Try cache first, fallback to LLM
+    const cachedEntries = await this.cacheService.getCachedEntries(transaction.id);
+    let classification;
+    if (cachedEntries && cachedEntries.length === 2) {
+      const debitEntry = cachedEntries.find((e) => e.type === 'DEBIT');
+      const creditEntry = cachedEntries.find((e) => e.type === 'CREDIT');
+      if (debitEntry && creditEntry) {
+        classification = {
+          debit_account: debitEntry.account,
+          credit_account: creditEntry.account,
+          category: debitEntry.category,
+          subcategory: debitEntry.subcategory,
+        };
+        this.logger.log(`Using cached classification for transaction ${transaction.id}`);
+      }
+    }
+    if (!classification) {
+      this.logger.log(`No cache found, calling LLM for transaction ${transaction.id}`);
+      classification = await this.llmService.classify(
+        transaction.description || 'No description',
+        usdAmount,
+        transaction.type,
+        transaction.platform,
+      );
+    }
 
     const dateFormatted = this.formatDate(transaction.date);
 

@@ -20,20 +20,21 @@ model TransactionGroup {
 }
 
 model Transaction {
-  id            Int                  @id @default(autoincrement())
-  date          DateTime
-  amount        Decimal              @db.Decimal(10, 2)
-  currency      String               @db.VarChar(10)
-  transactionId String               @unique @map("transaction_id")
-  status        TransactionStatus    @default(NEW)
-  createdAt     DateTime             @default(now()) @map("created_at")
-  updatedAt     DateTime             @updatedAt @map("updated_at")
-  type          TransactionType      @default(EXPENSE)
-  description   String?
-  platform      TransactionPlatform
-  method        PaymentMethod?
-  groupId       Int?                 @map("group_id")
-  group         TransactionGroup?    @relation(fields: [groupId], references: [id])
+  id             Int                  @id @default(autoincrement())
+  date           DateTime
+  amount         Decimal              @db.Decimal(10, 2)
+  currency       String               @db.VarChar(10)
+  transactionId  String               @unique @map("transaction_id")
+  status         TransactionStatus    @default(NEW)
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  type           TransactionType      @default(EXPENSE)
+  description    String?
+  platform       TransactionPlatform
+  method         PaymentMethod?
+  groupId        Int?                 @map("group_id")
+  group          TransactionGroup?    @relation(fields: [groupId], references: [id])
+  journalEntries JournalEntry[]
 
   @@map("transactions")
 }
@@ -146,4 +147,23 @@ enum EquityName {
   EQUITY_FULL_INVESTMENT
   EQUITY_CRYPTO_INVESTMENT
   EQUITY_FIAT_INVESTMENT
+}
+
+enum JournalEntryType {
+  DEBIT
+  CREDIT
+}
+
+model JournalEntry {
+  id            Int              @id @default(autoincrement())
+  transactionId Int              @map("transaction_id")
+  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  type          JournalEntryType
+  account       String
+  category      String           @default("")
+  subcategory   String           @default("")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@map("journal_entries")
 }

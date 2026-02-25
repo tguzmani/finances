@@ -17,11 +17,12 @@ import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
 import { CursorScheduler } from './email/subscriptions/cursor/cursor.scheduler';
 import { CommonModule } from '../common/common.module';
+import { JournalEntryModule } from '../journal-entry/journal-entry.module';
 import { TransactionsSheetsService } from './transactions-sheets.service';
 import { TransactionSearchService } from './transaction-search.service';
 
 @Module({
-  imports: [CommonModule],
+  imports: [CommonModule, JournalEntryModule],
   controllers: [TransactionsController],
   providers: [
     TransactionsService,

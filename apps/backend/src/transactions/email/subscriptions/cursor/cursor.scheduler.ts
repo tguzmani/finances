@@ -2,13 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TransactionPlatform, PaymentMethod, TransactionStatus, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { JournalEntryCacheService } from '../../../../journal-entry/journal-entry-cache.service';
 
 @Injectable()
 export class CursorScheduler {
   private readonly logger = new Logger(CursorScheduler.name);
   private isRunning = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly journalEntryCache: JournalEntryCacheService,
+  ) {}
 
   // Run daily at 12:00 PM (noon) to check if we need to create transaction
   @Cron('0 12 * * *', {
@@ -48,7 +52,7 @@ export class CursorScheduler {
       }
 
       // Create the transaction
-      await this.prisma.transaction.create({
+      const transaction = await this.prisma.transaction.create({
         data: {
           date: today,
           amount: 20.00,
@@ -62,7 +66,12 @@ export class CursorScheduler {
         },
       });
 
-      this.logger.log(`✅ Created Cursor subscription transaction for ${year}-${month}`);
+      // Fire-and-forget: pre-compute journal entry classification
+      void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>
+        this.logger.error(`Failed to cache journal entry for Cursor subscription: ${err.message}`),
+      );
+
+      this.logger.log(`Created Cursor subscription transaction for ${year}-${month}`);
     } catch (error) {
       this.logger.error(`Error creating Cursor subscription: ${error.message}`, error.stack);
     } finally {

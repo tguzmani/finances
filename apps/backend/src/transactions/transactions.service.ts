@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { TransactionsBinanceService } from './transactions-binance.service';
+import { JournalEntryCacheService } from '../journal-entry/journal-entry-cache.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
@@ -15,7 +16,8 @@ export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailRegistry: EmailServiceRegistry,
-    private readonly binanceTransactions: TransactionsBinanceService
+    private readonly binanceTransactions: TransactionsBinanceService,
+    private readonly journalEntryCache: JournalEntryCacheService,
   ) { }
 
   async findAll(query: QueryTransactionsDto) {
@@ -117,10 +119,26 @@ export class TransactionsService {
       data.amount = dto.amount;
     }
 
-    return this.prisma.transaction.update({
+    const updated = await this.prisma.transaction.update({
       where: { id },
       data,
     });
+
+    // Fire-and-forget: classify on description change
+    if (dto.description) {
+      void this.journalEntryCache.classifyAndCache(updated).catch((err) =>
+        this.logger.error(`Failed to cache journal entry for transaction ${id}: ${err.message}`),
+      );
+    }
+
+    // Cleanup cached entries on terminal status
+    if (dto.status === TransactionStatus.REGISTERED || dto.status === TransactionStatus.REJECTED) {
+      void this.journalEntryCache.deleteCachedEntries(id).catch((err) =>
+        this.logger.error(`Failed to delete cached journal entries for transaction ${id}: ${err.message}`),
+      );
+    }
+
+    return updated;
   }
 
   async syncFromEmail(limitPerBank = 30) {
@@ -163,7 +181,7 @@ export class TransactionsService {
               }
             }
 
-            await this.prisma.transaction.create({
+            const created = await this.prisma.transaction.create({
               data: {
                 date: tx.date,
                 amount: tx.amount,
@@ -177,6 +195,13 @@ export class TransactionsService {
               },
             });
             totalCreated++;
+
+            // Fire-and-forget: pre-compute journal entry classification if description exists
+            if (created.description) {
+              void this.journalEntryCache.classifyAndCache(created).catch((err) =>
+                this.logger.error(`Failed to cache journal entry for synced transaction ${created.id}: ${err.message}`),
+              );
+            }
           } catch (err) {
             if (err.code === 'P2002') {
               totalSkipped++;
@@ -373,7 +398,7 @@ export class TransactionsService {
       paymentMethod = PaymentMethod.CASH;
     }
 
-    return await this.prisma.transaction.create({
+    const transaction = await this.prisma.transaction.create({
       data: {
         date: transactionDate,
         amount: data.amount,
@@ -386,5 +411,12 @@ export class TransactionsService {
         status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status
       },
     });
+
+    // Fire-and-forget: pre-compute journal entry classification
+    void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>
+      this.logger.error(`Failed to cache journal entry for manual transaction ${transaction.id}: ${err.message}`),
+    );
+
+    return transaction;
   }
 }
