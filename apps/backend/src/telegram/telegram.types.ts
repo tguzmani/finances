@@ -67,6 +67,7 @@ export interface ReviewSession {
     currency: string;
     ocrText: string;
     paymentMethod: PaymentMethod | null;
+    imageUrl?: string;
   };
   // Date/amount change flow (review)
   waitingForDateChange?: boolean;
@@ -77,6 +78,10 @@ export interface ReviewSession {
   groupFlowTransactionIds?: number[];
   // Notification edit flow
   notificationTransactionId?: number;
+  // Bill query flow (within /register)
+  billQueryTransactionId?: number;
+  waitingForBillQuery?: boolean;
+  billMessageId?: number;
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;
 }

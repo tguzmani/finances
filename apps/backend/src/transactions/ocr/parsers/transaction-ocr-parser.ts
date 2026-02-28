@@ -10,6 +10,7 @@ export interface TransactionData {
   currency: string; // Always present (defaults to 'VES')
   ocrText: string; // Full OCR text for debugging
   paymentMethod: PaymentMethod | null;
+  imageUrl?: string; // B2 storage URL for the bill image
 }
 
 @Injectable()

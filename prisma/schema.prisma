@@ -32,6 +32,8 @@ model Transaction {
   description    String?
   platform       TransactionPlatform
   method         PaymentMethod?
+  imageUrl       String?              @map("image_url")
+  ocrText        String?              @map("ocr_text")
   groupId        Int?                 @map("group_id")
   group          TransactionGroup?    @relation(fields: [groupId], references: [id])
   journalEntries JournalEntry[]

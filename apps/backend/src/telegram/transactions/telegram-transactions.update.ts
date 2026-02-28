@@ -20,6 +20,8 @@ import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { BackblazeStorageService } from '../../common/backblaze-storage.service';
+import { TelegramBillService } from '../bills/telegram-bill.service';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -42,6 +44,8 @@ export class TelegramTransactionsUpdate {
     private readonly dateParser: DateParserService,
     private readonly journalEntryService: JournalEntryService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly backblazeStorage: BackblazeStorageService,
+    private readonly billService: TelegramBillService,
   ) { }
 
   @Command('transactions')
@@ -899,6 +903,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Bill query flow - handle question input
+    if (ctx.session.waitingForBillQuery) {
+      await this.handleBillQueryInput(ctx);
+      return;
+    }
+
     // /group flow - description input
     if (ctx.session.groupFlowWaitingForDescription) {
       await this.groupFlowUpdate.handleDescriptionInput(ctx);
@@ -1097,12 +1107,18 @@ export class TelegramTransactionsUpdate {
 
       await ctx.reply('📸 Processing image with OCR...');
 
-      // Download and process image directly
+      // Download image
       const imageBuffer = await this.downloadImage(photo.file_id, ctx);
 
-      // Parse with unified OCR parser
-      this.logger.log('Parsing transaction with Google Vision...');
-      const transactionData = await this.transactionOcrParser.parseTransaction(imageBuffer, caption);
+      // Upload to B2 and parse with OCR in parallel
+      const b2Key = this.backblazeStorage.buildBillKey(photo.file_id.substring(0, 8));
+      const [imageUrl, transactionData] = await Promise.all([
+        this.backblazeStorage.uploadFile(imageBuffer, b2Key, 'image/jpeg').catch(err => {
+          this.logger.error(`B2 upload failed: ${err.message}`);
+          return undefined;
+        }),
+        this.transactionOcrParser.parseTransaction(imageBuffer, caption),
+      ]);
 
       this.logger.log(`Parsed transaction: ${JSON.stringify(transactionData)}`);
 
@@ -1134,6 +1150,9 @@ export class TelegramTransactionsUpdate {
           { parse_mode: 'HTML' }
         );
       }
+
+      // Attach imageUrl to transaction data for session storage
+      transactionData.imageUrl = imageUrl;
 
       if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
         // Pago Móvil: Show preview
@@ -1177,6 +1196,8 @@ export class TelegramTransactionsUpdate {
         description: billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase',
         method: PaymentMethod.DEBIT_CARD, // Default payment method
         date: billData.datetime,
+        imageUrl: billData.imageUrl,
+        ocrText: billData.ocrText,
       });
 
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
@@ -1303,6 +1324,8 @@ export class TelegramTransactionsUpdate {
           amount: pagoMovilData.amount,
           currency: pagoMovilData.currency,
           transactionId: pagoMovilData.transactionId,
+          imageUrl: pagoMovilData.imageUrl,
+          ocrText: pagoMovilData.ocrText,
         });
 
         const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);
@@ -1917,8 +1940,14 @@ export class TelegramTransactionsUpdate {
         [{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any],
         [{ text: 'Copy Description', copy_text: { text: transaction.description || 'No description' } } as any],
         [{ text: `${usdAmount} USD`, copy_text: { text: excelFormula } } as any],
-        [actionButton, { text: '📒 Journal Entry', callback_data: `journal_entry_${transaction.id}` }],
       ];
+
+      // Add Show Bill button only if transaction has OCR text
+      if (transaction.ocrText) {
+        keyboardRows.push([{ text: '\ud83d\udcc4 Show Bill', callback_data: `show_bill_${transaction.id}` }]);
+      }
+
+      keyboardRows.push([actionButton, { text: '📒 Journal Entry', callback_data: `journal_entry_${transaction.id}` }]);
 
       // Add Undo button if not on first item
       const currentIndex = ctx.session.registerCurrentIndex ?? 0;
@@ -2220,6 +2249,154 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error canceling registration: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error canceling registration.');
+    }
+  }
+
+  @Action(/^show_bill_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleShowBill(@Ctx() ctx: SessionContext) {
+    try {
+      const match = (ctx.callbackQuery as any).data.match(/^show_bill_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction || !transaction.ocrText) {
+        await ctx.answerCbQuery('No bill data available');
+        return;
+      }
+
+      await ctx.answerCbQuery();
+
+      // Store transaction ID for bill queries
+      ctx.session.billQueryTransactionId = transactionId;
+
+      const buttons = [
+        [{ text: '❓ Ask Question', callback_data: 'bill_ask_question' }],
+        [{ text: '✅ Done', callback_data: 'bill_done' }],
+      ];
+
+      // Send bill image if available, otherwise send OCR text
+      if (transaction.imageUrl) {
+        const signedUrl = await this.backblazeStorage.getSignedUrl(transaction.imageUrl);
+        const sent = await ctx.replyWithPhoto(signedUrl, {
+          caption: '🧾 Bill image',
+          reply_markup: { inline_keyboard: buttons },
+        });
+        ctx.session.billMessageId = sent.message_id;
+      } else {
+        const ocrPreview = transaction.ocrText.length > 3000
+          ? transaction.ocrText.substring(0, 3000) + '...'
+          : transaction.ocrText;
+        const sent = await ctx.reply(
+          `🧾 <b>Bill OCR Text</b>\n\n<code>${ocrPreview}</code>`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
+        );
+        ctx.session.billMessageId = sent.message_id;
+      }
+    } catch (error) {
+      this.logger.error(`Error showing bill: ${error.message}`);
+      await ctx.answerCbQuery('Error showing bill');
+    }
+  }
+
+  @Action('bill_ask_question')
+  @UseGuards(TelegramAuthGuard)
+  async handleBillAskQuestion(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Type your question');
+      ctx.session.waitingForBillQuery = true;
+    } catch (error) {
+      this.logger.error(`Error in bill ask question: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('bill_ask_another')
+  @UseGuards(TelegramAuthGuard)
+  async handleBillAskAnother(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Type your question');
+      ctx.session.waitingForBillQuery = true;
+    } catch (error) {
+      this.logger.error(`Error in bill ask another: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('bill_done')
+  @UseGuards(TelegramAuthGuard)
+  async handleBillDone(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+
+      // Delete the bill message
+      if (ctx.session.billMessageId) {
+        try {
+          await ctx.telegram.deleteMessage(ctx.chat.id, ctx.session.billMessageId);
+        } catch (e) {
+          this.logger.warn(`Could not delete bill message: ${e.message}`);
+        }
+      }
+
+      // Clear bill session state
+      ctx.session.billQueryTransactionId = undefined;
+      ctx.session.waitingForBillQuery = undefined;
+      ctx.session.billMessageId = undefined;
+    } catch (error) {
+      this.logger.error(`Error in bill done: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  async handleBillQueryInput(ctx: SessionContext) {
+    if (!('text' in ctx.message)) return;
+
+    const userQuery = ctx.message.text;
+    const transactionId = ctx.session.billQueryTransactionId;
+
+    if (!transactionId) {
+      ctx.session.waitingForBillQuery = false;
+      return;
+    }
+
+    const transaction = await this.transactionsService.findOne(transactionId);
+    if (!transaction || !transaction.ocrText) {
+      await ctx.reply('❌ Bill data not found.');
+      ctx.session.waitingForBillQuery = false;
+      return;
+    }
+
+    ctx.session.waitingForBillQuery = false;
+
+    try {
+      const result = await this.billService.queryBill(transaction.ocrText, userQuery);
+
+      // Build answer message with buttons
+      const buttons: any[][] = [];
+      if (result.data) {
+        buttons.push([{ text: '📋 Copy', copy_text: { text: result.data } } as any]);
+      }
+      buttons.push([{ text: '❓ Ask Another', callback_data: 'bill_ask_another' }]);
+      buttons.push([{ text: '✅ Done', callback_data: 'bill_done' }]);
+
+      // Delete previous bill message and send new text message with answer
+      const chatId = ctx.chat.id;
+      if (ctx.session.billMessageId) {
+        try {
+          await ctx.telegram.deleteMessage(chatId, ctx.session.billMessageId);
+        } catch (e) {
+          this.logger.warn(`Could not delete previous bill message: ${e.message}`);
+        }
+      }
+
+      const sent = await ctx.reply(
+        `🧾 <b>Bill Answer</b>\n\n${result.answer}`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
+      );
+      ctx.session.billMessageId = sent.message_id;
+    } catch (error) {
+      this.logger.error(`Error querying bill: ${error.message}`);
+      await ctx.reply('❌ Error processing your question. Try again.');
     }
   }
 

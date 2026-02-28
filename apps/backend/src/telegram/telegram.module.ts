@@ -43,6 +43,7 @@ import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
 import { TelegramEquityPresenter } from './equity/telegram-equity.presenter';
 import { TelegramEquityScheduler } from './equity/telegram-equity.scheduler';
+import { TelegramBillService } from './bills/telegram-bill.service';
 import * as https from 'https';
 
 @Module({
@@ -135,6 +136,7 @@ import * as https from 'https';
     TelegramEquityService,
     TelegramEquityPresenter,
     TelegramEquityScheduler,
+    TelegramBillService,
   ],
   exports: [TelegramService],
 })

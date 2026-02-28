@@ -231,6 +231,8 @@ export class TransactionsService {
     amount: number;
     currency: string;
     transactionId: string;
+    imageUrl?: string;
+    ocrText?: string;
   }) {
     try {
       const transaction = await this.prisma.transaction.create({
@@ -243,6 +245,8 @@ export class TransactionsService {
           method: 'PAGO_MOVIL',
           type: TransactionType.EXPENSE,
           status: TransactionStatus.NEW,
+          imageUrl: parsed.imageUrl,
+          ocrText: parsed.ocrText,
         },
       });
 
@@ -382,6 +386,8 @@ export class TransactionsService {
     description: string;
     method?: PaymentMethod;
     date?: Date;
+    imageUrl?: string;
+    ocrText?: string;
   }): Promise<Transaction> {
     // Generate unique transaction ID for manual entries
     const timestamp = Date.now();
@@ -409,6 +415,8 @@ export class TransactionsService {
         type: data.type,
         description: data.description,
         status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status
+        imageUrl: data.imageUrl,
+        ocrText: data.ocrText,
       },
     });
 
