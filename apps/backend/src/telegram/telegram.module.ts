@@ -11,6 +11,7 @@ import { TelegramTransactionsService } from './transactions/telegram-transaction
 import { TelegramTransactionsPresenter } from './transactions/telegram-transactions.presenter';
 import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
 import { TelegramNotificationListener } from './listeners/telegram-notification.listener';
+import { ExchangeAutoRegistrationListener } from './listeners/exchange-auto-registration.listener';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
@@ -110,6 +111,7 @@ import * as https from 'https';
     TelegramTransactionsPresenter,
     TelegramGroupsPresenter,
     TelegramNotificationListener,
+    ExchangeAutoRegistrationListener,
     TelegramBaseHandler,
     TelegramTransactionsUpdate,
     TelegramManualTransactionUpdate,

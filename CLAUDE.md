@@ -16,6 +16,12 @@
 - This includes: bot messages, UI labels, logs, comments, variable names, etc.
 - Maintain consistency with the rest of the app which is already in English
 
+## Clean Code
+
+- **No duplicated logic**: If the same pattern appears in multiple places, extract it to a single source of truth (e.g., a service method or shared utility). Every behavior should live in one place.
+- **Single responsibility**: Don't mix concerns. Event emission, business logic, and orchestration should each live where they naturally belong.
+- **Always review for code smells** before finalizing changes. If something feels off, refactor it immediately — never leave smelly code behind.
+
 ## Timezone Rules
 
 1. **Storage**: Always store in UTC (database stores plain timestamps, we treat them as UTC)

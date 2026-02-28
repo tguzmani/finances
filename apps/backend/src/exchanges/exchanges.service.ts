@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExchangesBinanceService } from './exchanges-binance.service';
 import { ExchangesSheetsService } from './exchanges-sheets.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
+import { CompletedExchangesEvent } from './events/completed-exchanges.event';
 import { SyncResult, TradeType } from './exchange.types';
 import { Prisma, ExchangeStatus, ExchangeRateSource } from '@prisma/client';
 
@@ -15,6 +17,7 @@ export class ExchangesService {
     private readonly prisma: PrismaService,
     private readonly binanceApi: ExchangesBinanceService,
     private readonly sheetsService: ExchangesSheetsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async findAll(query: QueryExchangesDto) {
@@ -102,11 +105,8 @@ export class ExchangesService {
         if (binanceTrade) {
           const binanceStatus = this.mapBinanceStatus(binanceTrade.orderStatus);
 
-          // If Binance shows COMPLETED, mark as REVIEWED (skip manual review)
-          // Otherwise, update to the new status from Binance
-          const newStatus = binanceStatus === ExchangeStatus.COMPLETED
-            ? ExchangeStatus.REVIEWED
-            : binanceStatus;
+          // Keep the mapped status as-is (COMPLETED will be auto-registered by listener)
+          const newStatus = binanceStatus;
 
           if (newStatus !== pendingExchange.status) {
             try {
@@ -147,12 +147,8 @@ export class ExchangesService {
           const fiatAmount = parseFloat(trade.totalPrice);
           const exchangeRate = parseFloat(trade.unitPrice);
 
-          // Map Binance status to our enum
-          // COMPLETED from Binance → REVIEWED (skip manual review)
-          const mappedStatus = this.mapBinanceStatus(trade.orderStatus);
-          const status = mappedStatus === ExchangeStatus.COMPLETED
-            ? ExchangeStatus.REVIEWED
-            : mappedStatus;
+          // Map Binance status to our enum (COMPLETED will be auto-registered by listener)
+          const status = this.mapBinanceStatus(trade.orderStatus);
 
           // Create Exchange
           await this.prisma.exchange.create({
@@ -189,6 +185,16 @@ export class ExchangesService {
     this.logger.log(
       `Sync complete: ${result.exchangesCreated} created, ${result.exchangesUpdated} updated, ${result.exchangesSkipped} skipped, ${result.transactionsCreated} transactions created`
     );
+
+    // Emit event for COMPLETED exchanges so they get auto-registered
+    const completedExchanges = await this.findByStatus(ExchangeStatus.COMPLETED);
+    if (completedExchanges.length > 0) {
+      this.eventEmitter.emit(
+        'exchanges.completed',
+        new CompletedExchangesEvent(completedExchanges)
+      );
+      this.logger.log(`Emitted CompletedExchangesEvent for ${completedExchanges.length} exchanges`);
+    }
 
     return result;
   }
