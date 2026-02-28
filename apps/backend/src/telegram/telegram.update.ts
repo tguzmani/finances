@@ -178,47 +178,14 @@ export class TelegramUpdate {
       // Clear any previous session state
       this.baseHandler.clearSession(ctx);
 
-      // Get counts
-      const [reviewedTxCount, reviewedExCount] = await Promise.all([
-        this.telegramService.transactions.getReviewedTransactions().then(txs => txs.length),
-        this.telegramService.exchanges.getReviewedExchanges().then(exs => exs.length),
-      ]);
+      const reviewedTxs = await this.telegramService.transactions.getReviewedTransactions();
 
-      // If nothing to register, show message
-      if (reviewedTxCount === 0 && reviewedExCount === 0) {
+      if (reviewedTxs.length === 0) {
         await ctx.reply('✅ Nothing to register right now');
         return;
       }
 
-      // If only transactions available, go directly to transaction registration
-      if (reviewedTxCount > 0 && reviewedExCount === 0) {
-        await ctx.reply('ℹ️ Only transactions available to register');
-        await this.transactionsUpdate.startTransactionRegistration(ctx);
-        return;
-      }
-
-      // If only exchanges available, go directly to exchange registration
-      if (reviewedExCount > 0 && reviewedTxCount === 0) {
-        await ctx.reply('ℹ️ Only exchanges available to register');
-        await this.exchangesUpdate.startExchangeRegistration(ctx);
-        return;
-      }
-
-      // Both have items - show selection buttons
-      const buttons = [
-        [Markup.button.callback(`💸 Transactions (${reviewedTxCount})`, 'register_start_transactions')],
-        [Markup.button.callback(`💱 Exchanges (${reviewedExCount})`, 'register_start_exchanges')],
-      ];
-
-      const keyboard = Markup.inlineKeyboard(buttons);
-
-      await ctx.reply(
-        '<b>What would you like to register?</b>',
-        {
-          parse_mode: 'HTML',
-          ...keyboard,
-        }
-      );
+      await this.transactionsUpdate.startTransactionRegistration(ctx);
     } catch (error) {
       this.logger.error(`Error in register command: ${error.message}`);
       await ctx.reply('Error starting registration process.');
