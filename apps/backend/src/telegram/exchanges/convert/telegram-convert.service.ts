@@ -13,6 +13,7 @@ export interface ConversionResult {
   rateUsed: number;
   rateName: string;
   vesAmount: number | null;
+  vesAmountInternal: number | null;
   rates: RatesSnapshot;
   banescoAvailability?: {
     available: boolean;
@@ -117,6 +118,7 @@ export class TelegramConvertService {
           rateUsed: internalRate,
           rateName: 'Internal',
           vesAmount: null,
+          vesAmountInternal: null,
           rates,
         };
       }
@@ -125,6 +127,7 @@ export class TelegramConvertService {
         if (!bcvUsd) return null;
         const outputAmount = (amount * bcvUsd) / internalRate;
         const vesAmount = amount * bcvUsd;
+        const vesAmountInternal = amount * internalRate;
         return {
           inputAmount: amount,
           inputCurrency: currency,
@@ -133,6 +136,7 @@ export class TelegramConvertService {
           rateUsed: bcvUsd,
           rateName: 'BCV USD',
           vesAmount,
+          vesAmountInternal,
           rates,
         };
       }
@@ -149,6 +153,7 @@ export class TelegramConvertService {
           rateUsed: bcvEur,
           rateName: 'BCV EUR',
           vesAmount,
+          vesAmountInternal: null,
           rates,
         };
       }

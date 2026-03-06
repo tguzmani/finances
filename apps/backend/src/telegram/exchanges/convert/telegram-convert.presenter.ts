@@ -4,7 +4,7 @@ import { ConversionResult } from './telegram-convert.service';
 @Injectable()
 export class TelegramConvertPresenter {
   formatConversion(result: ConversionResult): string {
-    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, rates, banescoAvailability } = result;
+    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, vesAmountInternal, rates, banescoAvailability } = result;
 
     const rateLabel = inputCurrency === 'VES' ? '' : ' BCV';
     const outLabel = inputCurrency === 'VES' ? '' : ' Internal';
@@ -13,6 +13,9 @@ export class TelegramConvertPresenter {
     message += `${this.formatNumber(inputAmount)} ${inputCurrency}${rateLabel} = <b>${this.formatNumber(outputAmount)} ${outputCurrency}${outLabel}</b>\n`;
     if (vesAmount !== null) {
       message += `${this.formatNumber(inputAmount)} ${inputCurrency}${rateLabel} = <b>${this.formatNumber(vesAmount)} VES</b>\n`;
+    }
+    if (vesAmountInternal !== null) {
+      message += `${this.formatNumber(inputAmount)} ${inputCurrency} Internal = <b>${this.formatNumber(vesAmountInternal)} VES</b>\n`;
     }
 
     // Banesco availability between conversions and rates
