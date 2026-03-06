@@ -58,6 +58,7 @@ export interface ReviewSession {
   registerCurrentIndex?: number;
   registerTotalCount?: number;
   registerMessageId?: number; // For editing messages instead of sending new ones
+  registerBillMessageId?: number; // Message ID of the bill photo to delete on commit
   // Photo processing
   pendingPhotoFileId?: string;
   pendingBillData?: {
@@ -79,6 +80,10 @@ export interface ReviewSession {
   notificationTransactionId?: number;
   // Banesco balance update flow
   waitingForBanescoAmount?: boolean;
+  // Settings flow
+  settingsWaitingForSheetId?: boolean;
+  // Convert flow
+  convertWaitingForInput?: boolean;
 }
 
 export interface SessionContext extends Context {
@@ -101,6 +106,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },
   { command: 'add_transaction', description: 'Add manual transaction' },
+  { command: 'settings', description: 'Update settings' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },
 ];

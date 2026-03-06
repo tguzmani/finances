@@ -3,15 +3,7 @@ import { JournalEntry, Transaction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JournalEntryLlmService, JournalClassification } from './journal-entry-llm.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
-import { JOURNAL_ACCOUNTS } from './journal-entry.constants';
-
-const PLATFORM_TO_ACCOUNT: Record<string, string> = {
-  BANESCO: 'Banesco',
-  BINANCE: 'Binance',
-  BANK_OF_AMERICA: 'Bofa',
-  WALLET: 'Wallet',
-  CASH_BOX: 'Cash',
-};
+import { JOURNAL_ACCOUNTS, PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 
 // Asset and liability accounts only (exclude Gastos, Ingresos, Patrimonio)
 const TRANSFER_ACCOUNTS = JOURNAL_ACCOUNTS

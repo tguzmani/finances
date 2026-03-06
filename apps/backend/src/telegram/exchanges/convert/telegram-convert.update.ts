@@ -15,14 +15,24 @@ export class TelegramConvertUpdate {
   @Command('convert')
   @UseGuards(TelegramAuthGuard)
   async handleConvert(@Ctx() ctx: SessionContext) {
-    try {
-      const text = 'text' in ctx.message ? ctx.message.text : '';
-      const input = text.replace(/^\/convert\s*/, '');
+    ctx.session.convertWaitingForInput = true;
+    await ctx.reply(
+      'Enter amount and currency:\n' +
+      '<i>Example: 100 USD, 8177.49 VES, 50 EUR</i>',
+      { parse_mode: 'HTML' },
+    );
+  }
 
-      const message = await this.convertService.handleConvert(input);
+  async handleConvertInput(@Ctx() ctx: SessionContext) {
+    if (!ctx.message || !('text' in ctx.message)) return;
+
+    try {
+      ctx.session.convertWaitingForInput = false;
+
+      const message = await this.convertService.handleConvert(ctx.message.text);
       await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
-      this.logger.error(`Error in convert command: ${error.message}`);
+      this.logger.error(`Error in convert: ${error.message}`);
       await ctx.reply('Error performing conversion. Please try again later.');
     }
   }

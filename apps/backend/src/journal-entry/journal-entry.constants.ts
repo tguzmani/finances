@@ -11,6 +11,14 @@ export const JOURNAL_ACCOUNTS = [
   'Gastos cafeína', 'Gastos comisiones', 'Gastos Esther', 'Gastos restaurant',
 ];
 
+export const PLATFORM_TO_ACCOUNT: Record<string, string> = {
+  BANESCO: 'Banesco',
+  BINANCE: 'Binance',
+  BANK_OF_AMERICA: 'Bofa',
+  WALLET: 'Wallet',
+  CASH_BOX: 'Cash',
+};
+
 export const JOURNAL_CATEGORIES: Record<string, string[]> = {
   Esther:   ['Esther'],
   Comida:   ['Pescado', 'Carne', 'Mercado', 'Delivery', 'Local'],

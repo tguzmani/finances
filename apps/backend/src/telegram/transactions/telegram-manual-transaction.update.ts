@@ -8,6 +8,9 @@ import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { DateParserService } from '../../common/date-parser.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { AutoRegistrationService } from '../../journal-entry/auto-registration.service';
+import { SheetUpdateService } from '../../journal-entry/sheet-update.service';
+import { TransactionStatus } from '../../transactions/transaction.types';
 
 @Update()
 export class TelegramManualTransactionUpdate {
@@ -19,6 +22,8 @@ export class TelegramManualTransactionUpdate {
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly dateParser: DateParserService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly autoRegistrationService: AutoRegistrationService,
+    private readonly sheetUpdateService: SheetUpdateService,
   ) {
     this.logger.log('TelegramManualTransactionUpdate instantiated');
   }
@@ -304,7 +309,7 @@ export class TelegramManualTransactionUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleManualDateNow(@Ctx() ctx: SessionContext) {
     try {
-      await ctx.answerCbQuery('Using current time');
+      await ctx.answerCbQuery();
 
       // Create transaction with current date (button click → edit)
       await this.createTransactionAndFinish(ctx, true);
@@ -583,6 +588,95 @@ export class TelegramManualTransactionUpdate {
       date,
     });
 
+    // Clear manual transaction flow state
+    ctx.session.manualTransactionState = undefined;
+    ctx.session.manualTransactionType = undefined;
+    ctx.session.manualTransactionPlatform = undefined;
+    ctx.session.manualTransactionCurrency = undefined;
+    ctx.session.manualTransactionMethod = undefined;
+    ctx.session.manualTransactionAmount = undefined;
+    ctx.session.manualTransactionDescription = undefined;
+    ctx.session.manualTransactionDate = undefined;
+
+    // Try sheet cell update first (exact matches like "Neyda" need priority over LLM)
+    try {
+      const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
+      if (sheetResult) {
+        await this.transactionsService.update(transaction.id, {
+          status: TransactionStatus.REGISTERED,
+        });
+
+        let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
+        if (transaction.currency === 'VES') {
+          try {
+            const latestRate = await this.exchangeRateService.findLatest();
+            if (latestRate) {
+              const usd = Number(transaction.amount) / Number(latestRate.value);
+              amountLine += ` (${usd.toFixed(2)} USD)`;
+            }
+          } catch (e) { /* rate unavailable */ }
+        }
+
+        const sheetMessage =
+          `✅ <b>Transaction Auto-Registered!</b>\n\n` +
+          `<b>${description}</b>\n\n` +
+          `${amountLine}\n` +
+          `Status: Registered`;
+
+        if (editMode) {
+          await ctx.editMessageText(sheetMessage, { parse_mode: 'HTML' });
+        } else {
+          await ctx.reply(sheetMessage, { parse_mode: 'HTML' });
+        }
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
+    } catch (error) {
+      this.logger.error(`Sheet update error: ${error.message}`);
+      const errorMessage = `⚠️ <b>${description}</b>\n\n${error.message}`;
+      if (editMode) {
+        await ctx.editMessageText(errorMessage, { parse_mode: 'HTML' });
+      } else {
+        await ctx.reply(errorMessage, { parse_mode: 'HTML' });
+      }
+      // Don't return - fall through to normal flow so user can still manage the transaction
+    }
+
+    // Try auto-registration for known transaction types (journal entry creation)
+    const autoResult = await this.autoRegistrationService.tryAutoRegister(transaction);
+    if (autoResult) {
+      await this.transactionsService.update(transaction.id, {
+        status: TransactionStatus.REGISTERED,
+      });
+
+      let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
+      if (transaction.currency === 'VES') {
+        try {
+          const latestRate = await this.exchangeRateService.findLatest();
+          if (latestRate) {
+            const usd = Number(transaction.amount) / Number(latestRate.value);
+            amountLine += ` (${usd.toFixed(2)} USD)`;
+          }
+        } catch (e) { /* rate unavailable */ }
+      }
+
+      const autoMessage =
+        `✅ <b>Transaction Auto-Registered!</b>\n\n` +
+        `<b>${description}</b>\n\n` +
+        `${amountLine}\n` +
+        `Journal: ${autoResult.debitAccount} / ${autoResult.creditAccount}\n` +
+        `Category: ${autoResult.rule.category} / ${autoResult.rule.subcategory}\n` +
+        `Status: Registered`;
+
+      if (editMode) {
+        await ctx.editMessageText(autoMessage, { parse_mode: 'HTML' });
+      } else {
+        await ctx.reply(autoMessage, { parse_mode: 'HTML' });
+      }
+      this.baseHandler.clearSession(ctx);
+      return;
+    }
+
     // Format success message
     const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸', 'TRANSFER': '🔄' };
     const typeIcon = typeIcons[transaction.type] || '💸';
@@ -605,16 +699,6 @@ export class TelegramManualTransactionUpdate {
       t.groupId === null
     );
     const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
-
-    // Clear manual transaction flow state (but keep currentTransactionId if grouping)
-    ctx.session.manualTransactionState = undefined;
-    ctx.session.manualTransactionType = undefined;
-    ctx.session.manualTransactionPlatform = undefined;
-    ctx.session.manualTransactionCurrency = undefined;
-    ctx.session.manualTransactionMethod = undefined;
-    ctx.session.manualTransactionAmount = undefined;
-    ctx.session.manualTransactionDescription = undefined;
-    ctx.session.manualTransactionDate = undefined;
 
     let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
     if (transaction.currency === 'VES') {

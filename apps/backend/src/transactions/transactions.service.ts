@@ -419,4 +419,11 @@ export class TransactionsService {
 
     return transaction;
   }
+
+  async updateImageUrl(id: number, imageUrl: string): Promise<void> {
+    await this.prisma.transaction.update({
+      where: { id },
+      data: { imageUrl },
+    });
+  }
 }

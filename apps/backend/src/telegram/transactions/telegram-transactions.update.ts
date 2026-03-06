@@ -13,12 +13,17 @@ import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
 import { TelegramAccountsUpdate } from '../accounts/telegram-accounts.update';
+import { TelegramSettingsUpdate } from '../settings/telegram-settings.update';
+import { TelegramConvertUpdate } from '../exchanges/convert/telegram-convert.update';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { DateParserService } from '../../common/date-parser.service';
+import { B2StorageService } from '../../common/b2-storage.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
+import { AutoRegistrationService } from '../../journal-entry/auto-registration.service';
+import { SheetUpdateService } from '../../journal-entry/sheet-update.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import axios from 'axios';
 import * as https from 'https';
@@ -26,6 +31,7 @@ import * as https from 'https';
 @Update()
 export class TelegramTransactionsUpdate {
   private readonly logger = new Logger(TelegramTransactionsUpdate.name);
+  private readonly pendingImageBuffers = new Map<number, Buffer>(); // chatId -> imageBuffer
 
   constructor(
     private readonly telegramService: TelegramService,
@@ -36,12 +42,17 @@ export class TelegramTransactionsUpdate {
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly accountsUpdate: TelegramAccountsUpdate,
+    private readonly settingsUpdate: TelegramSettingsUpdate,
+    private readonly convertUpdate: TelegramConvertUpdate,
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly groupsPresenter: TelegramGroupsPresenter,
     private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly dateParser: DateParserService,
     private readonly journalEntryService: JournalEntryService,
+    private readonly autoRegistrationService: AutoRegistrationService,
+    private readonly sheetUpdateService: SheetUpdateService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly b2Storage: B2StorageService,
   ) { }
 
   @Command('transactions')
@@ -905,6 +916,18 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Convert flow - delegate to convert handler
+    if (ctx.session.convertWaitingForInput) {
+      await this.convertUpdate.handleConvertInput(ctx);
+      return;
+    }
+
+    // Settings flow - delegate to settings handler
+    if (ctx.session.settingsWaitingForSheetId) {
+      await this.settingsUpdate.handleSheetIdInput(ctx);
+      return;
+    }
+
     // Banesco balance update flow - delegate to accounts handler
     if (ctx.session.waitingForBanescoAmount) {
       await this.accountsUpdate.handleBanescoAmountInput(ctx);
@@ -1054,10 +1077,55 @@ export class TelegramTransactionsUpdate {
       const description = ctx.message.text;
 
       // Update transaction with description and mark as REVIEWED
-      await this.transactionsService.update(transactionId, {
+      const updated = await this.transactionsService.update(transactionId, {
         description,
         status: TransactionStatus.REVIEWED,
       });
+
+      // Try sheet cell update first (exact matches like "Neyda" need priority over LLM)
+      try {
+        const sheetResult = await this.sheetUpdateService.trySheetUpdate(updated);
+        if (sheetResult) {
+          await this.transactionsService.update(transactionId, {
+            status: TransactionStatus.REGISTERED,
+          });
+
+          await ctx.reply(
+            `✅ <b>Transaction Auto-Registered!</b>\n\n` +
+            `<b>${description}</b>\n` +
+            `Status: Registered`,
+            { parse_mode: 'HTML' },
+          );
+
+          ctx.session.waitingForDescription = false;
+          this.baseHandler.clearSession(ctx);
+          return;
+        }
+      } catch (error) {
+        this.logger.error(`Sheet update error: ${error.message}`);
+        await ctx.reply(`⚠️ <b>${description}</b>\n\n${error.message}`, { parse_mode: 'HTML' });
+      }
+
+      // Try auto-registration for known transaction types (journal entry creation)
+      const autoResult = await this.autoRegistrationService.tryAutoRegister(updated);
+      if (autoResult) {
+        await this.transactionsService.update(transactionId, {
+          status: TransactionStatus.REGISTERED,
+        });
+
+        await ctx.reply(
+          `✅ <b>Transaction Auto-Registered!</b>\n\n` +
+          `<b>${description}</b>\n` +
+          `Journal: ${autoResult.debitAccount} / ${autoResult.creditAccount}\n` +
+          `Category: ${autoResult.rule.category} / ${autoResult.rule.subcategory}\n` +
+          `Status: Registered`,
+          { parse_mode: 'HTML' },
+        );
+
+        ctx.session.waitingForDescription = false;
+        this.baseHandler.clearSession(ctx);
+        return;
+      }
 
       await ctx.reply(`✅ Description saved: "${description}"`);
 
@@ -1135,6 +1203,10 @@ export class TelegramTransactionsUpdate {
         );
       }
 
+      // Store image buffer for later upload when transaction is saved
+      const chatId = ctx.message.chat.id;
+      this.pendingImageBuffers.set(chatId, imageBuffer);
+
       if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
         // Pago Móvil: Show preview
         await this.handlePagoMovilTransaction(ctx, transactionData, isDebugMode);
@@ -1178,6 +1250,9 @@ export class TelegramTransactionsUpdate {
         method: PaymentMethod.DEBIT_CARD, // Default payment method
         date: billData.datetime,
       });
+
+      // Upload image to B2 if available
+      await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
 
@@ -1264,6 +1339,37 @@ export class TelegramTransactionsUpdate {
     }
   }
 
+  @Action(/^view_bill_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleViewBill(@Ctx() ctx: SessionContext) {
+    try {
+      if (!('data' in ctx.callbackQuery)) {
+        await ctx.answerCbQuery('Invalid callback');
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^view_bill_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+      await ctx.answerCbQuery();
+
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction?.imageUrl) {
+        await ctx.reply('No bill image found for this transaction.');
+        return;
+      }
+
+      // Delete previous bill photo if exists
+      await this.deleteBillMessage(ctx);
+
+      const signedUrl = await this.b2Storage.getSignedUrl(transaction.imageUrl);
+      const sentMsg = await ctx.replyWithPhoto({ url: signedUrl });
+      ctx.session.registerBillMessageId = sentMsg.message_id;
+    } catch (error) {
+      this.logger.error(`Error viewing bill: ${error.message}`);
+      await ctx.reply('Error loading bill image.');
+    }
+  }
+
   @Action('add_desc_skip')
   @UseGuards(TelegramAuthGuard)
   async handleAddDescriptionSkip(@Ctx() ctx: SessionContext) {
@@ -1304,6 +1410,9 @@ export class TelegramTransactionsUpdate {
           currency: pagoMovilData.currency,
           transactionId: pagoMovilData.transactionId,
         });
+
+        // Upload image to B2 if available
+        await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
         const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);
 
@@ -1470,6 +1579,39 @@ export class TelegramTransactionsUpdate {
     this.logger.log(`Image downloaded: ${imageBuffer.length} bytes`);
 
     return imageBuffer;
+  }
+
+  private async uploadPendingImage(ctx: SessionContext, transactionDbId: number, transactionId: string): Promise<void> {
+    const chatId = ctx.callbackQuery?.message?.chat?.id ?? (ctx.message as any)?.chat?.id;
+    if (!chatId) return;
+
+    const imageBuffer = this.pendingImageBuffers.get(chatId);
+    if (!imageBuffer) return;
+
+    try {
+      const key = await this.b2Storage.uploadTransactionImage(imageBuffer, transactionId);
+      await this.transactionsService.updateImageUrl(transactionDbId, key);
+      this.logger.log(`Image stored for transaction ${transactionId}: ${key}`);
+    } catch (error) {
+      this.logger.error(`Failed to upload image for transaction ${transactionId}: ${error.message}`);
+    } finally {
+      this.pendingImageBuffers.delete(chatId);
+    }
+  }
+
+  private async deleteBillMessage(ctx: SessionContext): Promise<void> {
+    const messageId = ctx.session.registerBillMessageId;
+    if (!messageId) return;
+
+    try {
+      const chatId = ctx.callbackQuery?.message?.chat?.id ?? (ctx.message as any)?.chat?.id;
+      if (chatId) {
+        await ctx.telegram.deleteMessage(chatId, messageId);
+      }
+    } catch (e) {
+      // Message may already be deleted
+    }
+    ctx.session.registerBillMessageId = undefined;
   }
 
   private async showNextTransaction(ctx: SessionContext) {
@@ -1920,6 +2062,11 @@ export class TelegramTransactionsUpdate {
         [actionButton, { text: '📒 Journal Entry', callback_data: `journal_entry_${transaction.id}` }],
       ];
 
+      // Add View Bill button if transaction has an image
+      if (transaction.imageUrl) {
+        keyboardRows.push([{ text: '🧾 View Bill', callback_data: `view_bill_${transaction.id}` }]);
+      }
+
       // Add Undo button if not on first item
       const currentIndex = ctx.session.registerCurrentIndex ?? 0;
       if (currentIndex > 0) {
@@ -2042,6 +2189,9 @@ export class TelegramTransactionsUpdate {
 
       await ctx.answerCbQuery(`✅ ${item.type === 'transaction' ? 'Transaction' : 'Group'} committed`);
 
+      // Delete bill photo if it was shown
+      await this.deleteBillMessage(ctx);
+
       // Move to next item and edit the same message
       ctx.session.registerCurrentIndex = currentIndex + 1;
       await this.showCurrentRegisterItem(ctx, true);
@@ -2089,6 +2239,9 @@ export class TelegramTransactionsUpdate {
       }
 
       await ctx.answerCbQuery(`↩️ ${item.type === 'transaction' ? 'Transaction' : 'Group'} reverted`);
+
+      // Delete bill photo if it was shown
+      await this.deleteBillMessage(ctx);
 
       // Move to next item and edit the same message
       ctx.session.registerCurrentIndex = currentIndex + 1;
@@ -2139,6 +2292,9 @@ export class TelegramTransactionsUpdate {
       }
 
       await ctx.answerCbQuery(`⬅️ Undone: ${previousItem.type === 'transaction' ? 'Transaction' : 'Group'}`);
+
+      // Delete bill photo if it was shown
+      await this.deleteBillMessage(ctx);
 
       // Move back and edit the message
       ctx.session.registerCurrentIndex = previousIndex;
@@ -2207,6 +2363,9 @@ export class TelegramTransactionsUpdate {
       }
 
       await ctx.answerCbQuery('Registration canceled');
+
+      // Delete bill photo if it was shown
+      await this.deleteBillMessage(ctx);
 
       // Edit message with cancellation
       await ctx.editMessageText(

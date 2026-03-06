@@ -17,6 +17,7 @@ import { TelegramGroupsPresenter } from './transactions/telegram-groups.presente
 import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
+import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 
 @Update()
 export class TelegramUpdate {
@@ -37,6 +38,7 @@ export class TelegramUpdate {
     private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly convertUpdate: TelegramConvertUpdate,
     private readonly equityUpdate: TelegramEquityUpdate,
+    private readonly settingsUpdate: TelegramSettingsUpdate,
   ) { }
 
   @Command('start')
@@ -72,6 +74,7 @@ export class TelegramUpdate {
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
+      '/settings - Update settings\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
@@ -157,6 +160,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleEquity(@Ctx() ctx: SessionContext) {
     await this.equityUpdate.handleEquity(ctx);
+  }
+
+  @Command('settings')
+  @UseGuards(TelegramAuthGuard)
+  async handleSettings(@Ctx() ctx: SessionContext) {
+    await this.settingsUpdate.handleSettings(ctx);
   }
 
   @Command('sync')

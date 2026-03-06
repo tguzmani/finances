@@ -38,6 +38,9 @@ import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramExpensesService } from './expenses/telegram-expenses.service';
 import { TelegramExpensesPresenter } from './expenses/telegram-expenses.presenter';
 import { CommonModule } from '../common/common.module';
+import { GoogleSheetConfigModule } from '../google-sheet-config/google-sheet-config.module';
+import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
+import { TelegramSettingsService } from './settings/telegram-settings.service';
 import { EquityModule } from '../equity/equity.module';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
@@ -99,6 +102,7 @@ import * as https from 'https';
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
     EquityModule, // Para usar EquityService, EquityChartService
     CommonModule, // Para usar DateParserService
+    GoogleSheetConfigModule, // Para usar GoogleSheetConfigService
   ],
   providers: [
     TelegramUpdate,
@@ -135,6 +139,8 @@ import * as https from 'https';
     TelegramEquityService,
     TelegramEquityPresenter,
     TelegramEquityScheduler,
+    TelegramSettingsUpdate,
+    TelegramSettingsService,
   ],
   exports: [TelegramService],
 })

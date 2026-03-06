@@ -4,14 +4,16 @@ import {
 } from 'google-auth-library/build/src/auth/googleauth';
 import { google, sheets_v4 } from 'googleapis';
 import { Injectable } from '@nestjs/common';
+import { GoogleSheetConfigService } from '../google-sheet-config/google-sheet-config.service';
 
 @Injectable()
 export class SheetsRepository {
   auth: GoogleAuth<JSONClient>;
   sheets: sheets_v4.Sheets;
-  spreadsheetId: string | undefined = process.env.GOOGLE_SHEETS_ID;
 
-  constructor() {
+  constructor(
+    private readonly googleSheetConfigService: GoogleSheetConfigService,
+  ) {
     const credentialsBase64 = process.env.GOOGLE_CREDENTIALS_JSON_BASE64;
 
     if (!credentialsBase64) {
@@ -42,9 +44,14 @@ export class SheetsRepository {
     this.sheets = google.sheets({ version: 'v4', auth: this.auth });
   }
 
+  private async getSpreadsheetId(): Promise<string | undefined> {
+    return this.googleSheetConfigService.getCurrentSheetId();
+  }
+
   async getSheetValues(range: string) {
+    const spreadsheetId = await this.getSpreadsheetId();
     const res = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId,
       range,
     });
 
@@ -52,8 +59,9 @@ export class SheetsRepository {
   }
 
   async updateSheetValues(range: string, values: any[][]) {
+    const spreadsheetId = await this.getSpreadsheetId();
     const res = await this.sheets.spreadsheets.values.update({
-      spreadsheetId: this.spreadsheetId,
+      spreadsheetId,
       range,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
