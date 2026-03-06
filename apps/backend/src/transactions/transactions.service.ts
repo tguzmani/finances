@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { TransactionsBinanceService } from './transactions-binance.service';
 import { JournalEntryCacheService } from '../journal-entry/journal-entry-cache.service';
+import { SheetUpdateService } from '../journal-entry/sheet-update.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
@@ -18,6 +19,7 @@ export class TransactionsService {
     private readonly emailRegistry: EmailServiceRegistry,
     private readonly binanceTransactions: TransactionsBinanceService,
     private readonly journalEntryCache: JournalEntryCacheService,
+    private readonly sheetUpdateService: SheetUpdateService,
   ) { }
 
   async findAll(query: QueryTransactionsDto) {
@@ -196,8 +198,23 @@ export class TransactionsService {
             });
             totalCreated++;
 
-            // Fire-and-forget: pre-compute journal entry classification if description exists
+            // Try auto sheet update and mark as registered if matched
             if (created.description) {
+              try {
+                const sheetResult = await this.sheetUpdateService.trySheetUpdate(created);
+                if (sheetResult) {
+                  await this.prisma.transaction.update({
+                    where: { id: created.id },
+                    data: { status: TransactionStatus.REGISTERED },
+                  });
+                  this.logger.log(`Auto-registered transaction ${created.id} via sheet update rule "${sheetResult.rule.name}"`);
+                  continue;
+                }
+              } catch (err) {
+                this.logger.error(`Sheet update failed for transaction ${created.id}: ${err.message}`);
+              }
+
+              // If no sheet rule matched, pre-compute journal entry classification
               void this.journalEntryCache.classifyAndCache(created).catch((err) =>
                 this.logger.error(`Failed to cache journal entry for synced transaction ${created.id}: ${err.message}`),
               );
@@ -294,6 +311,20 @@ export class TransactionsService {
         totalCreated++;
 
         if (created.description) {
+          try {
+            const sheetResult = await this.sheetUpdateService.trySheetUpdate(created);
+            if (sheetResult) {
+              await this.prisma.transaction.update({
+                where: { id: created.id },
+                data: { status: TransactionStatus.REGISTERED },
+              });
+              this.logger.log(`Auto-registered Binance transaction ${created.id} via sheet update rule "${sheetResult.rule.name}"`);
+              continue;
+            }
+          } catch (err) {
+            this.logger.error(`Sheet update failed for Binance transaction ${created.id}: ${err.message}`);
+          }
+
           void this.journalEntryCache.classifyAndCache(created).catch((err) =>
             this.logger.error(`Failed to cache journal entry for Binance transaction ${created.id}: ${err.message}`),
           );
