@@ -35,10 +35,16 @@ export class SheetUpdateService {
 
     const amount = Number(transaction.amount);
     const cell = await this.findAvailableCell(rule);
-
     const fullRange = `${rule.sheet}!${cell}`;
-    this.logger.log(`Sheet update: writing ${amount} to ${fullRange} via rule "${rule.name}"`);
-    await this.sheetsRepository.updateSheetValues(fullRange, [[amount]]);
+
+    if (rule.accumulate) {
+      const formula = await this.buildAccumulatedFormula(fullRange, amount);
+      this.logger.log(`Sheet update: accumulating ${amount} to ${fullRange} via rule "${rule.name}" → ${formula}`);
+      await this.sheetsRepository.updateSheetValues(fullRange, [[formula]]);
+    } else {
+      this.logger.log(`Sheet update: writing ${amount} to ${fullRange} via rule "${rule.name}"`);
+      await this.sheetsRepository.updateSheetValues(fullRange, [[amount]]);
+    }
 
     return { rule, cell: fullRange, amount };
   }
@@ -112,6 +118,32 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
       this.logger.error(`LLM match failed: ${error.message}`);
       return null;
     }
+  }
+
+  private async buildAccumulatedFormula(fullRange: string, amount: number): Promise<string> {
+    const values = await this.sheetsRepository.getSheetValues(fullRange);
+    const currentValue = values?.[0]?.[0]?.toString().trim() ?? '';
+    const formatted = amount.toFixed(2);
+
+    // Cell is empty or contains "$ -" (Google Sheets empty currency format)
+    if (!currentValue || currentValue === '$ -' || currentValue === '$') {
+      return `=${formatted}`;
+    }
+
+    // Cell already has a formula like "=6.99" or "=6.99+10.00"
+    if (currentValue.startsWith('=')) {
+      return `${currentValue}+${formatted}`;
+    }
+
+    // Cell has a plain number (e.g., "$6.99" or "6.99")
+    const existing = parseFloat(currentValue.replace(/[$,]/g, ''));
+    if (!isNaN(existing)) {
+      return `=${existing.toFixed(2)}+${formatted}`;
+    }
+
+    // Fallback: start fresh
+    this.logger.warn(`Unexpected cell value "${currentValue}" at ${fullRange}, starting fresh`);
+    return `=${formatted}`;
   }
 
   private async findAvailableCell(rule: SheetUpdateRule): Promise<string> {

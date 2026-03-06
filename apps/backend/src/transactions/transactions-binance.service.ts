@@ -10,6 +10,7 @@ export interface BinanceTransaction {
   type: TransactionType;
   method: PaymentMethod;
   platform: TransactionPlatform;
+  description?: string;
 }
 
 @Injectable()
@@ -78,15 +79,22 @@ export class TransactionsBinanceService {
         return [];
       }
 
-      return response.map((p: any) => ({
-        date: new Date(p.transactionTime),
-        amount: parseFloat(p.amount),
-        currency: p.currency,
-        transactionId: p.transactionId || p.orderId,
-        type: TransactionType.INCOME,
-        method: PaymentMethod.BINANCE_PAY,
-        platform: TransactionPlatform.BINANCE,
-      }));
+      return response.map((p: any) => {
+        const amount = parseFloat(p.amount);
+        const currency = p.currency;
+        const isCodebay = amount === 800 && currency === 'USDC';
+
+        return {
+          date: new Date(p.transactionTime),
+          amount,
+          currency,
+          transactionId: p.transactionId || p.orderId,
+          type: TransactionType.INCOME,
+          method: PaymentMethod.BINANCE_PAY,
+          platform: TransactionPlatform.BINANCE,
+          ...(isCodebay && { description: 'Codebay' }),
+        };
+      });
     } catch (err) {
       this.logger.error(`Failed to fetch Binance Pay: ${(err as Error).message}`);
       return [];

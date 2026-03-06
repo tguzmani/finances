@@ -50,7 +50,7 @@ export class GooglePlayParser {
         platform: TransactionPlatform.BANK_OF_AMERICA,
         method: PaymentMethod.CREDIT_CARD,
         type: TransactionType.EXPENSE,
-        description: serviceName,
+        description: `Google Play - ${serviceName}`,
       };
     } catch (error) {
       this.logger.error(`Error parsing Google Play email: ${error.message}`);

@@ -278,7 +278,7 @@ export class TransactionsService {
 
     for (const tx of allTransactions) {
       try {
-        await this.prisma.transaction.create({
+        const created = await this.prisma.transaction.create({
           data: {
             date: tx.date,
             amount: tx.amount,
@@ -288,9 +288,16 @@ export class TransactionsService {
             method: tx.method,
             type: tx.type,
             status: TransactionStatus.NEW,
+            description: tx.description || null,
           },
         });
         totalCreated++;
+
+        if (created.description) {
+          void this.journalEntryCache.classifyAndCache(created).catch((err) =>
+            this.logger.error(`Failed to cache journal entry for Binance transaction ${created.id}: ${err.message}`),
+          );
+        }
       } catch (err) {
         if (err.code === 'P2002') {
           totalSkipped++; // Duplicate transactionId
