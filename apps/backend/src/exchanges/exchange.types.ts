@@ -1,3 +1,5 @@
+import { Exchange } from '@prisma/client';
+
 export enum ExchangeStatus {
   COMPLETED = 'COMPLETED',
   PROCESSING = 'PROCESSING',
@@ -21,4 +23,5 @@ export interface SyncResult {
   exchangesSkipped: number;
   transactionsCreated: number;
   errors: string[];
+  completedExchanges: Exchange[];
 }

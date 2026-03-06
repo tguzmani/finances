@@ -3,8 +3,10 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
 import { NewTransactionsEvent } from '../../transactions/events/new-transactions.event';
-import { NewExchangesEvent } from '../../exchanges/events/new-exchanges.event';
+import { ExchangesCompletedEvent } from '../../exchanges/events/exchanges-completed.event';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { ExchangesService } from '../../exchanges/exchanges.service';
+import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 import { TelegramTransactionsPresenter } from '../transactions/telegram-transactions.presenter';
 
 @Injectable()
@@ -16,6 +18,8 @@ export class TelegramNotificationListener {
     @InjectBot() private readonly bot: Telegraf,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly transactionsPresenter: TelegramTransactionsPresenter,
+    private readonly exchangesService: ExchangesService,
+    private readonly journalEntryService: JournalEntryService,
   ) {
     // Get chatId from environment variable
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
@@ -69,31 +73,73 @@ export class TelegramNotificationListener {
     }
   }
 
-  @OnEvent('exchanges.new')
-  async handleNewExchanges(event: NewExchangesEvent) {
+  @OnEvent('exchanges.completed')
+  async handleCompletedExchanges(event: ExchangesCompletedEvent) {
     if (!this.chatId) return;
 
     try {
       const { exchanges } = event;
 
-      // Send notification for each exchange
-      for (const exchange of exchanges) {
-        const amountGross = Number(exchange.amountGross).toFixed(2);
-        const unitPrice = Number(exchange.exchangeRate).toFixed(2);
-        const fiatAmount = Number(exchange.fiatAmount).toFixed(2);
+      // 1. Calculate WAVG and metrics
+      const metrics = this.exchangesService.calculateRegisterMetrics(exchanges);
+      const { wavg, sumFormula, totalAmount, terminalList } = metrics;
+      const exchangeIds = exchanges.map(e => e.id);
 
-        const message =
-          `💱 Sold ${amountGross} USDT for ${unitPrice} VES/USDT ` +
-          `for a total ${fiatAmount} VES`;
+      // 2. Create journal entry in Google Sheets
+      await this.journalEntryService.createExchangeJournalEntry(sumFormula, wavg);
 
-        await this.bot.telegram.sendMessage(this.chatId, message, {
-          parse_mode: 'HTML',
-        });
+      // 3. Register exchanges (mark as REGISTERED + save rate in DB + update Sheets)
+      await this.exchangesService.registerExchanges(exchangeIds, wavg);
 
-        this.logger.log(`Sent notification for exchange ${exchange.orderNumber} to chat ${this.chatId}`);
-      }
+      // 4. Build notification message
+      const exchangeLines = exchanges.map(e => {
+        const amountGross = Number(e.amountGross).toFixed(2);
+        const unitPrice = Number(e.exchangeRate).toFixed(2);
+        const fiatAmount = Number(e.fiatAmount).toFixed(2);
+        return `  ${amountGross} USDT @ ${unitPrice} = ${fiatAmount} VES`;
+      }).join('\n');
+
+      const message =
+        `<b>Exchanges Auto-Registered</b>\n\n` +
+        `${exchanges.length} exchange(s) registered:\n` +
+        `${exchangeLines}\n\n` +
+        `<b>WAVG Rate:</b> ${wavg} VES/USD\n` +
+        `<b>Total:</b> ${totalAmount.toFixed(2)} USD\n` +
+        `<b>Terminal:</b> ${terminalList}\n\n` +
+        `Journal entry created.\n` +
+        `Exchange rate saved: ${wavg} VES/USD`;
+
+      // 5. Send notification with "Update Banesco Balance" inline button
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: 'Update Banesco Balance',
+              callback_data: 'accounts_update_banesco',
+            },
+          ],
+        ],
+      };
+
+      await this.bot.telegram.sendMessage(this.chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+      });
+
+      this.logger.log(
+        `Auto-registered ${exchangeIds.length} exchanges with WAVG ${wavg}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send exchange notification: ${error.message}`);
+      this.logger.error(`Failed to auto-register exchanges: ${error.message}`);
+
+      try {
+        await this.bot.telegram.sendMessage(
+          this.chatId,
+          `Failed to auto-register exchanges: ${error.message}`,
+        );
+      } catch {
+        // Ignore notification failure
+      }
     }
   }
 }

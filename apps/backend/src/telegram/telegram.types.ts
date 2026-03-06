@@ -16,9 +16,6 @@ export interface ReviewSession {
   currentTransactionId?: number;
   currentExchangeId?: number;
   waitingForDescription?: boolean;
-  registerExchangeIds?: number[];
-  registerWavg?: number;
-  registerSumFormula?: string;
   // Transaction registration flow
   registerTransactionIds?: number[];
   registerTransactionIndex?: number;
@@ -35,8 +32,6 @@ export interface ReviewSession {
   reviewCurrentIndex?: number;
   // Undo functionality
   lastRegisteredTransactionIds?: number[];
-  lastRegisteredExchangeIds?: number[];
-  lastRegisteredWavg?: number;
   // Manual transaction entry flow
   manualTransactionState?: 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date';
   manualTransactionType?: 'INCOME' | 'EXPENSE' | 'TRANSFER';
@@ -99,7 +94,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'groups', description: 'View unregistered groups' },
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },
-  { command: 'register', description: 'Register reviewed items' },
+  { command: 'register', description: 'Register reviewed transactions' },
   { command: 'add_transaction', description: 'Add manual transaction' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },

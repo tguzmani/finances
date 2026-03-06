@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ExchangesService } from '../exchanges/exchanges.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { ExchangesCompletedEvent } from '../exchanges/events/exchanges-completed.event';
 import { TelegramExchangesService } from './exchanges/telegram-exchanges.service';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
 import { TelegramAccountsService } from './accounts/telegram-accounts.service';
@@ -19,6 +21,7 @@ export class TelegramService {
     private readonly telegramExchanges: TelegramExchangesService,
     private readonly telegramTransactions: TelegramTransactionsService,
     private readonly telegramAccounts: TelegramAccountsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async getStatus(): Promise<string> {
@@ -129,6 +132,14 @@ export class TelegramService {
         message += `   Skipped: ${exResult.exchangesSkipped}\n`;
         if (exResult.errors.length > 0) {
           message += `   ⚠️ Errors: ${exResult.errors.length}\n`;
+        }
+
+        // Emit event for completed exchanges (auto-registration)
+        if (exResult.completedExchanges.length > 0) {
+          this.eventEmitter.emit(
+            'exchanges.completed',
+            new ExchangesCompletedEvent(exResult.completedExchanges),
+          );
         }
       } else {
         message += `❌ Exchanges error: ${results[2].reason}\n`;

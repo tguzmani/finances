@@ -79,6 +79,7 @@ export class ExchangesService {
       exchangesSkipped: 0,
       transactionsCreated: 0,
       errors: [],
+      completedExchanges: [],
     };
 
     try {
@@ -110,10 +111,14 @@ export class ExchangesService {
 
           if (newStatus !== pendingExchange.status) {
             try {
-              await this.prisma.exchange.update({
+              const updatedExchange = await this.prisma.exchange.update({
                 where: { id: pendingExchange.id },
                 data: { status: newStatus },
               });
+
+              if (newStatus === ExchangeStatus.REVIEWED) {
+                result.completedExchanges.push(updatedExchange);
+              }
 
               result.exchangesUpdated++;
               this.logger.log(
@@ -155,7 +160,7 @@ export class ExchangesService {
             : mappedStatus;
 
           // Create Exchange
-          await this.prisma.exchange.create({
+          const createdExchange = await this.prisma.exchange.create({
             data: {
               orderNumber: trade.orderNumber,
               asset: trade.asset,
@@ -170,6 +175,10 @@ export class ExchangesService {
               binanceCreatedAt: new Date(trade.createTime),
             },
           });
+
+          if (status === ExchangeStatus.REVIEWED) {
+            result.completedExchanges.push(createdExchange);
+          }
 
           result.exchangesCreated++;
 
@@ -258,35 +267,5 @@ export class ExchangesService {
     this.logger.log(`Registered ${exchangeIds.length} exchanges with WAVG ${wavg}`);
 
     await this.sheetsService.updateBsDollarRate(wavg);
-  }
-
-  async updateExchangeRateOnly(wavg: number): Promise<{updated: boolean, value: number}> {
-    // Fetch latest exchange rate
-    const latestRate = await this.prisma.exchangeRate.findFirst({
-      orderBy: { date: 'desc' },
-    });
-
-    // Round wavg to match database precision (Decimal 10,2)
-    const roundedWavg = Math.round(wavg * 100) / 100;
-
-    // If latest rate exists and has same value, return no update
-    if (latestRate && Number(latestRate.value) === roundedWavg) {
-      this.logger.log(`Exchange rate unchanged: ${roundedWavg} VES/USD`);
-      return { updated: false, value: roundedWavg };
-    }
-
-    // Save new rate
-    await this.prisma.exchangeRate.create({
-      data: {
-        value: roundedWavg,
-        source: ExchangeRateSource.INTERNAL
-      },
-    });
-
-    this.logger.log(`Saved new exchange rate: ${roundedWavg} VES/USD`);
-
-    await this.sheetsService.updateBsDollarRate(roundedWavg);
-
-    return { updated: true, value: roundedWavg };
   }
 }

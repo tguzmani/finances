@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExchangesService } from '../../exchanges/exchanges.service';
 import { TelegramExchangesPresenter } from './telegram-exchanges.presenter';
-import { ExchangeStatus, Exchange } from '@prisma/client';
+import { ExchangeStatus } from '@prisma/client';
 
 @Injectable()
 export class TelegramExchangesService {
@@ -11,7 +11,6 @@ export class TelegramExchangesService {
     private readonly exchangesService: ExchangesService,
     private readonly presenter: TelegramExchangesPresenter,
   ) {}
-
 
   async getRecentExchangesList(showAll = false): Promise<string> {
     try {
@@ -32,32 +31,7 @@ export class TelegramExchangesService {
     }
   }
 
-  // Register flow methods
   async getReviewedExchanges() {
     return this.exchangesService.findByStatus(ExchangeStatus.REVIEWED);
-  }
-
-  calculateRegisterMetrics(exchanges: any[]) {
-    return this.exchangesService.calculateRegisterMetrics(exchanges);
-  }
-
-  formatRegisterSummary(metrics: any): string {
-    return this.presenter.formatRegisterSummary(metrics);
-  }
-
-  async registerExchanges(exchangeIds: number[], wavg: number): Promise<void> {
-    return this.exchangesService.registerExchanges(exchangeIds, wavg);
-  }
-
-  async updateExchangeRateOnly(wavg: number): Promise<{updated: boolean, value: number}> {
-    return this.exchangesService.updateExchangeRateOnly(wavg);
-  }
-
-  formatExchangeRateUpdated(value: number): string {
-    return this.presenter.formatExchangeRateUpdated(value);
-  }
-
-  formatExchangeRateUnchanged(value: number): string {
-    return this.presenter.formatExchangeRateUnchanged(value);
   }
 }

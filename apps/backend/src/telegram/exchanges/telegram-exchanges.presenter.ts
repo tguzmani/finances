@@ -1,14 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Exchange } from '@prisma/client';
 
-interface RegisterMetrics {
-  terminalList: string;
-  wavg: number;
-  sumFormula: string;
-  totalAmount: number;
-  count: number;
-}
-
 @Injectable()
 export class TelegramExchangesPresenter {
   formatRecentList(exchanges: Exchange[]): string {
@@ -40,31 +32,6 @@ export class TelegramExchangesPresenter {
     });
 
     return message;
-  }
-
-  formatRegisterSummary(metrics: RegisterMetrics): string {
-    return (
-      `<b>Register Exchanges</b>\n\n` +
-      `📊 <b>Summary:</b>\n` +
-      `Total exchanges: ${metrics.count}\n` +
-      `Total USD: ${metrics.totalAmount}\n` +
-      `Weighted Avg Rate: ${metrics.wavg} VES/USD\n\n` +
-      `Use the buttons below to copy data:`
-    );
-  }
-
-  formatExchangeRateUpdated(value: number): string {
-    return (
-      `✅ <b>Exchange Rate Updated!</b>\n\n` +
-      `New rate saved: ${value} VES/USD`
-    );
-  }
-
-  formatExchangeRateUnchanged(value: number): string {
-    return (
-      `ℹ️ <b>Exchange Rate Unchanged</b>\n\n` +
-      `${value} VES/USD already exists in the database`
-    );
   }
 
   private getStatusLabel(status: string): string {
