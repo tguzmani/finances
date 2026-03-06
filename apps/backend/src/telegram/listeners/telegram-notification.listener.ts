@@ -69,6 +69,30 @@ export class TelegramNotificationListener {
     }
   }
 
+  @OnEvent('transactions.auto-registered')
+  async handleAutoRegisteredTransactions(event: NewTransactionsEvent) {
+    if (!this.chatId) return;
+
+    try {
+      for (const transaction of event.transactions) {
+        const amount = Number(transaction.amount).toFixed(2);
+        const message =
+          `✅ <b>Auto-Registered</b>\n` +
+          `<b>${transaction.description}</b>\n\n` +
+          `${transaction.currency} ${amount}\n` +
+          `Status: Registered (sheet updated)`;
+
+        await this.bot.telegram.sendMessage(this.chatId, message, {
+          parse_mode: 'HTML',
+        });
+
+        this.logger.log(`Sent auto-registration notification for transaction ${transaction.id}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send auto-registration notification: ${error.message}`);
+    }
+  }
+
   @OnEvent('exchanges.new')
   async handleNewExchanges(event: NewExchangesEvent) {
     if (!this.chatId) return;

@@ -150,6 +150,7 @@ export class TransactionsService {
     let totalCreated = 0;
     let totalSkipped = 0;
     let totalEmails = 0;
+    const autoRegistered: Transaction[] = [];
 
     for (const service of services) {
       const platform = service.getBankPlatform();
@@ -203,10 +204,11 @@ export class TransactionsService {
               try {
                 const sheetResult = await this.sheetUpdateService.trySheetUpdate(created);
                 if (sheetResult) {
-                  await this.prisma.transaction.update({
+                  const registered = await this.prisma.transaction.update({
                     where: { id: created.id },
                     data: { status: TransactionStatus.REGISTERED },
                   });
+                  autoRegistered.push(registered);
                   this.logger.log(`Auto-registered transaction ${created.id} via sheet update rule "${sheetResult.rule.name}"`);
                   continue;
                 }
@@ -240,6 +242,7 @@ export class TransactionsService {
       emailsProcessed: totalEmails,
       transactionsCreated: totalCreated,
       transactionsSkipped: totalSkipped,
+      autoRegistered,
     };
   }
 
@@ -278,11 +281,13 @@ export class TransactionsService {
     transactionsCreated: number;
     transactionsSkipped: number;
     totalFetched: number;
+    autoRegistered: Transaction[];
   }> {
     this.logger.log(`Starting Binance sync with limit ${limitPerType} per type`);
 
     let totalCreated = 0;
     let totalSkipped = 0;
+    const autoRegistered: Transaction[] = [];
 
     // Fetch all types in parallel
     const [deposits, withdrawals, pays] = await Promise.all([
@@ -314,10 +319,11 @@ export class TransactionsService {
           try {
             const sheetResult = await this.sheetUpdateService.trySheetUpdate(created);
             if (sheetResult) {
-              await this.prisma.transaction.update({
+              const registered = await this.prisma.transaction.update({
                 where: { id: created.id },
                 data: { status: TransactionStatus.REGISTERED },
               });
+              autoRegistered.push(registered);
               this.logger.log(`Auto-registered Binance transaction ${created.id} via sheet update rule "${sheetResult.rule.name}"`);
               continue;
             }
@@ -346,6 +352,7 @@ export class TransactionsService {
       transactionsCreated: totalCreated,
       transactionsSkipped: totalSkipped,
       totalFetched: allTransactions.length,
+      autoRegistered,
     };
   }
 

@@ -43,6 +43,24 @@ export class TransactionsScheduler {
         `Skipped: ${result.transactionsSkipped}`
       );
 
+      // Emit event for auto-registered transactions
+      if (result.autoRegistered.length > 0) {
+        const totalAutoAmount = result.autoRegistered.reduce(
+          (sum, t) => sum + Number(t.amount), 0
+        );
+        this.eventEmitter.emit(
+          'transactions.auto-registered',
+          new NewTransactionsEvent(
+            result.autoRegistered,
+            totalAutoAmount,
+            result.autoRegistered[0].currency
+          )
+        );
+        this.logger.log(
+          `[EVENT] Emitted auto-registered event for ${result.autoRegistered.length} transactions`
+        );
+      }
+
       // Emit event if new transactions were created
       if (result.transactionsCreated > 0) {
         const allTransactions = await this.transactionsService.findAll({});
