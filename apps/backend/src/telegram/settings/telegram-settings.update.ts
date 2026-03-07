@@ -13,9 +13,18 @@ export class TelegramSettingsUpdate {
 
   async handleSettings(@Ctx() ctx: SessionContext) {
     try {
-      const keyboard = Markup.inlineKeyboard([
+      const buttons = [
         [Markup.button.callback('Update Sheets ID', 'settings_update_sheet_id')],
-      ]);
+      ];
+
+      const testCount = await this.settingsService.countTestTransactions();
+      if (testCount > 0) {
+        buttons.push([
+          Markup.button.callback(`Delete Test Tx (${testCount})`, 'settings_delete_test_tx'),
+        ]);
+      }
+
+      const keyboard = Markup.inlineKeyboard(buttons);
 
       await ctx.reply('<b>Settings</b>\n\nSelect an option:', {
         parse_mode: 'HTML',
@@ -37,6 +46,19 @@ export class TelegramSettingsUpdate {
     } catch (error) {
       this.logger.error(`Error starting Sheet ID update: ${error.message}`);
       await ctx.reply('Error starting update. Please try again.');
+    }
+  }
+
+  @Action('settings_delete_test_tx')
+  @UseGuards(TelegramAuthGuard)
+  async handleDeleteTestTx(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      const result = await this.settingsService.deleteTestTransactions();
+      await ctx.reply(result, { parse_mode: 'HTML' });
+    } catch (error) {
+      this.logger.error(`Error deleting test transactions: ${error.message}`);
+      await ctx.reply('Error deleting test transactions. Please try again.');
     }
   }
 

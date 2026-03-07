@@ -46,9 +46,6 @@ export class TelegramManualTransactionUpdate {
                 { text: '💸 Expense', callback_data: 'manual_type_EXPENSE' },
               ],
               [
-                { text: '🔄 Transfer', callback_data: 'manual_type_TRANSFER' },
-              ],
-              [
                 { text: '🚫 Cancel', callback_data: 'manual_cancel' },
               ],
             ],
@@ -68,7 +65,7 @@ export class TelegramManualTransactionUpdate {
   async handleManualType(@Ctx() ctx: SessionContext) {
     try {
       const match = (ctx as any).match as RegExpMatchArray;
-      const type = match[1] as 'INCOME' | 'EXPENSE' | 'TRANSFER';
+      const type = match[1] as 'INCOME' | 'EXPENSE';
 
       await ctx.answerCbQuery();
 
@@ -78,7 +75,6 @@ export class TelegramManualTransactionUpdate {
       const typeLabels: Record<string, string> = {
         'INCOME': '💰 Income',
         'EXPENSE': '💸 Expense',
-        'TRANSFER': '🔄 Transfer',
       };
       const typeLabel = typeLabels[type] || type;
 
@@ -678,7 +674,7 @@ export class TelegramManualTransactionUpdate {
     }
 
     // Format success message
-    const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸', 'TRANSFER': '🔄' };
+    const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸' };
     const typeIcon = typeIcons[transaction.type] || '💸';
     const platformLabel = this.getPlatformLabel(transaction.platform);
     const methodLabel = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
@@ -754,7 +750,6 @@ export class TelegramManualTransactionUpdate {
       const typeLabels: Record<string, string> = {
         'INCOME': '💰 Income',
         'EXPENSE': '💸 Expense',
-        'TRANSFER': '🔄 Transfer',
       };
       parts.push(`Type: ${typeLabels[ctx.session.manualTransactionType] || ctx.session.manualTransactionType}`);
     }

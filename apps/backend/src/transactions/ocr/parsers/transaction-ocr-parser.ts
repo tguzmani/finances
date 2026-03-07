@@ -10,6 +10,7 @@ export interface TransactionData {
   currency: string; // Always present (defaults to 'VES')
   ocrText: string; // Full OCR text for debugging
   paymentMethod: PaymentMethod | null;
+  caption?: string; // User-provided photo caption, used as description
 }
 
 @Injectable()

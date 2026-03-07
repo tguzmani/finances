@@ -39,7 +39,7 @@ export interface ReviewSession {
   lastRegisteredWavg?: number;
   // Manual transaction entry flow
   manualTransactionState?: 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date';
-  manualTransactionType?: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  manualTransactionType?: 'INCOME' | 'EXPENSE';
   manualTransactionPlatform?: string;
   manualTransactionCurrency?: string;
   manualTransactionMethod?: string;
@@ -68,6 +68,7 @@ export interface ReviewSession {
     currency: string;
     ocrText: string;
     paymentMethod: PaymentMethod | null;
+    caption?: string;
   };
   // Date/amount change flow (review)
   waitingForDateChange?: boolean;
@@ -84,6 +85,11 @@ export interface ReviewSession {
   settingsWaitingForSheetId?: boolean;
   // Convert flow
   convertWaitingForInput?: boolean;
+  // Transfer flow
+  transferState?: 'waiting_amount' | 'waiting_debit' | 'waiting_credit' | 'waiting_description';
+  transferAmount?: number;
+  transferDebitAccount?: string;
+  transferCreditAccount?: string;
 }
 
 export interface SessionContext extends Context {
@@ -106,6 +112,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },
   { command: 'add_transaction', description: 'Add manual transaction' },
+  { command: 'transfer', description: 'Register a transfer between accounts' },
   { command: 'settings', description: 'Update settings' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },

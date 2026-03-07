@@ -41,6 +41,8 @@ import { CommonModule } from '../common/common.module';
 import { GoogleSheetConfigModule } from '../google-sheet-config/google-sheet-config.module';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramSettingsService } from './settings/telegram-settings.service';
+import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
+import { TelegramTransferService } from './transfers/telegram-transfer.service';
 import { EquityModule } from '../equity/equity.module';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
@@ -141,6 +143,8 @@ import * as https from 'https';
     TelegramEquityScheduler,
     TelegramSettingsUpdate,
     TelegramSettingsService,
+    TelegramTransferUpdate,
+    TelegramTransferService,
   ],
   exports: [TelegramService],
 })

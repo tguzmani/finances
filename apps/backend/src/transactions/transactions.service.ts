@@ -471,4 +471,44 @@ export class TransactionsService {
       data: { imageUrl },
     });
   }
+
+  private async findTestTransactions() {
+    const testPattern = /^(test|prueba|testing)(\s|$|\d|_|-|ing)/i;
+    const exactMatch = /^(test|prueba|testing)$/i;
+
+    const allTransactions = await this.prisma.transaction.findMany({
+      where: { description: { not: null } },
+      select: { id: true, description: true },
+    });
+
+    return allTransactions.filter(t => {
+      const desc = t.description?.trim();
+      if (!desc) return false;
+      return exactMatch.test(desc) || testPattern.test(desc);
+    });
+  }
+
+  async countTestTransactions(): Promise<number> {
+    const testTransactions = await this.findTestTransactions();
+    return testTransactions.length;
+  }
+
+  async deleteTestTransactions(): Promise<{ deleted: number; descriptions: string[] }> {
+    const testTransactions = await this.findTestTransactions();
+
+    if (testTransactions.length === 0) {
+      return { deleted: 0, descriptions: [] };
+    }
+
+    const ids = testTransactions.map(t => t.id);
+
+    // Delete related journal entries first, then transactions
+    await this.prisma.journalEntry.deleteMany({ where: { transactionId: { in: ids } } });
+    await this.prisma.transaction.deleteMany({ where: { id: { in: ids } } });
+
+    return {
+      deleted: testTransactions.length,
+      descriptions: testTransactions.map(t => t.description),
+    };
+  }
 }

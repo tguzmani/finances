@@ -19,6 +19,7 @@ import { TransactionGroupsService } from '../../transaction-groups/transaction-g
 import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
+import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { B2StorageService } from '../../common/b2-storage.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
@@ -53,6 +54,7 @@ export class TelegramTransactionsUpdate {
     private readonly sheetUpdateService: SheetUpdateService,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly b2Storage: B2StorageService,
+    private readonly transferUpdate: TelegramTransferUpdate,
   ) { }
 
   @Command('transactions')
@@ -196,27 +198,27 @@ export class TelegramTransactionsUpdate {
       const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
       const hasGroup = transaction.groupId !== null;
+      const groupButton = hasGroup
+        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
+        : Markup.button.callback('📎 Group', 'group_transaction');
+
       const buttons = [];
 
-      buttons.push([
-        Markup.button.callback('❌ Reject', 'review_reject'),
-      ]);
-
-      if (hasGroup) {
-        buttons.push([
-          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
-        ]);
-      } else {
-        buttons.push([
-          Markup.button.callback('📎 Group', 'group_transaction'),
-        ]);
+      if (transaction.imageUrl) {
+        buttons.push([Markup.button.callback('🧾 View Bill', `view_bill_${transaction.id}`)]);
       }
 
       buttons.push([
-        Markup.button.callback('✏️ Change Name', 'review_name'),
         Markup.button.callback('📅 Change Date', 'review_date'),
-        Markup.button.callback('💲 Change Amount', 'review_amount'),
+        Markup.button.callback('✏️ Change Name', 'review_name'),
       ]);
+
+      buttons.push([
+        Markup.button.callback('💲 Change Amount', 'review_amount'),
+        groupButton,
+      ]);
+
+      buttons.push([Markup.button.callback('❌ Reject', 'review_reject')]);
 
       const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -928,6 +930,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Transfer flow - delegate to transfer handler
+    if (ctx.session.transferState) {
+      await this.transferUpdate.handleTextInput(ctx);
+      return;
+    }
+
     // Banesco balance update flow - delegate to accounts handler
     if (ctx.session.waitingForBanescoAmount) {
       await this.accountsUpdate.handleBanescoAmountInput(ctx);
@@ -1207,6 +1215,9 @@ export class TelegramTransactionsUpdate {
       const chatId = ctx.message.chat.id;
       this.pendingImageBuffers.set(chatId, imageBuffer);
 
+      // Attach caption to transaction data for later use as description
+      transactionData.caption = caption;
+
       if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
         // Pago Móvil: Show preview
         await this.handlePagoMovilTransaction(ctx, transactionData, isDebugMode);
@@ -1240,13 +1251,17 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
+      // Use caption as description if provided, otherwise fallback
+      const description = billData.caption
+        || (billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase');
+
       // Create transaction from bill data
       const transaction = await this.transactionsService.createManualTransaction({
         type: TransactionType.EXPENSE, // Bills are usually expenses
         platform: TransactionPlatform.BANESCO, // Default platform for bills
         currency: billData.currency,
         amount: billData.amount,
-        description: billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase',
+        description,
         method: PaymentMethod.DEBIT_CARD, // Default payment method
         date: billData.datetime,
       });
@@ -1265,20 +1280,20 @@ export class TelegramTransactionsUpdate {
         { parse_mode: 'HTML' }
       );
 
-      // Ask if user wants to add/change description
-      await ctx.reply(
-        '📝 Do you want to add a description?',
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
-                { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
-              ],
-            ],
-          },
-        }
-      );
+      if (billData.caption) {
+        // Caption was used as description, no need to ask
+        await ctx.reply(`📝 Description set from caption: "${billData.caption}"`);
+      } else {
+        // No caption provided, ask for description
+        ctx.session.currentTransactionId = transaction.id;
+        ctx.session.waitingForDescription = true;
+        ctx.session.reviewSingleItem = true;
+
+        await ctx.reply(
+          '✏️ Please type a description for this transaction:',
+          { reply_markup: { force_reply: true } }
+        );
+      }
 
       // Clear session
       ctx.session.pendingBillData = undefined;
@@ -1370,17 +1385,6 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  @Action('add_desc_skip')
-  @UseGuards(TelegramAuthGuard)
-  async handleAddDescriptionSkip(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery('Skipped');
-      await ctx.reply('⏭️ Description skipped. Transaction saved without description.');
-    } catch (error) {
-      this.logger.error(`Error handling skip description: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-    }
-  }
 
   @Action('pago_movil_save')
   @UseGuards(TelegramAuthGuard)
@@ -1411,6 +1415,13 @@ export class TelegramTransactionsUpdate {
           transactionId: pagoMovilData.transactionId,
         });
 
+        // If caption was provided, use it as description
+        if (pagoMovilData.caption) {
+          await this.transactionsService.update(transaction.id, {
+            description: pagoMovilData.caption,
+          });
+        }
+
         // Upload image to B2 if available
         await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
@@ -1424,20 +1435,20 @@ export class TelegramTransactionsUpdate {
           { parse_mode: 'HTML' }
         );
 
-        // Ask if user wants to add description
-        await ctx.reply(
-          '📝 Do you want to add a description?',
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
-                  { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
-                ],
-              ],
-            },
-          }
-        );
+        if (pagoMovilData.caption) {
+          // Caption was used as description, no need to ask
+          await ctx.reply(`📝 Description set from caption: "${pagoMovilData.caption}"`);
+        } else {
+          // No caption provided, ask for description
+          ctx.session.currentTransactionId = transaction.id;
+          ctx.session.waitingForDescription = true;
+          ctx.session.reviewSingleItem = true;
+
+          await ctx.reply(
+            '✏️ Please type a description for this transaction:',
+            { reply_markup: { force_reply: true } }
+          );
+        }
 
         // Clear pending data
         ctx.session.pendingBillData = undefined;
@@ -1655,26 +1666,31 @@ export class TelegramTransactionsUpdate {
       // Add "Go Back" button if there's history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
 
+      const groupButton = hasGroup
+        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
+        : Markup.button.callback('📎 Group', 'group_transaction');
+
       const buttons = [];
 
-      buttons.push(
-        [
-          Markup.button.callback('⏭️ Skip', 'review_skip'),
-          Markup.button.callback('❌ Reject', 'review_reject'),
-          Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
-        ]
-      );
-
-      // Add Group or Ungroup button
-      if (hasGroup) {
-        buttons.push([
-          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
-        ]);
-      } else {
-        buttons.push([
-          Markup.button.callback('📎 Group', 'group_transaction'),
-        ]);
+      if (fullTransaction?.imageUrl) {
+        buttons.push([Markup.button.callback('🧾 View Bill', `view_bill_${transaction.id}`)]);
       }
+
+      buttons.push([
+        Markup.button.callback('📅 Change Date', 'review_date'),
+        Markup.button.callback('✏️ Change Name', 'review_name'),
+      ]);
+
+      buttons.push([
+        Markup.button.callback('💲 Change Amount', 'review_amount'),
+        groupButton,
+      ]);
+
+      buttons.push([
+        Markup.button.callback('⏭️ Skip', 'review_skip'),
+        Markup.button.callback('❌ Reject', 'review_reject'),
+        Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
+      ]);
 
       if (hasHistory) {
         buttons.push([
@@ -1803,28 +1819,27 @@ export class TelegramTransactionsUpdate {
     const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
     const hasGroup = transaction.groupId !== null;
+    const groupButton = hasGroup
+      ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
+      : Markup.button.callback('📎 Group', 'group_transaction');
 
     const buttons = [];
 
-    buttons.push([
-      Markup.button.callback('❌ Reject', 'review_reject'),
-    ]);
-
-    if (hasGroup) {
-      buttons.push([
-        Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
-      ]);
-    } else {
-      buttons.push([
-        Markup.button.callback('📎 Group', 'group_transaction'),
-      ]);
+    if (transaction.imageUrl) {
+      buttons.push([Markup.button.callback('🧾 View Bill', `view_bill_${transaction.id}`)]);
     }
 
     buttons.push([
-      Markup.button.callback('✏️ Change Name', 'review_name'),
       Markup.button.callback('📅 Change Date', 'review_date'),
-      Markup.button.callback('💲 Change Amount', 'review_amount'),
+      Markup.button.callback('✏️ Change Name', 'review_name'),
     ]);
+
+    buttons.push([
+      Markup.button.callback('💲 Change Amount', 'review_amount'),
+      groupButton,
+    ]);
+
+    buttons.push([Markup.button.callback('❌ Reject', 'review_reject')]);
 
     const keyboard = Markup.inlineKeyboard(buttons);
 
@@ -1877,30 +1892,34 @@ export class TelegramTransactionsUpdate {
 
       // Check if transaction has a group
       const hasGroup = transaction.groupId !== null;
+      const groupButton = hasGroup
+        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
+        : Markup.button.callback('📎 Group', 'group_transaction');
 
       // Check if there's still more history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
 
       const buttons = [];
 
-      buttons.push(
-        [
-          Markup.button.callback('⏭️ Skip', 'review_skip'),
-          Markup.button.callback('❌ Reject', 'review_reject'),
-          Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
-        ]
-      );
-
-      // Add Group or Ungroup button
-      if (hasGroup) {
-        buttons.push([
-          Markup.button.callback('🔗 Ungroup', 'ungroup_transaction'),
-        ]);
-      } else {
-        buttons.push([
-          Markup.button.callback('📎 Group', 'group_transaction'),
-        ]);
+      if (transaction.imageUrl) {
+        buttons.push([Markup.button.callback('🧾 View Bill', `view_bill_${transaction.id}`)]);
       }
+
+      buttons.push([
+        Markup.button.callback('📅 Change Date', 'review_date'),
+        Markup.button.callback('✏️ Change Name', 'review_name'),
+      ]);
+
+      buttons.push([
+        Markup.button.callback('💲 Change Amount', 'review_amount'),
+        groupButton,
+      ]);
+
+      buttons.push([
+        Markup.button.callback('⏭️ Skip', 'review_skip'),
+        Markup.button.callback('❌ Reject', 'review_reject'),
+        Markup.button.callback('✅ Mark Reviewed', 'review_mark_reviewed'),
+      ]);
 
       if (hasHistory) {
         buttons.push([

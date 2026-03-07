@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Patch,
@@ -43,5 +44,10 @@ export class TransactionsController {
     @Body() dto: UpdateTransactionDto
   ) {
     return this.transactionsService.update(id, dto);
+  }
+
+  @Delete('tests')
+  deleteTestTransactions() {
+    return this.transactionsService.deleteTestTransactions();
   }
 }
