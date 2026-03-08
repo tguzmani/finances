@@ -7,12 +7,21 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { ExchangesService } from './exchanges.service';
+import { ExchangeRatesAggregatorService } from './exchange-rates-aggregator.service';
 import { QueryExchangesDto } from './dto/query-exchanges.dto';
 import { SyncExchangesDto } from './dto/sync-exchanges.dto';
 
 @Controller('exchanges')
 export class ExchangesController {
-  constructor(private readonly exchangesService: ExchangesService) {}
+  constructor(
+    private readonly exchangesService: ExchangesService,
+    private readonly ratesAggregator: ExchangeRatesAggregatorService,
+  ) {}
+
+  @Get('rates')
+  getRates() {
+    return this.ratesAggregator.getRatesWithDiscounts();
+  }
 
   @Get()
   findAll(@Query() query: QueryExchangesDto) {
