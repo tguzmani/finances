@@ -73,6 +73,14 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     accumulate: true,
   },
   {
+    name: 'render_subscription',
+    keywords: ['render'],
+    exactMatch: false,
+    sheet: 'Libro',
+    cells: [{ cell: 'F4' }],
+    accumulate: true,
+  },
+  {
     name: 'onemeta_income',
     keywords: ['onemeta'],
     exactMatch: false,

@@ -187,7 +187,7 @@ export class TelegramTransactionsService {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const date = dateString.charAt(0).toUpperCase() + dateString.slice(1);
@@ -196,7 +196,7 @@ export class TelegramTransactionsService {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'UTC'
+      timeZone: 'America/Caracas'
     });
 
     const amount = Number(transaction.amount).toFixed(2);

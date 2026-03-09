@@ -131,6 +131,7 @@ enum ExchangeRateSource {
   INTERNAL
   BINANCE_P2P
   BCV
+  BCV_EUR
 }
 
 model EquitySnapshot {

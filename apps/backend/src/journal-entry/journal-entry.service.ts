@@ -145,8 +145,8 @@ export class JournalEntryService {
 
   private formatDate(date: Date): string {
     const d = new Date(date);
-    const day = d.getUTCDate();
-    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+    const day = d.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' });
+    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' });
     return `${day}-${month}`;
   }
 }

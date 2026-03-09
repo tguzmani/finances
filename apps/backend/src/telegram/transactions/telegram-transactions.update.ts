@@ -944,8 +944,8 @@ export class TelegramTransactionsUpdate {
 
     // Manual transaction flow is handled by TelegramManualTransactionUpdate
     if (ctx.session.manualTransactionState === 'waiting_amount' ||
-        ctx.session.manualTransactionState === 'waiting_description' ||
-        ctx.session.manualTransactionState === 'waiting_custom_date') {
+      ctx.session.manualTransactionState === 'waiting_description' ||
+      ctx.session.manualTransactionState === 'waiting_custom_date') {
       await this.manualTransactionUpdate.handleManualAmountOrDescription(ctx);
       return;
     }
@@ -1215,8 +1215,10 @@ export class TelegramTransactionsUpdate {
       const chatId = ctx.message.chat.id;
       this.pendingImageBuffers.set(chatId, imageBuffer);
 
-      // Attach caption to transaction data for later use as description
-      transactionData.caption = caption;
+      // Store caption for use as description when saving
+      if (caption) {
+        transactionData.caption = caption;
+      }
 
       if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
         // Pago Móvil: Show preview
@@ -1269,29 +1271,46 @@ export class TelegramTransactionsUpdate {
       // Upload image to B2 if available
       await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
+      // Try auto sheet update if description matches a rule
+      let statusText = '<i>Status: Unreviewed</i>';
+      try {
+        const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
+        if (sheetResult) {
+          await this.transactionsService.update(transaction.id, {
+            status: TransactionStatus.REGISTERED,
+          });
+          statusText = `<i>Status: ✅ Auto-Registered (${sheetResult.cell})</i>`;
+        }
+      } catch (err) {
+        this.logger.error(`Sheet update error for bill: ${err.message}`);
+      }
+
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
 
       await ctx.reply(
         `✅ <b>Transaction saved!</b>\n\n` +
+        `Description: ${description}\n` +
         `Amount: ${billData.currency} ${billData.amount.toFixed(2)}${usdSuffix}\n` +
         `Date: ${billData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}\n` +
         `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
-        `<i>Status: Unreviewed</i>`,
+        statusText,
         { parse_mode: 'HTML' }
       );
 
-      if (billData.caption) {
-        // Caption was used as description, no need to ask
-        await ctx.reply(`📝 Description set from caption: "${billData.caption}"`);
-      } else {
-        // No caption provided, ask for description
-        ctx.session.currentTransactionId = transaction.id;
-        ctx.session.waitingForDescription = true;
-        ctx.session.reviewSingleItem = true;
-
+      // Ask if user wants to add/change description (skip if already auto-registered)
+      if (!statusText.includes('Auto-Registered')) {
         await ctx.reply(
-          '✏️ Please type a description for this transaction:',
-          { reply_markup: { force_reply: true } }
+          '📝 Do you want to add a description?',
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
+                  { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
+                ],
+              ],
+            },
+          }
         );
       }
 
@@ -1522,13 +1541,13 @@ export class TelegramTransactionsUpdate {
     // Format message with extracted data (display in Venezuela timezone)
     const dateStr = transactionData.datetime
       ? transactionData.datetime.toLocaleString('es-VE', {
-          timeZone: 'America/Caracas',
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })
+        timeZone: 'America/Caracas',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
       : 'Not detected';
 
     let amountStr: string;
@@ -1976,7 +1995,7 @@ export class TelegramTransactionsUpdate {
       ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
       // Combine transactions and groups into a single chronologically ordered list
-      const combinedItems: Array<{type: 'transaction' | 'group', date: Date, id: number, data: any}> = [
+      const combinedItems: Array<{ type: 'transaction' | 'group', date: Date, id: number, data: any }> = [
         ...result.singleTransactions.map(tx => ({
           type: 'transaction' as const,
           date: new Date(tx.date),
@@ -2060,10 +2079,10 @@ export class TelegramTransactionsUpdate {
 
       // Format date as "1-Feb"
       const transactionDate = new Date(transaction.date);
-      const day = transactionDate.getUTCDate();
+      const day = transactionDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' });
       const monthShort = transactionDate.toLocaleDateString('en-US', {
         month: 'short',
-        timeZone: 'UTC'
+        timeZone: 'America/Caracas'
       });
       const dateFormatted = `${day}-${monthShort}`;
 
@@ -2129,7 +2148,7 @@ export class TelegramTransactionsUpdate {
 
       // If it's a group with monetary value, add copy buttons
       if (calculation.hasMonetaryValue && calculation.type !== 'NEUTRAL') {
-        const dateFormatted = `${groupDate.getUTCDate()}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
+        const dateFormatted = `${groupDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' })}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' })}`;
         buttons.push([{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any]);
         buttons.push([{ text: 'Copy Description', copy_text: { text: group.description } } as any]);
         buttons.push([{ text: `${calculation.totalAmount.toFixed(2)} USD`, copy_text: { text: calculation.excelFormula } } as any]);

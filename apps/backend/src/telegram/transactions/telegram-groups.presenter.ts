@@ -18,12 +18,12 @@ export class TelegramGroupsPresenter {
     for (const tx of group.transactions) {
       const txDate = new Date(tx.date);
 
-      const date = txDate.toLocaleDateString('es-VE', { timeZone: 'UTC' });
+      const date = txDate.toLocaleDateString('es-VE', { timeZone: 'America/Caracas' });
       const time = txDate.toLocaleTimeString('es-VE', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'UTC'
+        timeZone: 'America/Caracas'
       });
 
       const amount = Number(tx.amount).toFixed(2);
@@ -61,7 +61,7 @@ export class TelegramGroupsPresenter {
         message += `Amount: ${calculation.totalAmount.toFixed(2)} USD\n`;
       }
 
-      const dateFormatted = `${groupDate.getUTCDate()}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}`;
+      const dateFormatted = `${groupDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' })}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' })}`;
       message += `Date: ${dateFormatted}`;
     } else {
       // NEUTRAL group

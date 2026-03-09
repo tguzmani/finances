@@ -34,28 +34,37 @@ export class ExchangeRateBcvScheduler {
     const startTime = Date.now();
 
     try {
-      // Fetch BCV USD exchange rate
-      const rate = await this.bcvService.getUsdExchangeRate();
+      // Fetch BCV USD and EUR exchange rates in parallel
+      const [usdRate, eurRate] = await Promise.all([
+        this.bcvService.getUsdExchangeRate(),
+        this.bcvService.getEurExchangeRate(),
+      ]);
 
-      if (rate === null) {
-        this.logger.warn('[CRON] Failed to fetch BCV rate - service unavailable');
+      if (usdRate === null && eurRate === null) {
+        this.logger.warn('[CRON] Failed to fetch BCV rates - service unavailable');
         return;
       }
 
-      // Round to 2 decimal places (match database precision)
-      const roundedRate = Math.round(rate * 100) / 100;
+      // Store USD rate
+      if (usdRate !== null) {
+        const roundedUsd = Math.round(usdRate * 100) / 100;
+        await this.exchangeRateService.create(roundedUsd, ExchangeRateSource.BCV);
+        this.logger.log(`[CRON] Stored BCV USD rate: ${roundedUsd} VES/USD`);
+      } else {
+        this.logger.warn('[CRON] Failed to fetch BCV USD rate');
+      }
 
-      // Store rate with BCV source
-      await this.exchangeRateService.create(
-        roundedRate,
-        ExchangeRateSource.BCV
-      );
+      // Store EUR rate
+      if (eurRate !== null) {
+        const roundedEur = Math.round(eurRate * 100) / 100;
+        await this.exchangeRateService.create(roundedEur, ExchangeRateSource.BCV_EUR);
+        this.logger.log(`[CRON] Stored BCV EUR rate: ${roundedEur} VES/EUR`);
+      } else {
+        this.logger.warn('[CRON] Failed to fetch BCV EUR rate');
+      }
 
       const duration = Date.now() - startTime;
-      this.logger.log(
-        `[CRON] BCV rate sync completed in ${duration}ms - ` +
-        `Stored rate: ${roundedRate} VES/USD`
-      );
+      this.logger.log(`[CRON] BCV rate sync completed in ${duration}ms`);
 
     } catch (error) {
       const duration = Date.now() - startTime;

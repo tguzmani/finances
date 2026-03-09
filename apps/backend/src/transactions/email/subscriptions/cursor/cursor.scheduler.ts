@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TransactionPlatform, PaymentMethod, TransactionStatus, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { JournalEntryCacheService } from '../../../../journal-entry/journal-entry-cache.service';
+import { SheetUpdateService } from '../../../../journal-entry/sheet-update.service';
+import { NewTransactionsEvent } from '../../../events/new-transactions.event';
 
 @Injectable()
 export class CursorScheduler {
@@ -12,6 +15,8 @@ export class CursorScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journalEntryCache: JournalEntryCacheService,
+    private readonly sheetUpdateService: SheetUpdateService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // Run daily at 12:00 PM (noon) to check if we need to create transaction
@@ -66,10 +71,31 @@ export class CursorScheduler {
         },
       });
 
-      // Fire-and-forget: pre-compute journal entry classification
-      void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>
-        this.logger.error(`Failed to cache journal entry for Cursor subscription: ${err.message}`),
-      );
+      // Try auto sheet update (accumulate to Libro!F4)
+      try {
+        const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
+        if (sheetResult) {
+          const registered = await this.prisma.transaction.update({
+            where: { id: transaction.id },
+            data: { status: TransactionStatus.REGISTERED },
+          });
+          this.logger.log(`Auto-registered Cursor subscription via sheet update rule "${sheetResult.rule.name}"`);
+          this.eventEmitter.emit(
+            'transactions.auto-registered',
+            new NewTransactionsEvent([registered], Number(registered.amount), registered.currency),
+          );
+        } else {
+          // Fallback: pre-compute journal entry classification
+          void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>
+            this.logger.error(`Failed to cache journal entry for Cursor subscription: ${err.message}`),
+          );
+        }
+      } catch (err) {
+        this.logger.error(`Sheet update failed for Cursor subscription: ${err.message}`);
+        void this.journalEntryCache.classifyAndCache(transaction).catch((e) =>
+          this.logger.error(`Failed to cache journal entry for Cursor subscription: ${e.message}`),
+        );
+      }
 
       this.logger.log(`Created Cursor subscription transaction for ${year}-${month}`);
     } catch (error) {

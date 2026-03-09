@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ExchangesBcvService } from './exchanges-bcv.service';
-import { ExchangesBinanceService } from './exchanges-binance.service';
+import { ExchangeRateSource } from '@prisma/client';
 import { ExchangeRateService } from './exchange-rate.service';
 
 export interface RatesSnapshot {
@@ -28,32 +27,26 @@ export class ExchangeRatesAggregatorService {
   private readonly logger = new Logger(ExchangeRatesAggregatorService.name);
 
   constructor(
-    private readonly bcvService: ExchangesBcvService,
-    private readonly binanceService: ExchangesBinanceService,
     private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
   /**
-   * Get a snapshot of all exchange rates in parallel
+   * Get a snapshot of all exchange rates from the database
    */
   async getRatesSnapshot(): Promise<RatesSnapshot> {
-    this.logger.log('Fetching rates snapshot from all sources...');
+    this.logger.log('Fetching rates snapshot from database...');
 
-    // When selling USDT for VES, you need advertisers who are BUYING USDT (they give you VES)
-    // So tradeType should be 'BUY' not 'SELL'
-    // Note: Not using transAmount filter for now as it may refer to fiat amount, not asset amount
-    const results = await Promise.allSettled([
-      this.bcvService.getUsdExchangeRate(),
-      this.bcvService.getEurExchangeRate(),
-      this.binanceService.getAverageP2PRate('VES', 'USDT', 'BUY', 10),
-      this.exchangeRateService.findLatest(),
+    const [bcvUsdEntity, bcvEurEntity, binanceEntity, internalEntity] = await Promise.all([
+      this.exchangeRateService.findLatest(ExchangeRateSource.BCV),
+      this.exchangeRateService.findLatest(ExchangeRateSource.BCV_EUR),
+      this.exchangeRateService.findLatest(ExchangeRateSource.BINANCE_P2P),
+      this.exchangeRateService.findLatest(ExchangeRateSource.INTERNAL),
     ]);
 
-    const bcvUsd = results[0].status === 'fulfilled' ? results[0].value : null;
-    const bcvEur = results[1].status === 'fulfilled' ? results[1].value : null;
-    const binanceVesUsdt = results[2].status === 'fulfilled' ? results[2].value : null;
-    const internalRateEntity = results[3].status === 'fulfilled' ? results[3].value : null;
-    const internalRate = internalRateEntity ? Number(internalRateEntity.value) : null;
+    const bcvUsd = bcvUsdEntity ? Number(bcvUsdEntity.value) : null;
+    const bcvEur = bcvEurEntity ? Number(bcvEurEntity.value) : null;
+    const binanceVesUsdt = binanceEntity ? Number(binanceEntity.value) : null;
+    const internalRate = internalEntity ? Number(internalEntity.value) : null;
 
     this.logger.log(
       `Rates snapshot: BCV USD=${bcvUsd}, BCV EUR=${bcvEur}, Binance VES/USDT=${binanceVesUsdt}, Internal=${internalRate}`

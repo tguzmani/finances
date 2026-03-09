@@ -16,6 +16,8 @@ import { GooglePlayParser } from './email/subscriptions/google-play/google-play.
 import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic-email.service';
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
 import { CursorScheduler } from './email/subscriptions/cursor/cursor.scheduler';
+import { RenderEmailService } from './email/subscriptions/render/render-email.service';
+import { RenderParser } from './email/subscriptions/render/render.parser';
 import { OneMetaEmailService } from './email/incomes/onemeta/onemeta-email.service';
 import { OneMetaParser } from './email/incomes/onemeta/onemeta.parser';
 import { CommonModule } from '../common/common.module';
@@ -49,6 +51,9 @@ import { TransactionSearchService } from './transaction-search.service';
 
     CursorScheduler,
 
+    RenderEmailService,
+    RenderParser,
+
     OneMetaEmailService,
     OneMetaParser,
 
@@ -73,12 +78,14 @@ export class TransactionsModule {
     private readonly bofaService: BofaEmailService,
     private readonly googlePlayService: GooglePlayEmailService,
     private readonly anthropicService: AnthropicEmailService,
+    private readonly renderService: RenderEmailService,
     private readonly oneMetaService: OneMetaEmailService,
   ) {
     this.registry.register(this.banescoService);
     this.registry.register(this.bofaService);
     this.registry.register(this.googlePlayService);
     this.registry.register(this.anthropicService);
+    this.registry.register(this.renderService);
     this.registry.register(this.oneMetaService);
   }
 }

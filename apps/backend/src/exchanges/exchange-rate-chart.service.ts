@@ -14,7 +14,8 @@ export class ExchangeRateChartService {
     grid: 'rgba(255, 255, 255, 0.08)',
     internal: '#00d4aa', // Cyan/teal for internal rates
     binance: '#ff9f40', // Orange for Binance P2P
-    bcv: '#ff5a5f', // Red for BCV official rate
+    bcv: '#ff5a5f', // Red for BCV official USD rate
+    bcvEur: '#a855f7', // Purple for BCV official EUR rate
   };
 
   // QuickChart API endpoint
@@ -53,8 +54,12 @@ export class ExchangeRateChartService {
         .filter((r) => r.source === ExchangeRateSource.BCV)
         .sort((a, b) => a.date.getTime() - b.date.getTime());
 
+      const bcvEurRates = recentRates
+        .filter((r) => r.source === ExchangeRateSource.BCV_EUR)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
       this.logger.log(
-        `Found ${internalRates.length} internal, ${binanceRates.length} Binance P2P, and ${bcvRates.length} BCV rates`
+        `Found ${internalRates.length} internal, ${binanceRates.length} Binance P2P, ${bcvRates.length} BCV USD, and ${bcvEurRates.length} BCV EUR rates`
       );
 
       // Build Chart.js configuration with dark theme
@@ -95,7 +100,7 @@ export class ExchangeRateChartService {
               pointBorderWidth: 2,
             },
             {
-              label: 'BCV Official',
+              label: 'BCV USD',
               data: bcvRates.map((r) => ({
                 x: r.date.toISOString(),
                 y: Number(r.value),
@@ -107,6 +112,22 @@ export class ExchangeRateChartService {
               pointRadius: 5,
               pointHoverRadius: 7,
               pointBackgroundColor: this.COLORS.bcv,
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+            },
+            {
+              label: 'BCV EUR',
+              data: bcvEurRates.map((r) => ({
+                x: r.date.toISOString(),
+                y: Number(r.value),
+              })),
+              borderColor: this.COLORS.bcvEur,
+              backgroundColor: this.COLORS.bcvEur + '20',
+              borderWidth: 3,
+              tension: 0.3,
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointBackgroundColor: this.COLORS.bcvEur,
               pointBorderColor: '#fff',
               pointBorderWidth: 2,
             },
@@ -149,9 +170,9 @@ export class ExchangeRateChartService {
               time: {
                 unit: days <= 7 ? 'day' : 'day',
                 displayFormats: {
-                  day: 'ddd M/D',
+                  day: 'M/d',
                 },
-                tooltipFormat: 'ddd M/D/YYYY HH:mm',
+                tooltipFormat: 'M/d/yyyy HH:mm',
               },
               grid: {
                 color: this.COLORS.grid,
