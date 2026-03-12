@@ -1,5 +1,6 @@
 import { Update, Ctx, Command } from 'nestjs-telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
+import { Markup } from 'telegraf';
 import { TelegramAuthGuard } from '../../guards/telegram-auth.guard';
 import { SessionContext } from '../../telegram.types';
 import { TelegramConvertService } from './telegram-convert.service';
@@ -29,8 +30,22 @@ export class TelegramConvertUpdate {
     try {
       ctx.session.convertWaitingForInput = false;
 
-      const message = await this.convertService.handleConvert(ctx.message.text);
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      const result = await this.convertService.handleConvert(ctx.message.text);
+
+      const buttons: any[][] = [];
+      if (result.bcvAmount) {
+        buttons.push([{ text: '📋 Copy BCV', copy_text: { text: result.bcvAmount.toFixed(2) } }]);
+      }
+      if (result.internalAmount) {
+        buttons.push([{ text: '📋 Copy Internal', copy_text: { text: result.internalAmount.toFixed(2) } }]);
+      }
+
+      const extra: any = { parse_mode: 'HTML' };
+      if (buttons.length > 0) {
+        extra.reply_markup = { inline_keyboard: buttons };
+      }
+
+      await ctx.reply(result.message, extra);
     } catch (error) {
       this.logger.error(`Error in convert: ${error.message}`);
       await ctx.reply('Error performing conversion. Please try again later.');

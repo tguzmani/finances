@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
 import { OpenRouterService } from '../common/open-router.service';
+import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { SHEET_UPDATE_RULES, SheetUpdateRule } from './sheet-update.rules';
 
 export interface SheetUpdateResult {
@@ -17,6 +18,7 @@ export class SheetUpdateService {
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
   /**
@@ -34,16 +36,17 @@ export class SheetUpdateService {
     if (!rule) return null;
 
     const amount = Number(transaction.amount);
+    const formulaFragment = await this.buildAmountFragment(transaction);
     const cell = await this.findAvailableCell(rule);
     const fullRange = `${rule.sheet}!${cell}`;
 
     if (rule.accumulate) {
-      const formula = await this.buildAccumulatedFormula(fullRange, amount);
-      this.logger.log(`Sheet update: accumulating ${amount} to ${fullRange} via rule "${rule.name}" → ${formula}`);
+      const formula = await this.buildAccumulatedFormula(fullRange, formulaFragment);
+      this.logger.log(`Sheet update: accumulating ${formulaFragment} to ${fullRange} via rule "${rule.name}" → ${formula}`);
       await this.sheetsRepository.updateSheetValues(fullRange, [[formula]]);
     } else {
-      this.logger.log(`Sheet update: writing ${amount} to ${fullRange} via rule "${rule.name}"`);
-      await this.sheetsRepository.updateSheetValues(fullRange, [[amount]]);
+      this.logger.log(`Sheet update: writing ${formulaFragment} to ${fullRange} via rule "${rule.name}"`);
+      await this.sheetsRepository.updateSheetValues(fullRange, [[`=${formulaFragment}`]]);
     }
 
     return { rule, cell: fullRange, amount };
@@ -120,30 +123,42 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     }
   }
 
-  private async buildAccumulatedFormula(fullRange: string, amount: number): Promise<string> {
-    const values = await this.sheetsRepository.getSheetValues(fullRange);
+  private async buildAmountFragment(transaction: Transaction): Promise<string> {
+    const amount = Number(transaction.amount);
+    if (transaction.currency !== 'VES') return amount.toFixed(2);
+
+    const latestRate = await this.exchangeRateService.findLatest();
+    const exchangeRate = latestRate ? Number(latestRate.value) : 0;
+    if (!exchangeRate) {
+      throw new Error(`No exchange rate available for VES conversion (transaction ${transaction.id})`);
+    }
+
+    return `${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`;
+  }
+
+  private async buildAccumulatedFormula(fullRange: string, fragment: string): Promise<string> {
+    const values = await this.sheetsRepository.getSheetValues(fullRange, 'FORMULA');
     const currentValue = values?.[0]?.[0]?.toString().trim() ?? '';
-    const formatted = amount.toFixed(2);
 
     // Cell is empty or contains "$ -" (Google Sheets empty currency format)
     if (!currentValue || currentValue === '$ -' || currentValue === '$') {
-      return `=${formatted}`;
+      return `=${fragment}`;
     }
 
     // Cell already has a formula like "=6.99" or "=6.99+10.00"
     if (currentValue.startsWith('=')) {
-      return `${currentValue}+${formatted}`;
+      return `${currentValue}+${fragment}`;
     }
 
     // Cell has a plain number (e.g., "$6.99" or "6.99")
     const existing = parseFloat(currentValue.replace(/[$,]/g, ''));
     if (!isNaN(existing)) {
-      return `=${existing.toFixed(2)}+${formatted}`;
+      return `=${existing.toFixed(2)}+${fragment}`;
     }
 
     // Fallback: start fresh
     this.logger.warn(`Unexpected cell value "${currentValue}" at ${fullRange}, starting fresh`);
-    return `=${formatted}`;
+    return `=${fragment}`;
   }
 
   private async findAvailableCell(rule: SheetUpdateRule): Promise<string> {

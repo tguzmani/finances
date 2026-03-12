@@ -5,6 +5,12 @@ import { TelegramConvertPresenter } from './telegram-convert.presenter';
 
 type Currency = 'VES' | 'USD' | 'EUR';
 
+export interface ConvertResponse {
+  message: string;
+  bcvAmount?: number | null;
+  internalAmount?: number | null;
+}
+
 export interface ConversionResult {
   inputAmount: number;
   inputCurrency: Currency;
@@ -32,11 +38,11 @@ export class TelegramConvertService {
     private readonly presenter: TelegramConvertPresenter,
   ) {}
 
-  async handleConvert(input: string): Promise<string> {
+  async handleConvert(input: string): Promise<ConvertResponse> {
     const parsed = this.parseInput(input);
 
     if (!parsed) {
-      return this.presenter.formatUsage();
+      return { message: this.presenter.formatUsage() };
     }
 
     const { amount, currency } = parsed;
@@ -45,7 +51,7 @@ export class TelegramConvertService {
     const result = this.convert(amount, currency, rates);
 
     if (!result) {
-      return this.presenter.formatMissingRate(currency);
+      return { message: this.presenter.formatMissingRate(currency) };
     }
 
     // Check Banesco availability
@@ -76,7 +82,11 @@ export class TelegramConvertService {
       this.logger.warn(`Could not check Banesco availability: ${error.message}`);
     }
 
-    return this.presenter.formatConversion(result);
+    return {
+      message: this.presenter.formatConversion(result),
+      bcvAmount: result.vesAmount,
+      internalAmount: result.vesAmountInternal,
+    };
   }
 
   private parseInput(input: string): { amount: number; currency: Currency } | null {

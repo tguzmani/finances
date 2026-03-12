@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
 import { TransactionsScheduler } from './transactions.scheduler';
+import { TransactionsImageCleanupService } from './transactions-image-cleanup.service';
+import { TransactionsImageCleanupScheduler } from './transactions-image-cleanup.scheduler';
 import { TransactionsBinanceService } from './transactions-binance.service';
 import { TransactionsBinanceScheduler } from './transactions-binance.scheduler';
 import { TransactionOcrParser } from './ocr/parsers/transaction-ocr-parser';
@@ -31,6 +33,8 @@ import { TransactionSearchService } from './transaction-search.service';
   providers: [
     TransactionsService,
     TransactionsScheduler,
+    TransactionsImageCleanupService,
+    TransactionsImageCleanupScheduler,
     TransactionsBinanceService,
     TransactionsBinanceScheduler,
     TransactionsSheetsService,

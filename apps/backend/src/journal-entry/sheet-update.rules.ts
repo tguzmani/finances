@@ -18,6 +18,7 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F6' }],
+    accumulate: true,
   },
   {
     name: 'gym',

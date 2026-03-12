@@ -22,6 +22,10 @@
 - **Single responsibility**: Don't mix concerns. Event emission, business logic, and orchestration should each live where they naturally belong.
 - **Always review for code smells** before finalizing changes. If something feels off, refactor it immediately — never leave smelly code behind.
 
+## Google Sheets Currency
+
+**CRITICAL:** Google Sheets values are ALWAYS in **USD**. Any amount written to Google Sheets MUST be converted to USD first. VES amounts must be divided by the current exchange rate before writing. Never write VES amounts directly to any sheet cell.
+
 ## Timezone Rules
 
 1. **Storage**: Always store in UTC (database stores plain timestamps, we treat them as UTC)

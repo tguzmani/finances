@@ -1427,7 +1427,7 @@ export class TelegramTransactionsUpdate {
 
       // Create Pago Móvil transaction
       try {
-        const transaction = await this.transactionsService.createFromPagoMovil({
+        let transaction = await this.transactionsService.createFromPagoMovil({
           date: pagoMovilData.datetime,
           amount: pagoMovilData.amount,
           currency: pagoMovilData.currency,
@@ -1439,10 +1439,26 @@ export class TelegramTransactionsUpdate {
           await this.transactionsService.update(transaction.id, {
             description: pagoMovilData.caption,
           });
+          // Reload transaction with description for sheet update
+          transaction = await this.transactionsService.findOne(transaction.id);
         }
 
         // Upload image to B2 if available
         await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
+
+        // Try auto sheet update if description matches a rule
+        let statusText = '';
+        try {
+          const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
+          if (sheetResult) {
+            await this.transactionsService.update(transaction.id, {
+              status: TransactionStatus.REGISTERED,
+            });
+            statusText = `\n\n<i>✅ Auto-Registered (${sheetResult.cell})</i>`;
+          }
+        } catch (err) {
+          this.logger.error(`Sheet update error for Pago Móvil: ${err.message}`);
+        }
 
         const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);
 
@@ -1450,7 +1466,8 @@ export class TelegramTransactionsUpdate {
           `✅ <b>Pago Móvil Transaction Saved!</b>\n\n` +
           `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}${pmUsdSuffix}\n` +
           `Reference: ${pagoMovilData.transactionId}\n` +
-          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}`,
+          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}` +
+          statusText,
           { parse_mode: 'HTML' }
         );
 

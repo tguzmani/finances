@@ -48,11 +48,12 @@ export class SheetsRepository {
     return this.googleSheetConfigService.getCurrentSheetId();
   }
 
-  async getSheetValues(range: string) {
+  async getSheetValues(range: string, valueRenderOption?: 'FORMATTED_VALUE' | 'UNFORMATTED_VALUE' | 'FORMULA') {
     const spreadsheetId = await this.getSpreadsheetId();
     const res = await this.sheets.spreadsheets.values.get({
       spreadsheetId,
       range,
+      valueRenderOption,
     });
 
     return res.data.values;
