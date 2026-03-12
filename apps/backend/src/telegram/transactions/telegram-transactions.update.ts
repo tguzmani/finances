@@ -1535,9 +1535,12 @@ export class TelegramTransactionsUpdate {
     const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Confirm to save:</i>';
     const keyboard = isDebugMode ? [] : [[{ text: '✅ OK', callback_data: 'pago_movil_save' }]];
 
+    const captionLine = transactionData.caption ? `📝 ${transactionData.caption}\n\n` : '';
+
     // Show preview with confirmation button
     await ctx.reply(
       `💸 <b>Pago Móvil Data (Preview)</b>\n\n` +
+      captionLine +
       `📅 Date: ${dateStr}\n` +
       `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}${usdSuffix}\n` +
       `🔢 Reference: ${transactionData.transactionId}\n\n` +
@@ -1584,9 +1587,12 @@ export class TelegramTransactionsUpdate {
       { text: '✏️ Enter Manually', callback_data: 'bill_manual' },
     ]];
 
+    const captionLine = transactionData.caption ? `📝 ${transactionData.caption}\n\n` : '';
+
     // Send parsed data with action buttons
     await ctx.reply(
       `🧾 <b>Bill Data (Preview)</b>\n\n` +
+      captionLine +
       `📅 Date: ${dateStr}\n` +
       `💰 Amount: ${amountStr}\n` +
       `🔢 Transaction ID: ${transactionIdStr}${methodStr}\n\n` +
