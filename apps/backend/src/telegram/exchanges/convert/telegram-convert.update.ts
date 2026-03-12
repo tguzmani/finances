@@ -1,6 +1,5 @@
-import { Update, Ctx, Command } from 'nestjs-telegraf';
+import { Update, Ctx, Command, Action } from 'nestjs-telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
-import { Markup } from 'telegraf';
 import { TelegramAuthGuard } from '../../guards/telegram-auth.guard';
 import { SessionContext } from '../../telegram.types';
 import { TelegramConvertService } from './telegram-convert.service';
@@ -35,9 +34,14 @@ export class TelegramConvertUpdate {
       const buttons: any[][] = [];
       if (result.bcvAmount) {
         buttons.push([{ text: '📋 Copy BCV', copy_text: { text: result.bcvAmount.toFixed(2) } }]);
+        ctx.session.convertVesAmount = result.bcvAmount;
+        ctx.session.convertRatesSnapshot = result.rates;
       }
       if (result.internalAmount) {
         buttons.push([{ text: '📋 Copy Internal', copy_text: { text: result.internalAmount.toFixed(2) } }]);
+      }
+      if (result.bcvAmount) {
+        buttons.push([{ text: '🏦 Check with Banesco', callback_data: 'convert_check_banesco' }]);
       }
 
       const extra: any = { parse_mode: 'HTML' };
@@ -49,6 +53,30 @@ export class TelegramConvertUpdate {
     } catch (error) {
       this.logger.error(`Error in convert: ${error.message}`);
       await ctx.reply('Error performing conversion. Please try again later.');
+    }
+  }
+
+  @Action('convert_check_banesco')
+  async handleCheckBanesco(@Ctx() ctx: SessionContext) {
+    const vesAmount = ctx.session.convertVesAmount;
+    const rates = ctx.session.convertRatesSnapshot;
+
+    if (!vesAmount || !rates) {
+      await ctx.answerCbQuery('No conversion data available');
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+      const banescoLine = await this.convertService.checkBanesco(vesAmount, rates);
+
+      const currentMessage = (ctx.callbackQuery as any)?.message;
+      if (currentMessage && 'text' in currentMessage) {
+        await ctx.editMessageText(currentMessage.text + '\n' + banescoLine, { parse_mode: 'HTML' });
+      }
+    } catch (error) {
+      this.logger.error(`Error checking Banesco: ${error.message}`);
+      await ctx.answerCbQuery('Error checking Banesco balance');
     }
   }
 }

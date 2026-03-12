@@ -4,7 +4,7 @@ import { ConversionResult } from './telegram-convert.service';
 @Injectable()
 export class TelegramConvertPresenter {
   formatConversion(result: ConversionResult): string {
-    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, vesAmountInternal, rates, banescoAvailability } = result;
+    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, vesAmountInternal, rates } = result;
 
     const rateLabel = inputCurrency === 'VES' ? '' : ' BCV';
     const outLabel = inputCurrency === 'VES' ? '' : ' Internal';
@@ -18,24 +18,17 @@ export class TelegramConvertPresenter {
       message += `${this.formatNumber(inputAmount)} ${inputCurrency} Internal = <b>${this.formatNumber(vesAmountInternal)} VES</b>\n`;
     }
 
-    // Banesco availability between conversions and rates
-    if (banescoAvailability) {
-      message += '\n';
-      if (banescoAvailability.available) {
-        message += `✅ Available. ${this.formatNumber(banescoAvailability.differenceVes)} VES (${this.formatNumber(banescoAvailability.differenceUsd)} USD) will remain in account`;
-      } else {
-        message += `❌ Not available. ${this.formatNumber(banescoAvailability.differenceVes)} VES (${this.formatNumber(banescoAvailability.differenceUsd)} USD) is required`;
-      }
-      message += '\n';
-    }
-
     message += `\n<i>Rate used: ${rateName} @ ${this.formatNumber(rateUsed)}</i>\n`;
     message += `<i>Internal rate: ${rates.internalRate ? this.formatNumber(rates.internalRate) : 'N/A'}</i>`;
-    if (banescoAvailability && !banescoAvailability.available && rates.binanceVesUsdt) {
-      message += `\n<i>Binance rate: ${this.formatNumber(rates.binanceVesUsdt)}</i>`;
-    }
 
     return message;
+  }
+
+  formatBanescoAvailability(availability: { available: boolean; differenceVes: number; differenceUsd: number }): string {
+    if (availability.available) {
+      return `\n✅ Available. ${this.formatNumber(availability.differenceVes)} VES (${this.formatNumber(availability.differenceUsd)} USD) will remain in account`;
+    }
+    return `\n❌ Not available. ${this.formatNumber(availability.differenceVes)} VES (${this.formatNumber(availability.differenceUsd)} USD) is required`;
   }
 
   formatUsage(): string {

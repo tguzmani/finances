@@ -2,10 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SheetsRepository } from '../../common/sheets.repository';
 import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
+import { LedgerRowCursorService } from '../../journal-entry/ledger-row-cursor.service';
 import { REAL_ACCOUNTS } from '../../accounts/account.constants';
 import { TRANSFER_RULES, TransferRule } from './transfer.rules';
-
-const LEDGER_RANGE = 'Libro!B:K';
 
 @Injectable()
 export class TelegramTransferService {
@@ -14,6 +13,7 @@ export class TelegramTransferService {
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
+    private readonly ledgerCursor: LedgerRowCursorService,
   ) {}
 
   async matchAccount(userInput: string): Promise<string | null> {
@@ -84,7 +84,7 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     creditAccount: string,
     description: string,
   ): Promise<void> {
-    const nextRow = await this.getNextRow();
+    const nextRow = await this.ledgerCursor.getNextRow();
     const dateFormatted = this.formatDate(new Date());
 
     const builder = new JournalEntryBuilder(nextRow);
@@ -102,14 +102,10 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
 
     this.logger.log(`Transfer: inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, rows);
+    this.ledgerCursor.advance(rows.length);
     this.logger.log(
       `Transfer registered: debit=${debitAccount}, credit=${creditAccount}, $${amount.toFixed(2)}`,
     );
-  }
-
-  private async getNextRow(): Promise<number> {
-    const values = await this.sheetsRepository.getSheetValues(LEDGER_RANGE);
-    return (values || []).length + 1;
   }
 
   private formatDate(date: Date): string {

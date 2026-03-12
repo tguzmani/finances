@@ -5,6 +5,7 @@ import { OpenRouterService } from '../common/open-router.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
+import { LedgerRowCursorService } from './ledger-row-cursor.service';
 import { AUTO_REGISTRATION_RULES, AutoRegistrationRule } from './auto-registration.rules';
 
 export interface AutoRegistrationResult {
@@ -12,8 +13,6 @@ export interface AutoRegistrationResult {
   debitAccount: string;
   creditAccount: string;
 }
-
-const LEDGER_RANGE = 'Libro!B:K';
 
 @Injectable()
 export class AutoRegistrationService {
@@ -23,6 +22,7 @@ export class AutoRegistrationService {
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly ledgerCursor: LedgerRowCursorService,
   ) {}
 
   /**
@@ -109,7 +109,7 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
 
     const [latestRate, nextRow] = await Promise.all([
       isVes ? this.exchangeRateService.findLatest() : Promise.resolve(null),
-      this.getNextRow(),
+      this.ledgerCursor.getNextRow(),
     ]);
 
     const exchangeRate = latestRate ? Number(latestRate.value) : 0;
@@ -140,12 +140,8 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
 
     this.logger.log(`Auto-registration: inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, rows);
+    this.ledgerCursor.advance(rows.length);
     this.logger.log(`Auto-registered transaction ${transaction.id} via rule "${rule.name}"`);
-  }
-
-  private async getNextRow(): Promise<number> {
-    const values = await this.sheetsRepository.getSheetValues(LEDGER_RANGE);
-    return (values || []).length + 1;
   }
 
   private formatDate(date: Date): string {

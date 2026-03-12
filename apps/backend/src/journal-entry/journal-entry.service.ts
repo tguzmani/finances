@@ -4,17 +4,18 @@ import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { JournalEntryLlmService } from './journal-entry-llm.service';
 import { JournalEntryCacheService } from './journal-entry-cache.service';
+import { LedgerRowCursorService } from './ledger-row-cursor.service';
 
 @Injectable()
 export class JournalEntryService {
   private readonly logger = new Logger(JournalEntryService.name);
-  private readonly LEDGER_RANGE = 'Libro!B:K';
 
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly llmService: JournalEntryLlmService,
     private readonly cacheService: JournalEntryCacheService,
+    private readonly ledgerCursor: LedgerRowCursorService,
   ) {}
 
   async createJournalEntry(transaction: Transaction): Promise<void> {
@@ -23,7 +24,7 @@ export class JournalEntryService {
 
     const [latestRate, nextRow] = await Promise.all([
       isVes ? this.exchangeRateService.findLatest() : Promise.resolve(null),
-      this.getNextRow(),
+      this.ledgerCursor.getNextRow(),
     ]);
 
     const exchangeRate = latestRate ? Number(latestRate.value) : 0;
@@ -95,11 +96,12 @@ export class JournalEntryService {
     const range = `Libro!B${nextRow}:K${nextRow + 1}`;
     this.logger.log(`Inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, [row1, row2]);
+    this.ledgerCursor.advance(2);
     this.logger.log(`Journal entry inserted for transaction ${transaction.id}`);
   }
 
   async createExchangeJournalEntry(sumFormula: string, wavg: number): Promise<void> {
-    const nextRow = await this.getNextRow();
+    const nextRow = await this.ledgerCursor.getNextRow();
 
     const dateFormatted = this.formatDate(new Date());
 
@@ -134,13 +136,8 @@ export class JournalEntryService {
     const range = `Libro!B${nextRow}:K${nextRow + 1}`;
     this.logger.log(`Inserting exchange journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, [row1, row2]);
+    this.ledgerCursor.advance(2);
     this.logger.log(`Exchange journal entry inserted: Binance a Banesco`);
-  }
-
-  private async getNextRow(): Promise<number> {
-    const values = await this.sheetsRepository.getSheetValues(this.LEDGER_RANGE);
-    const existingRows = values || [];
-    return existingRows.length + 1;
   }
 
   private formatDate(date: Date): string {

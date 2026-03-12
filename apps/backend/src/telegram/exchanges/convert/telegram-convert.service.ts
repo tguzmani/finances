@@ -9,6 +9,7 @@ export interface ConvertResponse {
   message: string;
   bcvAmount?: number | null;
   internalAmount?: number | null;
+  rates?: RatesSnapshot;
 }
 
 export interface ConversionResult {
@@ -21,11 +22,6 @@ export interface ConversionResult {
   vesAmount: number | null;
   vesAmountInternal: number | null;
   rates: RatesSnapshot;
-  banescoAvailability?: {
-    available: boolean;
-    differenceVes: number;
-    differenceUsd: number;
-  };
 }
 
 @Injectable()
@@ -54,39 +50,26 @@ export class TelegramConvertService {
       return { message: this.presenter.formatMissingRate(currency) };
     }
 
-    // Check Banesco availability
-    try {
-      const vesNeeded = result.vesAmount ?? result.inputAmount;
-      const banescoStatus = await this.banescoService.getBanescoStatus();
-      const difference = banescoStatus.estimatedBalance - vesNeeded;
-
-      if (difference >= 0) {
-        // Available — use internal rate for the remaining difference
-        const diffUsd = rates.internalRate ? difference / rates.internalRate : 0;
-        result.banescoAvailability = {
-          available: true,
-          differenceVes: difference,
-          differenceUsd: diffUsd,
-        };
-      } else {
-        // Not available — use binance rate for the shortfall
-        const shortfall = Math.abs(difference);
-        const diffUsd = rates.binanceVesUsdt ? shortfall / rates.binanceVesUsdt : 0;
-        result.banescoAvailability = {
-          available: false,
-          differenceVes: shortfall,
-          differenceUsd: diffUsd,
-        };
-      }
-    } catch (error) {
-      this.logger.warn(`Could not check Banesco availability: ${error.message}`);
-    }
-
     return {
       message: this.presenter.formatConversion(result),
       bcvAmount: result.vesAmount,
       internalAmount: result.vesAmountInternal,
+      rates,
     };
+  }
+
+  async checkBanesco(vesAmount: number, rates: RatesSnapshot): Promise<string> {
+    const banescoStatus = await this.banescoService.getBanescoStatus();
+    const difference = banescoStatus.estimatedBalance - vesAmount;
+
+    if (difference >= 0) {
+      const diffUsd = rates.internalRate ? difference / rates.internalRate : 0;
+      return this.presenter.formatBanescoAvailability({ available: true, differenceVes: difference, differenceUsd: diffUsd });
+    }
+
+    const shortfall = Math.abs(difference);
+    const diffUsd = rates.binanceVesUsdt ? shortfall / rates.binanceVesUsdt : 0;
+    return this.presenter.formatBanescoAvailability({ available: false, differenceVes: shortfall, differenceUsd: diffUsd });
   }
 
   private parseInput(input: string): { amount: number; currency: Currency } | null {

@@ -85,6 +85,8 @@ export interface ReviewSession {
   settingsWaitingForSheetId?: boolean;
   // Convert flow
   convertWaitingForInput?: boolean;
+  convertVesAmount?: number;
+  convertRatesSnapshot?: any;
   // Transfer flow
   transferState?: 'waiting_amount' | 'waiting_debit' | 'waiting_credit' | 'waiting_description';
   transferAmount?: number;

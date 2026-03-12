@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { ExchangeRateSource } from '@prisma/client';
 import { ExchangeRateService } from './exchange-rate.service';
 
@@ -25,15 +26,24 @@ export interface RatesWithDiscounts {
 @Injectable()
 export class ExchangeRatesAggregatorService {
   private readonly logger = new Logger(ExchangeRatesAggregatorService.name);
+  private readonly CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+  private cachedSnapshot: RatesSnapshot | null = null;
+  private cachedAt: number | null = null;
 
   constructor(
     private readonly exchangeRateService: ExchangeRateService,
   ) {}
 
   /**
-   * Get a snapshot of all exchange rates from the database
+   * Get a snapshot of all exchange rates, cached in memory.
+   * Returns cached version if still fresh, otherwise fetches from database.
    */
   async getRatesSnapshot(): Promise<RatesSnapshot> {
+    if (this.cachedSnapshot && this.cachedAt && (Date.now() - this.cachedAt) < this.CACHE_TTL_MS) {
+      this.logger.log('Returning cached rates snapshot');
+      return this.cachedSnapshot;
+    }
+
     this.logger.log('Fetching rates snapshot from database...');
 
     const [bcvUsdEntity, bcvEurEntity, binanceEntity, internalEntity] = await Promise.all([
@@ -52,13 +62,23 @@ export class ExchangeRatesAggregatorService {
       `Rates snapshot: BCV USD=${bcvUsd}, BCV EUR=${bcvEur}, Binance VES/USDT=${binanceVesUsdt}, Internal=${internalRate}`
     );
 
-    return {
+    this.cachedSnapshot = {
       bcvUsd,
       bcvEur,
       binanceVesUsdt,
       internalRate,
       timestamp: new Date(),
     };
+    this.cachedAt = Date.now();
+
+    return this.cachedSnapshot;
+  }
+
+  @OnEvent('exchange-rate.created')
+  invalidateCache(): void {
+    this.cachedSnapshot = null;
+    this.cachedAt = null;
+    this.logger.log('Rates snapshot cache invalidated');
   }
 
   /**

@@ -1,18 +1,24 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExchangeRate, ExchangeRateSource } from '@prisma/client';
 
 @Injectable()
 export class ExchangeRateService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(
     value: number,
     source: ExchangeRateSource = ExchangeRateSource.INTERNAL
   ): Promise<ExchangeRate> {
-    return this.prisma.exchangeRate.create({
+    const rate = await this.prisma.exchangeRate.create({
       data: { value, source },
     });
+    this.eventEmitter.emit('exchange-rate.created');
+    return rate;
   }
 
   async findAll(source?: ExchangeRateSource): Promise<ExchangeRate[]> {
