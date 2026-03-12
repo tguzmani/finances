@@ -87,6 +87,9 @@ export interface ReviewSession {
   convertWaitingForInput?: boolean;
   convertVesAmount?: number;
   convertRatesSnapshot?: any;
+  // Pago Móvil data parsing flow
+  pagoMovilWaiting?: boolean;
+  pagoMovilMessageId?: number;
   // Transfer flow
   transferState?: 'waiting_amount' | 'waiting_debit' | 'waiting_credit' | 'waiting_description';
   transferAmount?: number;
@@ -115,6 +118,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'register', description: 'Register reviewed items' },
   { command: 'add_transaction', description: 'Add manual transaction' },
   { command: 'transfer', description: 'Register a transfer between accounts' },
+  { command: 'pago_movil', description: 'Parse Pago Móvil payment data' },
   { command: 'settings', description: 'Update settings' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },

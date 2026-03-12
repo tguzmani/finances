@@ -8,6 +8,7 @@ import { TransactionsBinanceService } from './transactions-binance.service';
 import { TransactionsBinanceScheduler } from './transactions-binance.scheduler';
 import { TransactionOcrParser } from './ocr/parsers/transaction-ocr-parser';
 import { TransactionLlmParserService } from './ocr/parsers/transaction-llm-parser.service';
+import { PagoMovilLlmParserService } from './ocr/parsers/pago-movil-llm-parser.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { BanescoEmailService } from './email/banks/banesco/banesco-email.service';
 import { BanescoParser } from './email/banks/banesco/banesco.parser';
@@ -64,6 +65,7 @@ import { TransactionSearchService } from './transaction-search.service';
     // OCR - LLM-based parsing
     TransactionOcrParser,
     TransactionLlmParserService,
+    PagoMovilLlmParserService,
 
     // Search
     TransactionSearchService,
@@ -71,6 +73,7 @@ import { TransactionSearchService } from './transaction-search.service';
   exports: [
     TransactionsService,
     TransactionOcrParser,
+    PagoMovilLlmParserService,
     TransactionsSheetsService,
     TransactionSearchService,
   ],

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
+import Fuse from 'fuse.js';
 import { SheetsRepository } from '../common/sheets.repository';
-import { OpenRouterService } from '../common/open-router.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
@@ -17,13 +17,19 @@ export interface AutoRegistrationResult {
 @Injectable()
 export class AutoRegistrationService {
   private readonly logger = new Logger(AutoRegistrationService.name);
+  private readonly fuse: Fuse<AutoRegistrationRule>;
 
   constructor(
     private readonly sheetsRepository: SheetsRepository,
-    private readonly openRouter: OpenRouterService,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly ledgerCursor: LedgerRowCursorService,
-  ) {}
+  ) {
+    this.fuse = new Fuse(AUTO_REGISTRATION_RULES, {
+      keys: ['keywords', 'patterns'],
+      threshold: 0.4,
+      includeScore: true,
+    });
+  }
 
   /**
    * Attempts to auto-register a transaction by matching its description
@@ -35,7 +41,7 @@ export class AutoRegistrationService {
     if (!transaction.description) return null;
 
     const rule = this.simpleMatch(transaction.description)
-      ?? await this.llmMatch(transaction.description);
+      ?? this.fuzzyMatch(transaction.description);
 
     if (!rule) return null;
 
@@ -64,39 +70,15 @@ export class AutoRegistrationService {
     return null;
   }
 
-  private async llmMatch(description: string): Promise<AutoRegistrationRule | null> {
-    if (description.length > 60) return null;
+  private fuzzyMatch(description: string): AutoRegistrationRule | null {
+    const results = this.fuse.search(description);
+    if (results.length === 0) return null;
 
-    const rulesList = AUTO_REGISTRATION_RULES
-      .map((r, i) => `${i + 1}. ${r.patterns.join(' / ')}`)
-      .join('\n');
+    const best = results[0];
+    if (best.score !== undefined && best.score > 0.4) return null;
 
-    const prompt = `Given this transaction description: "${description}"
-
-Does it match any of these known transaction types (considering possible typos/variations)?
-${rulesList}
-
-Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
-
-    try {
-      const response = await this.openRouter.chat(
-        [{ role: 'user', content: prompt }],
-        { temperature: 0, maxTokens: 10 },
-      );
-
-      const answer = response.trim();
-      if (answer === 'none') return null;
-
-      const index = parseInt(answer, 10);
-      if (isNaN(index) || index < 1 || index > AUTO_REGISTRATION_RULES.length) return null;
-
-      const rule = AUTO_REGISTRATION_RULES[index - 1];
-      this.logger.log(`LLM match found: "${description}" → ${rule.name}`);
-      return rule;
-    } catch (error) {
-      this.logger.error(`LLM match failed: ${error.message}`);
-      return null;
-    }
+    this.logger.log(`Fuzzy match found: "${description}" → ${best.item.name} (score: ${best.score?.toFixed(3)})`);
+    return best.item;
   }
 
   private async createJournalEntry(

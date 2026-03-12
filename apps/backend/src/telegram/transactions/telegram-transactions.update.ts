@@ -20,6 +20,7 @@ import { TransactionGroupStatus } from '../../transaction-groups/transaction-gro
 import { TelegramGroupsPresenter } from './telegram-groups.presenter';
 import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
+import { TelegramPagoMovilUpdate } from '../pago-movil/telegram-pago-movil.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { B2StorageService } from '../../common/b2-storage.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
@@ -55,6 +56,7 @@ export class TelegramTransactionsUpdate {
     private readonly exchangeRateService: ExchangeRateService,
     private readonly b2Storage: B2StorageService,
     private readonly transferUpdate: TelegramTransferUpdate,
+    private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
   ) { }
 
   @Command('transactions')
@@ -912,6 +914,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Pago Móvil flow - delegate to pago móvil handler
+    if (ctx.session.pagoMovilWaiting) {
+      await this.pagoMovilUpdate.handleTextInput(ctx);
+      return;
+    }
+
     // /group flow - description input
     if (ctx.session.groupFlowWaitingForDescription) {
       await this.groupFlowUpdate.handleDescriptionInput(ctx);
@@ -1160,6 +1168,12 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
+    // Delegate to Pago Móvil handler if that flow is active
+    if (ctx.session.pagoMovilWaiting) {
+      await this.pagoMovilUpdate.handlePhoto(ctx);
+      return;
+    }
+
     try {
       // Get highest resolution photo
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
@@ -1279,7 +1293,7 @@ export class TelegramTransactionsUpdate {
           await this.transactionsService.update(transaction.id, {
             status: TransactionStatus.REGISTERED,
           });
-          statusText = `<i>Status: ✅ Auto-Registered (${sheetResult.cell})</i>`;
+          statusText = `<i>Status: ✅ Auto-Registered</i>`;
         }
       } catch (err) {
         this.logger.error(`Sheet update error for bill: ${err.message}`);
@@ -1454,7 +1468,7 @@ export class TelegramTransactionsUpdate {
             await this.transactionsService.update(transaction.id, {
               status: TransactionStatus.REGISTERED,
             });
-            statusText = `\n\n<i>✅ Auto-Registered (${sheetResult.cell})</i>`;
+            statusText = `\n\n<i>✅ Auto-Registered</i>`;
           }
         } catch (err) {
           this.logger.error(`Sheet update error for Pago Móvil: ${err.message}`);

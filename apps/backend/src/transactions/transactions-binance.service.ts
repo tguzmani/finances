@@ -73,15 +73,18 @@ export class TransactionsBinanceService {
 
   async getBinancePay(limit = 30): Promise<BinanceTransaction[]> {
     try {
-      const response = await this.binanceApi.getPayHistory({ limit });
+      const response = await this.binanceApi.getPayTransactions({ limit });
+      const transactions = response?.data;
 
-      if (!response || !Array.isArray(response)) {
+      if (!transactions || !Array.isArray(transactions)) {
         return [];
       }
 
-      return response.map((p: any) => {
-        const amount = parseFloat(p.amount);
+      return transactions.map((p: any) => {
+        const rawAmount = parseFloat(p.amount);
+        const amount = Math.abs(rawAmount);
         const currency = p.currency;
+        const isExpense = rawAmount < 0;
         const isCodebay = amount === 800 && currency === 'USDC';
 
         return {
@@ -89,7 +92,7 @@ export class TransactionsBinanceService {
           amount,
           currency,
           transactionId: p.transactionId || p.orderId,
-          type: TransactionType.INCOME,
+          type: isExpense ? TransactionType.EXPENSE : TransactionType.INCOME,
           method: PaymentMethod.BINANCE_PAY,
           platform: TransactionPlatform.BINANCE,
           ...(isCodebay && { description: 'Codebay' }),

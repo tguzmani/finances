@@ -19,6 +19,7 @@ import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.upda
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
+import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update';
 
 @Update()
 export class TelegramUpdate {
@@ -41,6 +42,7 @@ export class TelegramUpdate {
     private readonly equityUpdate: TelegramEquityUpdate,
     private readonly settingsUpdate: TelegramSettingsUpdate,
     private readonly transferUpdate: TelegramTransferUpdate,
+    private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
   ) { }
 
   @Command('start')
@@ -77,6 +79,7 @@ export class TelegramUpdate {
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
       '/transfer - Register a transfer between accounts\n' +
+      '/pago_movil - Parse Pago Móvil payment data\n' +
       '/settings - Update settings\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
@@ -175,6 +178,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleTransfer(@Ctx() ctx: SessionContext) {
     await this.transferUpdate.handleTransfer(ctx);
+  }
+
+  @Command('pago_movil')
+  @UseGuards(TelegramAuthGuard)
+  async handlePagoMovil(@Ctx() ctx: SessionContext) {
+    await this.pagoMovilUpdate.handlePagoMovil(ctx);
   }
 
   @Command('sync')
@@ -304,6 +313,18 @@ export class TelegramUpdate {
 
       // Clear session
       this.baseHandler.clearSession(ctx);
+    } catch (error) {
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('pago_movil_cancel')
+  @UseGuards(TelegramAuthGuard)
+  async handlePagoMovilCancel(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Cancelled');
+      ctx.session.pagoMovilWaiting = false;
+      await ctx.editMessageText('🚫 Pago Móvil cancelled.');
     } catch (error) {
       await ctx.answerCbQuery('Error');
     }

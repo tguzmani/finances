@@ -33,6 +33,7 @@
     "class-validator": "^0.14.3",
     "dayjs": "^1.11.19",
     "dotenv": "^17.2.3",
+    "fuse.js": "^7.1.0",
     "google-auth-library": "^10.5.0",
     "googleapis": "^171.4.0",
     "imapflow": "^1.2.8",

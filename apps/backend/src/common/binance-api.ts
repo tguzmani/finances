@@ -47,14 +47,12 @@ export class BinanceApiClient {
     }
   }
 
-  // Binance Pay (NEW - needs research if available)
-  async getPayHistory(params?: any) {
+  // Binance Pay
+  async getPayTransactions(params?: any) {
     try {
-      // Note: May require different endpoint or Binance Pay specific API
-      // Research: https://developers.binance.com/docs/binance-pay
-      return await (this.client as any).getPayHistory?.(params);
+      return await this.client.getPayTransactions(params);
     } catch (err) {
-      this.logger.error(`getPayHistory failed: ${(err as Error).message}`);
+      this.logger.error(`getPayTransactions failed: ${(err as Error).message}`);
       throw err;
     }
   }

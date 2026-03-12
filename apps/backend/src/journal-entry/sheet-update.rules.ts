@@ -89,6 +89,14 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     cells: [{ cell: 'F26' }, { cell: 'F30' }],
   },
   {
+    name: 'jardin',
+    keywords: ['jardin', 'jardín'],
+    exactMatch: false,
+    sheet: 'Libro',
+    cells: [{ cell: 'G25' }],
+    accumulate: true,
+  },
+  {
     name: 'codebay_income',
     keywords: ['codebay'],
     exactMatch: true,

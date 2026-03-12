@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
+import Fuse from 'fuse.js';
 import { SheetsRepository } from '../common/sheets.repository';
-import { OpenRouterService } from '../common/open-router.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { SHEET_UPDATE_RULES, SheetUpdateRule } from './sheet-update.rules';
 
@@ -14,12 +14,18 @@ export interface SheetUpdateResult {
 @Injectable()
 export class SheetUpdateService {
   private readonly logger = new Logger(SheetUpdateService.name);
+  private readonly fuse: Fuse<SheetUpdateRule>;
 
   constructor(
     private readonly sheetsRepository: SheetsRepository,
-    private readonly openRouter: OpenRouterService,
     private readonly exchangeRateService: ExchangeRateService,
-  ) {}
+  ) {
+    this.fuse = new Fuse(SHEET_UPDATE_RULES, {
+      keys: ['keywords'],
+      threshold: 0.4,
+      includeScore: true,
+    });
+  }
 
   /**
    * Attempts to match a transaction description against sheet update rules.
@@ -31,7 +37,7 @@ export class SheetUpdateService {
     if (!transaction.description) return null;
 
     const rule = this.simpleMatch(transaction.description)
-      ?? await this.llmMatch(transaction.description);
+      ?? this.fuzzyMatch(transaction.description);
 
     if (!rule) return null;
 
@@ -83,44 +89,21 @@ export class SheetUpdateService {
     return null;
   }
 
-  private async llmMatch(description: string): Promise<SheetUpdateRule | null> {
-    if (description.length > 60) return null;
+  private fuzzyMatch(description: string): SheetUpdateRule | null {
+    const results = this.fuse.search(description);
+    if (results.length === 0) return null;
 
-    const rulesList = SHEET_UPDATE_RULES
-      .map((r, i) => {
-        const matchNote = r.exactMatch ? ' (exact match only)' : '';
-        return `${i + 1}. ${r.keywords.join(' ')}${matchNote}`;
-      })
-      .join('\n');
+    const best = results[0];
+    if (best.score !== undefined && best.score > 0.4) return null;
 
-    const prompt = `Given this transaction description: "${description}"
-
-Does it match any of these known transaction types (considering possible typos/variations)?
-${rulesList}
-
-Important: "exact match only" means the description must refer to that concept alone, not combined with other words.
-
-Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
-
-    try {
-      const response = await this.openRouter.chat(
-        [{ role: 'user', content: prompt }],
-        { temperature: 0, maxTokens: 10 },
-      );
-
-      const answer = response.trim();
-      if (answer === 'none') return null;
-
-      const index = parseInt(answer, 10);
-      if (isNaN(index) || index < 1 || index > SHEET_UPDATE_RULES.length) return null;
-
-      const rule = SHEET_UPDATE_RULES[index - 1];
-      this.logger.log(`LLM match found: "${description}" → ${rule.name}`);
-      return rule;
-    } catch (error) {
-      this.logger.error(`LLM match failed: ${error.message}`);
-      return null;
+    const rule = best.item;
+    if (rule.exactMatch) {
+      const words = description.toLowerCase().trim().split(/\s+/);
+      if (words.length !== rule.keywords.length) return null;
     }
+
+    this.logger.log(`Fuzzy match found: "${description}" → ${rule.name} (score: ${best.score?.toFixed(3)})`);
+    return rule;
   }
 
   private async buildAmountFragment(transaction: Transaction): Promise<string> {
