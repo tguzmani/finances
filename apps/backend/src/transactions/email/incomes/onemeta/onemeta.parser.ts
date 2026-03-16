@@ -8,10 +8,10 @@ export class OneMetaParser {
 
   parse(subject: string, body: string, emailDate: Date): ParsedTransaction | null {
     try {
-      // Extract amount from "Transfer Amount:     USD 1,250.00"
-      const amountMatch = body.match(/Transfer Amount:\s*USD\s*([\d,]+\.?\d*)/i);
+      // Extract amount from "Transfer Amount: USD 1,250.00" (HTML) or "transfer of USD 1,250.00" (plain text)
+      const amountMatch = body.match(/(?:Transfer Amount:|transfer of)\s*USD\s*([\d,]+\.?\d*)/i);
       if (!amountMatch) {
-        this.logger.warn('Could not extract amount');
+        this.logger.warn('Could not extract amount from body');
         return null;
       }
 
