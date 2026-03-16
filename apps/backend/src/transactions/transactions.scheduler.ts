@@ -61,21 +61,17 @@ export class TransactionsScheduler {
         );
       }
 
-      // Emit event if new transactions were created
+      // Emit event if new transactions were created (expenses and incomes)
       if (result.transactionsCreated > 0) {
         const allTransactions = await this.transactionsService.findAll({});
 
-        // Filter to only NEW status and EXPENSE type, get the most recent ones
-        const recentExpenses = allTransactions
-          .filter(t =>
-            t.status === TransactionStatus.NEW &&
-            t.type === TransactionType.EXPENSE
-          )
+        const recentNew = allTransactions
+          .filter(t => t.status === TransactionStatus.NEW)
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
           .slice(0, result.transactionsCreated);
 
-        if (recentExpenses.length > 0) {
-          const totalAmount = recentExpenses.reduce(
+        if (recentNew.length > 0) {
+          const totalAmount = recentNew.reduce(
             (sum, t) => sum + Number(t.amount),
             0
           );
@@ -83,14 +79,14 @@ export class TransactionsScheduler {
           this.eventEmitter.emit(
             'transactions.new',
             new NewTransactionsEvent(
-              recentExpenses,
+              recentNew,
               totalAmount,
-              recentExpenses[0].currency
+              recentNew[0].currency
             )
           );
 
           this.logger.log(
-            `[EVENT] Emitted NewTransactionsEvent for ${recentExpenses.length} transactions`
+            `[EVENT] Emitted NewTransactionsEvent for ${recentNew.length} transactions`
           );
         }
       }

@@ -5,7 +5,7 @@ import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
-import { LedgerRowCursorService } from './ledger-row-cursor.service';
+import { LedgerRowService } from './ledger-row.service';
 import { AUTO_REGISTRATION_RULES, AutoRegistrationRule } from './auto-registration.rules';
 
 export interface AutoRegistrationResult {
@@ -22,7 +22,7 @@ export class AutoRegistrationService {
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
-    private readonly ledgerCursor: LedgerRowCursorService,
+    private readonly ledgerRowService: LedgerRowService,
   ) {
     this.fuse = new Fuse(AUTO_REGISTRATION_RULES, {
       keys: ['keywords', 'patterns'],
@@ -91,7 +91,7 @@ export class AutoRegistrationService {
 
     const [latestRate, nextRow] = await Promise.all([
       isVes ? this.exchangeRateService.findLatest() : Promise.resolve(null),
-      this.ledgerCursor.getNextRow(),
+      this.ledgerRowService.getNextRow(),
     ]);
 
     const exchangeRate = latestRate ? Number(latestRate.value) : 0;
@@ -122,7 +122,6 @@ export class AutoRegistrationService {
 
     this.logger.log(`Auto-registration: inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, rows);
-    this.ledgerCursor.advance(rows.length);
     this.logger.log(`Auto-registered transaction ${transaction.id} via rule "${rule.name}"`);
   }
 

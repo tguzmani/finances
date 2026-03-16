@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TransactionsService } from './transactions.service';
+import { TransactionStatus } from './transaction.types';
 import { NewTransactionsEvent } from './events/new-transactions.event';
 
 @Injectable()
@@ -50,6 +51,33 @@ export class TransactionsBinanceScheduler {
         this.logger.log(
           `[EVENT] Emitted auto-registered event for ${result.autoRegistered.length} Binance transactions`
         );
+      }
+
+      // Notify about new non-auto-registered transactions
+      const newCount = result.transactionsCreated - result.autoRegistered.length;
+      if (newCount > 0) {
+        const allTransactions = await this.transactionsService.findAll({});
+        const recentNew = allTransactions
+          .filter(t => t.status === TransactionStatus.NEW)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, newCount);
+
+        if (recentNew.length > 0) {
+          const totalAmount = recentNew.reduce(
+            (sum, t) => sum + Number(t.amount), 0
+          );
+          this.eventEmitter.emit(
+            'transactions.new',
+            new NewTransactionsEvent(
+              recentNew,
+              totalAmount,
+              recentNew[0].currency
+            )
+          );
+          this.logger.log(
+            `[EVENT] Emitted NewTransactionsEvent for ${recentNew.length} Binance transactions`
+          );
+        }
       }
     } catch (err) {
       this.logger.error(`Binance sync failed: ${(err as Error).message}`);

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SheetsRepository } from '../../common/sheets.repository';
 import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
-import { LedgerRowCursorService } from '../../journal-entry/ledger-row-cursor.service';
+import { LedgerRowService } from '../../journal-entry/ledger-row.service';
 import { REAL_ACCOUNTS } from '../../accounts/account.constants';
 import { TRANSFER_RULES, TransferRule } from './transfer.rules';
 
@@ -13,7 +13,7 @@ export class TelegramTransferService {
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
-    private readonly ledgerCursor: LedgerRowCursorService,
+    private readonly ledgerRowService: LedgerRowService,
   ) {}
 
   async matchAccount(userInput: string): Promise<string | null> {
@@ -84,7 +84,7 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     creditAccount: string,
     description: string,
   ): Promise<void> {
-    const nextRow = await this.ledgerCursor.getNextRow();
+    const nextRow = await this.ledgerRowService.getNextRow();
     const dateFormatted = this.formatDate(new Date());
 
     const builder = new JournalEntryBuilder(nextRow);
@@ -102,7 +102,6 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
 
     this.logger.log(`Transfer: inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, rows);
-    this.ledgerCursor.advance(rows.length);
     this.logger.log(
       `Transfer registered: debit=${debitAccount}, credit=${creditAccount}, $${amount.toFixed(2)}`,
     );
