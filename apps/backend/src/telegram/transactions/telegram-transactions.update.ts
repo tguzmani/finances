@@ -1185,7 +1185,7 @@ export class TelegramTransactionsUpdate {
         this.logger.log(`Photo caption: ${caption}`);
       }
 
-      await ctx.reply('📸 Processing image with OCR...');
+      const processingMsg = await ctx.reply('📸 Processing image with OCR...');
 
       // Download and process image directly
       const imageBuffer = await this.downloadImage(photo.file_id, ctx);
@@ -1201,13 +1201,16 @@ export class TelegramTransactionsUpdate {
       // Handle based on payment method detected
       if (!transactionData.paymentMethod) {
         // Could not determine payment method
-        await ctx.reply(
+        await ctx.telegram.editMessageText(
+          ctx.message.chat.id,
+          processingMsg.message_id,
+          undefined,
           '❌ Could not recognize this image as a transaction.\n\n' +
           'Supported formats:\n' +
           '• Pago Móvil screenshots\n' +
           '• Bank transfers\n' +
           '• Store receipts\n\n' +
-          'Please try again with a clearer photo.'
+          'Please try again with a clearer photo.',
         );
         return;
       }
@@ -1235,8 +1238,8 @@ export class TelegramTransactionsUpdate {
       }
 
       if (transactionData.paymentMethod === PaymentMethod.PAGO_MOVIL) {
-        // Pago Móvil: Show preview
-        await this.handlePagoMovilTransaction(ctx, transactionData, isDebugMode);
+        // Pago Móvil: Edit processing message with preview
+        await this.handlePagoMovilTransaction(ctx, transactionData, isDebugMode, processingMsg.message_id);
       } else {
         // Bill/Receipt/Transfer: Show preview with action buttons
         await this.handleBillTransaction(ctx, transactionData, isDebugMode);
@@ -1267,64 +1270,66 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
-      // Use caption as description if provided, otherwise fallback
-      const description = billData.caption
-        || (billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase');
+      const description = billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase';
 
       // Create transaction from bill data
       const transaction = await this.transactionsService.createManualTransaction({
-        type: TransactionType.EXPENSE, // Bills are usually expenses
-        platform: TransactionPlatform.BANESCO, // Default platform for bills
+        type: TransactionType.EXPENSE,
+        platform: TransactionPlatform.BANESCO,
         currency: billData.currency,
         amount: billData.amount,
         description,
-        method: PaymentMethod.DEBIT_CARD, // Default payment method
+        method: PaymentMethod.DEBIT_CARD,
         date: billData.datetime,
       });
+
+      // If caption was provided, use it as description
+      if (billData.caption) {
+        await this.transactionsService.update(transaction.id, {
+          description: billData.caption,
+        });
+      }
 
       // Upload image to B2 if available
       await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
       // Try auto sheet update if description matches a rule
-      let statusText = '<i>Status: Unreviewed</i>';
+      let statusText = '';
       try {
-        const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
+        const updatedTransaction = await this.transactionsService.findOne(transaction.id);
+        const sheetResult = await this.sheetUpdateService.trySheetUpdate(updatedTransaction);
         if (sheetResult) {
           await this.transactionsService.update(transaction.id, {
             status: TransactionStatus.REGISTERED,
           });
-          statusText = `<i>Status: ✅ Auto-Registered</i>`;
+          statusText = `\n\n<i>✅ Auto-Registered</i>`;
         }
       } catch (err) {
         this.logger.error(`Sheet update error for bill: ${err.message}`);
       }
 
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
+      const captionLine = billData.caption ? `📝 ${billData.caption}\n\n` : '';
 
-      await ctx.reply(
-        `✅ <b>Transaction saved!</b>\n\n` +
-        `Description: ${description}\n` +
-        `Amount: ${billData.currency} ${billData.amount.toFixed(2)}${usdSuffix}\n` +
-        `Date: ${billData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}\n` +
-        `Transaction ID: ${billData.transactionId || 'N/A'}\n\n` +
+      await ctx.editMessageText(
+        `✅ <b>Transaction Saved!</b>\n\n` +
+        captionLine +
+        `💰 Amount: ${billData.currency} ${billData.amount.toFixed(2)}${usdSuffix}\n` +
+        `🔢 Transaction ID: ${billData.transactionId || 'N/A'}\n` +
+        `📅 Date: ${billData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}` +
         statusText,
         { parse_mode: 'HTML' }
       );
 
-      // Ask if user wants to add/change description (skip if already auto-registered)
-      if (!statusText.includes('Auto-Registered')) {
+      if (!billData.caption) {
+        // No caption provided, ask for description
+        ctx.session.currentTransactionId = transaction.id;
+        ctx.session.waitingForDescription = true;
+        ctx.session.reviewSingleItem = true;
+
         await ctx.reply(
-          '📝 Do you want to add a description?',
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '✏️ Add Description', callback_data: `add_desc_${transaction.id}` },
-                  { text: '⏭️ Skip', callback_data: 'add_desc_skip' },
-                ],
-              ],
-            },
-          }
+          '✏️ Please type a description for this transaction:',
+          { reply_markup: { force_reply: true } }
         );
       }
 
@@ -1338,22 +1343,25 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  @Action('bill_manual')
+  @Action('bill_reject')
   @UseGuards(TelegramAuthGuard)
-  async handleBillManual(@Ctx() ctx: SessionContext) {
+  async handleBillReject(@Ctx() ctx: SessionContext) {
     try {
-      await ctx.answerCbQuery('Starting manual entry...');
+      await ctx.answerCbQuery('Transaction rejected');
 
-      // Clear bill data
       ctx.session.pendingBillData = undefined;
 
-      // Delegate to manual transaction flow
-      await this.manualTransactionUpdate.handleAddTransaction(ctx);
+      const chatId = ctx.callbackQuery?.message?.chat?.id;
+      if (chatId) {
+        this.pendingImageBuffers.delete(chatId);
+      }
 
+      await ctx.editMessageText(
+        '❌ <b>Transaction Rejected</b>',
+        { parse_mode: 'HTML' },
+      );
     } catch (error) {
-      this.logger.error(`Bill manual entry failed: ${error?.message || 'Unknown error'}`);
-      this.logger.error(error);
-      await ctx.reply('❌ Error starting manual entry. Please try again.');
+      this.logger.error(`Bill reject failed: ${error?.message}`);
     }
   }
 
@@ -1427,13 +1435,13 @@ export class TelegramTransactionsUpdate {
 
       const pagoMovilData = ctx.session.pendingBillData;
       if (!pagoMovilData) {
-        await ctx.reply('❌ Session expired. Please send the photo again.');
+        await ctx.editMessageText('❌ Session expired. Please send the photo again.');
         return;
       }
 
       // Validate required fields
       if (!pagoMovilData.datetime || !pagoMovilData.amount || !pagoMovilData.transactionId) {
-        await ctx.reply('❌ Cannot save transaction: Missing required data.');
+        await ctx.editMessageText('❌ Cannot save transaction: Missing required data.');
         return;
       }
 
@@ -1475,20 +1483,19 @@ export class TelegramTransactionsUpdate {
         }
 
         const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);
+        const captionLine = pagoMovilData.caption ? `📝 ${pagoMovilData.caption}\n\n` : '';
 
-        await ctx.reply(
+        await ctx.editMessageText(
           `✅ <b>Pago Móvil Transaction Saved!</b>\n\n` +
-          `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}${pmUsdSuffix}\n` +
-          `Reference: ${pagoMovilData.transactionId}\n` +
-          `Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}` +
+          captionLine +
+          `💰 Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}${pmUsdSuffix}\n` +
+          `🔢 Reference: ${pagoMovilData.transactionId}\n` +
+          `📅 Date: ${pagoMovilData.datetime.toLocaleString('es-VE', { timeZone: 'America/Caracas' })}` +
           statusText,
           { parse_mode: 'HTML' }
         );
 
-        if (pagoMovilData.caption) {
-          // Caption was used as description, no need to ask
-          await ctx.reply(`📝 Description set from caption: "${pagoMovilData.caption}"`);
-        } else {
+        if (!pagoMovilData.caption) {
           // No caption provided, ask for description
           ctx.session.currentTransactionId = transaction.id;
           ctx.session.waitingForDescription = true;
@@ -1505,7 +1512,7 @@ export class TelegramTransactionsUpdate {
 
       } catch (dbError) {
         if (dbError.message === 'Transaction already exists') {
-          await ctx.reply(
+          await ctx.editMessageText(
             `⚠️ This transaction already exists in the database.\n\n` +
             `Reference: ${pagoMovilData.transactionId}\n` +
             `Amount: ${pagoMovilData.currency} ${pagoMovilData.amount.toFixed(2)}`
@@ -1524,11 +1531,40 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  private async handlePagoMovilTransaction(ctx: SessionContext, transactionData: any, isDebugMode = false) {
+  @Action('pago_movil_reject')
+  @UseGuards(TelegramAuthGuard)
+  async handlePagoMovilReject(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Transaction rejected');
+
+      ctx.session.pendingBillData = undefined;
+
+      // Clean up pending image
+      const chatId = ctx.callbackQuery?.message?.chat?.id;
+      if (chatId) {
+        this.pendingImageBuffers.delete(chatId);
+      }
+
+      await ctx.editMessageText(
+        '❌ <b>Transaction Rejected</b>',
+        { parse_mode: 'HTML' },
+      );
+    } catch (error) {
+      this.logger.error(`Pago Móvil reject failed: ${error?.message}`);
+    }
+  }
+
+  private async handlePagoMovilTransaction(ctx: SessionContext, transactionData: any, isDebugMode = false, messageId?: number) {
     // Validate all required fields
     if (!transactionData.datetime || !transactionData.amount || !transactionData.transactionId) {
       this.logger.warn('Missing required Pago Móvil data');
-      await ctx.reply('❌ Could not extract all transaction data. Please try again with a clearer photo.');
+      const errorText = '❌ Could not extract all transaction data. Please try again with a clearer photo.';
+      if (messageId) {
+        const chatId = ctx.message?.chat?.id ?? (ctx.callbackQuery?.message as any)?.chat?.id;
+        await ctx.telegram.editMessageText(chatId, messageId, undefined, errorText);
+      } else {
+        await ctx.reply(errorText);
+      }
       return;
     }
 
@@ -1546,24 +1582,37 @@ export class TelegramTransactionsUpdate {
 
     const usdSuffix = await this.formatVesUsdSuffix(transactionData.currency, transactionData.amount);
 
-    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Confirm to save:</i>';
-    const keyboard = isDebugMode ? [] : [[{ text: '✅ OK', callback_data: 'pago_movil_save' }]];
+    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '';
+    const keyboard = isDebugMode ? [] : [[
+      { text: '✅ OK', callback_data: 'pago_movil_save' },
+      { text: '❌ Reject', callback_data: 'pago_movil_reject' },
+    ]];
 
     const captionLine = transactionData.caption ? `📝 ${transactionData.caption}\n\n` : '';
 
-    // Show preview with confirmation button
-    await ctx.reply(
+    const text =
       `💸 <b>Pago Móvil Data (Preview)</b>\n\n` +
       captionLine +
       `📅 Date: ${dateStr}\n` +
       `💰 Amount: ${transactionData.currency} ${transactionData.amount.toFixed(2)}${usdSuffix}\n` +
       `🔢 Reference: ${transactionData.transactionId}\n\n` +
-      footerText,
-      {
+      footerText;
+
+    const replyMarkup = keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined;
+
+    // Edit the processing message with preview
+    if (messageId) {
+      const chatId = ctx.message?.chat?.id ?? (ctx.callbackQuery?.message as any)?.chat?.id;
+      await ctx.telegram.editMessageText(chatId, messageId, undefined, text, {
         parse_mode: 'HTML',
-        reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined,
-      }
-    );
+        reply_markup: replyMarkup,
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
+    }
 
     // Store Pago Móvil data in session for confirmation (only if not debug mode)
     if (!isDebugMode) {
@@ -1595,10 +1644,10 @@ export class TelegramTransactionsUpdate {
     const transactionIdStr = transactionData.transactionId || 'Not detected';
     const methodStr = transactionData.paymentMethod ? `\n💳 Method: ${transactionData.paymentMethod}` : '';
 
-    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '<i>Choose an action:</i>';
+    const footerText = isDebugMode ? '<i>⚠️ DEBUG MODE IS ON</i>' : '';
     const keyboard = isDebugMode ? [] : [[
       { text: '✅ OK', callback_data: 'bill_save' },
-      { text: '✏️ Enter Manually', callback_data: 'bill_manual' },
+      { text: '❌ Reject', callback_data: 'bill_reject' },
     ]];
 
     const captionLine = transactionData.caption ? `📝 ${transactionData.caption}\n\n` : '';
