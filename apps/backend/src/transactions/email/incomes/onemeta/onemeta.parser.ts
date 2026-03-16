@@ -24,7 +24,7 @@ export class OneMetaParser {
       }
 
       // Extract estimated arrival date for unique ID
-      // Pattern: "Estimated Arrival:     Mar 02 - Mar 04, 2026"
+      // Pattern: "Estimated Arrival:     Mar 02 - Mar 04, 2026" or "Mar 16 - Mar 18, 2026 (excluding holidays)"
       const dateMatch = body.match(/Estimated Arrival:\s*([A-Za-z]+\s+\d+)\s*-\s*[A-Za-z]+\s+\d+,\s*(\d{4})/i);
       let transactionId: string;
 

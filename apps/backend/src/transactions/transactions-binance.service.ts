@@ -30,15 +30,22 @@ export class TransactionsBinanceService {
         return [];
       }
 
-      return response.map((d: any) => ({
-        date: new Date(d.insertTime || d.successTime),
-        amount: parseFloat(d.amount),
-        currency: d.coin,
-        transactionId: d.txId || d.id,
-        type: TransactionType.INCOME,
-        method: PaymentMethod.DEPOSIT,
-        platform: TransactionPlatform.BINANCE,
-      }));
+      return response.map((d: any) => {
+        const amount = parseFloat(d.amount);
+        const currency = d.coin;
+        const isCodebay = amount === 800 && currency === 'USDC';
+
+        return {
+          date: new Date(d.insertTime || d.successTime),
+          amount,
+          currency,
+          transactionId: d.txId || d.id,
+          type: TransactionType.INCOME,
+          method: PaymentMethod.DEPOSIT,
+          platform: TransactionPlatform.BINANCE,
+          ...(isCodebay && { description: 'Codebay' }),
+        };
+      });
     } catch (err) {
       this.logger.error(`Failed to fetch deposits: ${(err as Error).message}`);
       return [];

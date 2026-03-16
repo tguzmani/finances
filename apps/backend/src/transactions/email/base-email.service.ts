@@ -80,6 +80,16 @@ export abstract class BaseEmailService {
     return emails;
   }
 
+  private stripHtml(html: string): string {
+    return html
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&#?\w+;/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   protected extractEmail(parsed: ParsedMail, config: BankEmailConfig): RawEmail | null {
     const subject = parsed.subject || '';
 
@@ -91,7 +101,7 @@ export abstract class BaseEmailService {
       return null;
     }
 
-    const body = parsed.text || '';
+    const body = parsed.text || this.stripHtml(parsed.html || '');
     const date = parsed.date || new Date();
 
     return {
