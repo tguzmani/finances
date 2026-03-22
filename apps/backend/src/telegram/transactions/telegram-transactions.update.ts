@@ -1293,10 +1293,10 @@ export class TelegramTransactionsUpdate {
       // Upload image to B2 if available
       await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
-      // Try auto sheet update if description matches a rule
+      // Try auto-registration if description (caption) is available
       let statusText = '';
+      const updatedTransaction = await this.transactionsService.findOne(transaction.id);
       try {
-        const updatedTransaction = await this.transactionsService.findOne(transaction.id);
         const sheetResult = await this.sheetUpdateService.trySheetUpdate(updatedTransaction);
         if (sheetResult) {
           await this.transactionsService.update(transaction.id, {
@@ -1306,6 +1306,20 @@ export class TelegramTransactionsUpdate {
         }
       } catch (err) {
         this.logger.error(`Sheet update error for bill: ${err.message}`);
+      }
+
+      if (!statusText) {
+        try {
+          const autoResult = await this.autoRegistrationService.tryAutoRegister(updatedTransaction);
+          if (autoResult) {
+            await this.transactionsService.update(transaction.id, {
+              status: TransactionStatus.REGISTERED,
+            });
+            statusText = `\n\n<i>✅ Auto-Registered</i>`;
+          }
+        } catch (err) {
+          this.logger.error(`Auto-registration error for bill: ${err.message}`);
+        }
       }
 
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);
@@ -1456,10 +1470,11 @@ export class TelegramTransactionsUpdate {
           transactionId: pagoMovilData.transactionId,
         });
 
-        // If caption was provided, use it as description
+        // If caption was provided, use it as description and mark as REVIEWED
         if (pagoMovilData.caption) {
           await this.transactionsService.update(transaction.id, {
             description: pagoMovilData.caption,
+            status: TransactionStatus.REVIEWED,
           });
           // Reload transaction with description for sheet update
           transaction = await this.transactionsService.findOne(transaction.id);
@@ -1468,7 +1483,7 @@ export class TelegramTransactionsUpdate {
         // Upload image to B2 if available
         await this.uploadPendingImage(ctx, transaction.id, transaction.transactionId);
 
-        // Try auto sheet update if description matches a rule
+        // Try auto-registration if description (caption) is available
         let statusText = '';
         try {
           const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
@@ -1480,6 +1495,20 @@ export class TelegramTransactionsUpdate {
           }
         } catch (err) {
           this.logger.error(`Sheet update error for Pago Móvil: ${err.message}`);
+        }
+
+        if (!statusText) {
+          try {
+            const autoResult = await this.autoRegistrationService.tryAutoRegister(transaction);
+            if (autoResult) {
+              await this.transactionsService.update(transaction.id, {
+                status: TransactionStatus.REGISTERED,
+              });
+              statusText = `\n\n<i>✅ Auto-Registered</i>`;
+            }
+          } catch (err) {
+            this.logger.error(`Auto-registration error for Pago Móvil: ${err.message}`);
+          }
         }
 
         const pmUsdSuffix = await this.formatVesUsdSuffix(pagoMovilData.currency, pagoMovilData.amount);

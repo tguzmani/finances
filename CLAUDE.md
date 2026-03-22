@@ -16,6 +16,19 @@
 - This includes: bot messages, UI labels, logs, comments, variable names, etc.
 - Maintain consistency with the rest of the app which is already in English
 
+## Manual Transactions
+
+"Manual transactions" refers to all user-initiated transaction flows:
+- **Photo with caption** (`@On('photo')`) — both Pago Móvil and Bills
+- **Photo without caption** (`@On('photo')`) — followed by description prompt
+- **`/add_transaction`** command — step-by-step manual entry
+
+All manual transaction flows must support both auto-registration systems:
+1. `SheetUpdateService.trySheetUpdate()` — matches `SHEET_UPDATE_RULES` for cell updates
+2. `AutoRegistrationService.tryAutoRegister()` — matches `AUTO_REGISTRATION_RULES` for journal entries
+
+Sheet update rules take priority; auto-registration is attempted only if no sheet rule matched.
+
 ## Clean Code
 
 - **No duplicated logic**: If the same pattern appears in multiple places, extract it to a single source of truth (e.g., a service method or shared utility). Every behavior should live in one place.
