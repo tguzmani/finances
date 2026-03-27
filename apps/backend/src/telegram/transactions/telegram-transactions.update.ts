@@ -27,6 +27,7 @@ import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 import { AutoRegistrationService } from '../../journal-entry/auto-registration.service';
 import { SheetUpdateService } from '../../journal-entry/sheet-update.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
+import { GoogleSheetConfigService } from '../../google-sheet-config/google-sheet-config.service';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -57,6 +58,7 @@ export class TelegramTransactionsUpdate {
     private readonly b2Storage: B2StorageService,
     private readonly transferUpdate: TelegramTransferUpdate,
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
+    private readonly googleSheetConfigService: GoogleSheetConfigService,
   ) { }
 
   @Command('transactions')
@@ -2136,6 +2138,18 @@ export class TelegramTransactionsUpdate {
       }));
       ctx.session.registerCurrentIndex = 0;
       ctx.session.registerTotalCount = combinedItems.length;
+
+      // Show link to Google Sheets
+      const sheetId = await this.googleSheetConfigService.getCurrentSheetId();
+      if (sheetId) {
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?gid=1400547069#gid=1400547069`;
+        await ctx.reply(`📊 <b>Registration started</b> — ${combinedItems.length} item(s) to process.`, {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.url('Open Google Sheets', sheetUrl)],
+          ]),
+        });
+      }
 
       // Show first item
       await this.showCurrentRegisterItem(ctx);
