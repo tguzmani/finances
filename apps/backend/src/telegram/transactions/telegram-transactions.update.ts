@@ -1272,6 +1272,9 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
+      // Show loading state and hide buttons
+      await ctx.editMessageText('⏳ <b>Processing...</b>', { parse_mode: 'HTML' });
+
       const description = billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase';
 
       // Create transaction from bill data
@@ -1460,6 +1463,9 @@ export class TelegramTransactionsUpdate {
         await ctx.editMessageText('❌ Cannot save transaction: Missing required data.');
         return;
       }
+
+      // Show loading state and hide buttons
+      await ctx.editMessageText('⏳ <b>Processing...</b>', { parse_mode: 'HTML' });
 
       this.logger.log(`Creating Pago Móvil transaction: ${JSON.stringify(pagoMovilData)}`);
 
