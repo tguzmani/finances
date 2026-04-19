@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
 import { TelegramRatesService } from './telegram-rates.service';
+import { TelegramRatesUpdate } from './telegram-rates.update';
 import { ExchangeRateChartService } from '../../exchanges/exchange-rate-chart.service';
 
 @Injectable()
@@ -48,7 +49,11 @@ export class TelegramRatesScheduler {
       await this.bot.telegram.sendPhoto(
         this.chatId,
         { source: chartBuffer },
-        { caption: message, parse_mode: 'HTML' },
+        {
+          caption: message,
+          parse_mode: 'HTML',
+          ...TelegramRatesUpdate.BINANCE_COMPARISON_KEYBOARD,
+        },
       );
 
       this.logger.log(`✅ Daily exchange rates sent successfully to chat ${this.chatId}`);

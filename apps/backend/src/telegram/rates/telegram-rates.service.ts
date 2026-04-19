@@ -26,4 +26,20 @@ export class TelegramRatesService {
       throw error;
     }
   }
+
+  /**
+   * Get formatted BCV vs Binance comparison message for Telegram
+   */
+  async getBinanceComparisonMessage(): Promise<string> {
+    try {
+      this.logger.log('Getting BCV vs Binance comparison message...');
+
+      const ratesWithDiscounts = await this.ratesAggregator.getRatesWithDiscounts();
+
+      return this.presenter.formatBinanceComparison(ratesWithDiscounts);
+    } catch (error) {
+      this.logger.error(`Error getting Binance comparison message: ${error.message}`);
+      throw error;
+    }
+  }
 }
