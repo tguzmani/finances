@@ -68,9 +68,9 @@ export class BanescoParser {
     const timeStr = timeMatch ? timeMatch[1] : '00:00:00';
     const amount = this.parseAmount(amountMatch[1]);
 
-    // Parse date DD/MM/YYYY
+    // Parse date DD/MM/YYYY — dates in email body are Venezuela time (UTC-4)
     const [day, month, year] = dateStr.split('/');
-    const date = new Date(`${year}-${month}-${day}T${timeStr}`);
+    const date = new Date(`${year}-${month}-${day}T${timeStr}-04:00`);
 
     return {
       date,
@@ -95,9 +95,9 @@ export class BanescoParser {
   }
 
   private parseDate(dateStr: string, timeStr: string): Date {
-    // Parse DD-MM-YYYY HH:MM
+    // Parse DD-MM-YYYY HH:MM — dates in email body are Venezuela time (UTC-4)
     const [day, month, year] = dateStr.split('-');
-    return new Date(`${year}-${month}-${day}T${timeStr}:00`);
+    return new Date(`${year}-${month}-${day}T${timeStr}:00-04:00`);
   }
 
   /**
