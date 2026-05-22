@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
@@ -8,6 +8,6 @@ export default defineConfig({
   },
   datasource: {
     // Use DIRECT_DATABASE_URL for migrations (port 5432, no pgBouncer)
-    url: env("DIRECT_DATABASE_URL"),
+    url: process.env.DIRECT_DATABASE_URL,
   },
 });
