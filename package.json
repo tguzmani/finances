@@ -12,6 +12,19 @@
     "prisma:studio": "prisma studio"
   },
   "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@parcel/watcher",
+      "@prisma/engines",
+      "@swc/core",
+      "less",
+      "nx",
+      "prisma",
+      "protobufjs",
+      "unrs-resolver"
+    ]
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1003.0",
     "@aws-sdk/s3-request-presigner": "^3.1003.0",
