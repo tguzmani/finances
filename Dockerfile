@@ -18,7 +18,11 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm prisma:generate \
+# Prisma config eagerly reads DIRECT_DATABASE_URL; provide a placeholder for build.
+# The real URL is loaded at runtime from .env when migrate deploy runs.
+RUN DIRECT_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+    DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+    pnpm prisma:generate \
   && pnpm build
 
 # Drop dev dependencies for the runtime stage.
