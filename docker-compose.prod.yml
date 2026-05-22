@@ -1,0 +1,14 @@
+services:
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-OWNER/REPO}:latest
+    container_name: finances-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - '127.0.0.1:3000:3000'
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
