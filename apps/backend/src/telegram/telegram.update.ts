@@ -20,6 +20,7 @@ import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update';
+import { TelegramTransactionRegisterUpdate } from './transactions/telegram-transaction-register.update';
 
 @Update()
 export class TelegramUpdate {
@@ -43,6 +44,7 @@ export class TelegramUpdate {
     private readonly settingsUpdate: TelegramSettingsUpdate,
     private readonly transferUpdate: TelegramTransferUpdate,
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
+    private readonly transactionRegisterUpdate: TelegramTransactionRegisterUpdate,
   ) { }
 
   @Command('start')
@@ -212,7 +214,7 @@ export class TelegramUpdate {
         return;
       }
 
-      await this.transactionsUpdate.startTransactionRegistration(ctx);
+      await this.transactionRegisterUpdate.startTransactionRegistration(ctx);
     } catch (error) {
       this.logger.error(`Error in register command: ${error.message}`);
       await ctx.reply('Error starting registration process.');

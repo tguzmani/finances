@@ -46,6 +46,8 @@ import { TelegramTransferService } from './transfers/telegram-transfer.service';
 import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update';
 import { TelegramPagoMovilService } from './pago-movil/telegram-pago-movil.service';
 import { TelegramPagoMovilPresenter } from './pago-movil/telegram-pago-movil.presenter';
+import { TelegramTransactionPhotoUpdate } from './transactions/telegram-transaction-photo.update';
+import { TelegramTransactionRegisterUpdate } from './transactions/telegram-transaction-register.update';
 import { EquityModule } from '../equity/equity.module';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
@@ -151,6 +153,8 @@ import * as https from 'https';
     TelegramPagoMovilUpdate,
     TelegramPagoMovilService,
     TelegramPagoMovilPresenter,
+    TelegramTransactionPhotoUpdate,
+    TelegramTransactionRegisterUpdate,
   ],
   exports: [TelegramService],
 })
