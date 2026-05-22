@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-OWNER/REPO}:latest
+    image: ghcr.io/tguzmani/finances:latest
     container_name: finances-backend
     restart: unless-stopped
     env_file:

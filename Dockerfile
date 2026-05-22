@@ -25,9 +25,6 @@ RUN DIRECT_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
     pnpm prisma:generate \
   && pnpm build
 
-# Drop dev dependencies for the runtime stage.
-RUN pnpm prune --prod
-
 # ---------- Runtime ----------
 FROM node:22-slim AS runtime
 
@@ -45,4 +42,4 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/apps/backend/main.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/apps/backend/main.js"]
