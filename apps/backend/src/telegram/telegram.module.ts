@@ -15,6 +15,8 @@ import { ExchangeAutoRegistrationListener } from './listeners/exchange-auto-regi
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramTransactionsUpdate } from './transactions/telegram-transactions.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
+import { TransactionExtractionService } from './transactions/transaction-extraction.service';
+import { ManualTransactionPostListener } from './listeners/manual-transaction-post.listener';
 import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
@@ -124,6 +126,8 @@ import * as https from 'https';
     TelegramBaseHandler,
     TelegramTransactionsUpdate,
     TelegramManualTransactionUpdate,
+    TransactionExtractionService,
+    ManualTransactionPostListener,
     TelegramGroupFlowUpdate,
     TelegramExchangesUpdate,
     TelegramRatesUpdate,

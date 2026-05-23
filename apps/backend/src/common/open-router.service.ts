@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
+import { z, ZodType } from 'zod';
 
 export interface OpenRouterMessage {
   role: 'system' | 'user' | 'assistant';
@@ -95,6 +96,92 @@ export class OpenRouterService {
       );
 
       return content;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        this.logger.error(
+          `OpenRouter API error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
+        );
+        throw new Error(
+          `OpenRouter API error: ${error.response?.data?.error?.message || error.message}`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  async chatStructured<T>(
+    messages: OpenRouterMessage[],
+    schema: ZodType<T>,
+    options: OpenRouterOptions & { schemaName?: string } = {},
+  ): Promise<T> {
+    if (!this.apiKey) {
+      throw new Error('OPENROUTER_API_KEY environment variable is not set');
+    }
+
+    const model = options.model || this.DEFAULT_MODEL;
+    const schemaName = options.schemaName || 'response';
+    const jsonSchema = z.toJSONSchema(schema, { target: 'draft-7' });
+    delete (jsonSchema as any).$schema;
+
+    try {
+      this.logger.log(`Sending structured request to OpenRouter (model: ${model}, schema: ${schemaName})`);
+
+      const response = await axios.post<OpenRouterResponse>(
+        this.API_URL,
+        {
+          model,
+          messages,
+          temperature: options.temperature ?? 0.1,
+          max_tokens: options.maxTokens ?? 500,
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: schemaName,
+              strict: true,
+              schema: jsonSchema,
+            },
+          },
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.APP_URL || 'https://localhost',
+            'X-Title': 'Finances App',
+          },
+          timeout: 30000,
+        },
+      );
+
+      const content = response.data.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from OpenRouter');
+      }
+
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7);
+      else if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3);
+      if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3);
+      jsonStr = jsonStr.trim();
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (e) {
+        this.logger.error(`Structured response not valid JSON: ${content}`);
+        throw new Error(`LLM returned invalid JSON: ${e.message}`);
+      }
+
+      const result = schema.safeParse(parsed);
+      if (!result.success) {
+        this.logger.error(`Schema validation failed: ${JSON.stringify(result.error.issues)}. Raw: ${content}`);
+        throw new Error(`LLM response failed schema validation: ${result.error.message}`);
+      }
+
+      this.logger.log(
+        `OpenRouter structured response received. Tokens: ${response.data.usage?.total_tokens || 'unknown'}`,
+      );
+      return result.data;
     } catch (error) {
       if (error instanceof AxiosError) {
         this.logger.error(

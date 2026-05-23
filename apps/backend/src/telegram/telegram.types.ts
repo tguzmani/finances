@@ -38,7 +38,7 @@ export interface ReviewSession {
   lastRegisteredExchangeIds?: number[];
   lastRegisteredWavg?: number;
   // Manual transaction entry flow
-  manualTransactionState?: 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date';
+  manualTransactionState?: 'waiting_freeform' | 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date' | 'waiting_confirmation';
   manualTransactionType?: 'INCOME' | 'EXPENSE';
   manualTransactionPlatform?: string;
   manualTransactionCurrency?: string;

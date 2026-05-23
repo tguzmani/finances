@@ -98,6 +98,9 @@ importers:
       telegraf:
         specifier: ^4.16.3
         version: 4.16.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@eslint/js':
         specifier: ^9.8.0
@@ -201,87 +204,6 @@ importers:
       webpack-cli:
         specifier: ^5.1.4
         version: 5.1.4(webpack-bundle-analyzer@5.2.0)(webpack@5.105.0)
-
-  dist/apps/backend:
-    dependencies:
-      '@aws-sdk/client-s3':
-        specifier: 3.1003.0
-        version: 3.1003.0
-      '@aws-sdk/s3-request-presigner':
-        specifier: 3.1003.0
-        version: 3.1003.0
-      '@google-cloud/vision':
-        specifier: 5.3.4
-        version: 5.3.4
-      '@nestjs/common':
-        specifier: 11.1.13
-        version: 11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1)
-      '@nestjs/core':
-        specifier: 11.1.13
-        version: 11.1.13(@nestjs/common@11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/platform-express@11.1.13)(reflect-metadata@0.2.2)(rxjs@7.8.1)
-      '@nestjs/event-emitter':
-        specifier: 3.0.1
-        version: 3.0.1(@nestjs/common@11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.13)
-      '@nestjs/platform-express':
-        specifier: 11.1.13
-        version: 11.1.13(@nestjs/common@11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.13)
-      '@nestjs/schedule':
-        specifier: 6.1.0
-        version: 6.1.0(@nestjs/common@11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.13)
-      '@prisma/adapter-pg':
-        specifier: 7.3.0
-        version: 7.3.0
-      '@prisma/client':
-        specifier: 7.3.0
-        version: 7.3.0(prisma@7.3.0(@types/react@19.2.10)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
-      axios:
-        specifier: 1.13.4
-        version: 1.13.4
-      binance:
-        specifier: 3.2.3
-        version: 3.2.3(@swc/core@1.5.29(@swc/helpers@0.5.18))(typescript@5.9.3)
-      cheerio:
-        specifier: 1.2.0
-        version: 1.2.0
-      chrono-node:
-        specifier: 2.9.0
-        version: 2.9.0
-      class-transformer:
-        specifier: 0.5.1
-        version: 0.5.1
-      class-validator:
-        specifier: 0.14.3
-        version: 0.14.3
-      fuse.js:
-        specifier: 7.1.0
-        version: 7.1.0
-      google-auth-library:
-        specifier: 10.5.0
-        version: 10.5.0
-      googleapis:
-        specifier: 171.4.0
-        version: 171.4.0
-      imapflow:
-        specifier: 1.2.8
-        version: 1.2.8
-      mailparser:
-        specifier: 3.9.3
-        version: 3.9.3
-      nestjs-telegraf:
-        specifier: 2.9.1
-        version: 2.9.1(@nestjs/common@11.1.13(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.1))(@nestjs/core@11.1.13)(reflect-metadata@0.2.2)(telegraf@4.16.3)(typescript@5.9.3)
-      pg:
-        specifier: 8.18.0
-        version: 8.18.0
-      reflect-metadata:
-        specifier: 0.2.2
-        version: 0.2.2
-      rxjs:
-        specifier: 7.8.1
-        version: 7.8.1
-      telegraf:
-        specifier: 4.16.3
-        version: 4.16.3
 
 packages:
 
@@ -6778,6 +6700,9 @@ packages:
 
   zeptomatch@2.1.0:
     resolution: {integrity: sha512-KiGErG2J0G82LSpniV0CtIzjlJ10E04j02VOudJsPyPwNZgGnRKQy7I1R7GMyg/QswnE4l7ohSGrQbQbjXPPDA==}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -14669,3 +14594,5 @@ snapshots:
     dependencies:
       grammex: 3.1.12
       graphmatch: 1.1.0
+
+  zod@4.4.3: {}

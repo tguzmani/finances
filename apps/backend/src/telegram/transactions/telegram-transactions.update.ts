@@ -953,6 +953,10 @@ export class TelegramTransactionsUpdate {
     }
 
     // Manual transaction flow is handled by TelegramManualTransactionUpdate
+    if (ctx.session.manualTransactionState === 'waiting_freeform') {
+      await this.manualTransactionUpdate.handleManualFreeform(ctx);
+      return;
+    }
     if (ctx.session.manualTransactionState === 'waiting_amount' ||
       ctx.session.manualTransactionState === 'waiting_description' ||
       ctx.session.manualTransactionState === 'waiting_custom_date') {

@@ -8,9 +8,10 @@ import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { DateParserService } from '../../common/date-parser.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
-import { AutoRegistrationService } from '../../journal-entry/auto-registration.service';
-import { SheetUpdateService } from '../../journal-entry/sheet-update.service';
-import { TransactionStatus } from '../../transactions/transaction.types';
+import { TransactionPlatform } from '../../transactions/transaction.types';
+import { TransactionExtractionService, TransactionDraft } from './transaction-extraction.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { TransactionManualCreatedEvent } from '../../transactions/events/transaction-manual-created.event';
 
 @Update()
 export class TelegramManualTransactionUpdate {
@@ -22,8 +23,8 @@ export class TelegramManualTransactionUpdate {
     private readonly transactionGroupsService: TransactionGroupsService,
     private readonly dateParser: DateParserService,
     private readonly exchangeRateService: ExchangeRateService,
-    private readonly autoRegistrationService: AutoRegistrationService,
-    private readonly sheetUpdateService: SheetUpdateService,
+    private readonly extractionService: TransactionExtractionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.logger.log('TelegramManualTransactionUpdate instantiated');
   }
@@ -31,12 +32,40 @@ export class TelegramManualTransactionUpdate {
   async handleAddTransaction(@Ctx() ctx: SessionContext) {
     this.logger.log('handleAddTransaction');
     try {
-      // Clear any existing session data
       this.baseHandler.clearSession(ctx);
 
       await ctx.reply(
         '➕ <b>Manual Transaction Entry</b>\n\n' +
-        'What type of transaction is this?',
+        'Describe your transaction in one message.\n\n' +
+        'Or use the step-by-step wizard:',
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🪄 Use Wizard', callback_data: 'manual_use_wizard' },
+                { text: '🚫 Cancel', callback_data: 'manual_cancel' },
+              ],
+            ],
+          },
+        }
+      );
+
+      ctx.session.manualTransactionState = 'waiting_freeform';
+    } catch (error) {
+      this.logger.error(`Error starting manual transaction: ${error.message}`);
+      await ctx.reply('Error starting manual entry. Please try again.');
+    }
+  }
+
+  @Action('manual_use_wizard')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualUseWizard(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      ctx.session.manualTransactionState = 'waiting_type';
+      await ctx.editMessageText(
+        '➕ <b>Manual Transaction Entry</b>\n\nWhat type of transaction is this?',
         {
           parse_mode: 'HTML',
           reply_markup: {
@@ -45,19 +74,169 @@ export class TelegramManualTransactionUpdate {
                 { text: '💰 Income', callback_data: 'manual_type_INCOME' },
                 { text: '💸 Expense', callback_data: 'manual_type_EXPENSE' },
               ],
+              [{ text: '🚫 Cancel', callback_data: 'manual_cancel' }],
+            ],
+          },
+        }
+      );
+    } catch (error) {
+      this.logger.error(`Error starting wizard: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  async handleManualFreeform(@Ctx() ctx: SessionContext) {
+    if (!ctx.message || !('text' in ctx.message)) return;
+    const text = ctx.message.text.trim();
+
+    let draft: TransactionDraft;
+    try {
+      draft = await this.extractionService.extract(text);
+    } catch (error) {
+      this.logger.error(`Extraction failed: ${error.message}`);
+      await ctx.reply(
+        '⚠️ Could not understand your message. Please try again or tap the wizard button.',
+        {
+          reply_markup: {
+            inline_keyboard: [
               [
+                { text: '🪄 Use Wizard', callback_data: 'manual_use_wizard' },
                 { text: '🚫 Cancel', callback_data: 'manual_cancel' },
               ],
             ],
           },
         }
       );
-
-      ctx.session.manualTransactionState = 'waiting_type';
-    } catch (error) {
-      this.logger.error(`Error starting manual transaction: ${error.message}`);
-      await ctx.reply('Error starting manual entry. Please try again.');
+      return;
     }
+
+    this.applyDraftToSession(ctx, draft);
+    await this.resumeWizardAtFirstMissingField(ctx);
+  }
+
+  private applyDraftToSession(ctx: SessionContext, draft: TransactionDraft) {
+    if (draft.type) ctx.session.manualTransactionType = draft.type;
+    if (draft.platform) {
+      ctx.session.manualTransactionPlatform = draft.platform;
+      ctx.session.manualTransactionCurrency = this.transactionsService.getCurrencyForPlatform(
+        draft.platform as TransactionPlatform,
+      );
+    } else if (draft.currency) {
+      ctx.session.manualTransactionCurrency = draft.currency;
+    }
+    if (ctx.session.manualTransactionPlatform) {
+      const allowed = this.transactionsService.getAvailablePaymentMethods(
+        ctx.session.manualTransactionPlatform as TransactionPlatform,
+      );
+      if (draft.method && allowed.includes(draft.method as any)) {
+        ctx.session.manualTransactionMethod = draft.method;
+      } else if (!draft.method && allowed.includes('DEBIT_CARD' as any)) {
+        // Default to DEBIT_CARD when not stated — other methods (Pago Móvil, Electronic Transfer)
+        // are handled via the photo flow, so manual entries are almost always card purchases.
+        ctx.session.manualTransactionMethod = 'DEBIT_CARD';
+      }
+    }
+    if (draft.amount) ctx.session.manualTransactionAmount = draft.amount;
+    if (draft.description) ctx.session.manualTransactionDescription = draft.description;
+    if (draft.date) {
+      const parsed = new Date(draft.date);
+      if (!isNaN(parsed.getTime())) {
+        ctx.session.manualTransactionDate = parsed;
+      }
+    }
+    if (!ctx.session.manualTransactionDate) {
+      ctx.session.manualTransactionDate = new Date();
+    }
+  }
+
+  private async resumeWizardAtFirstMissingField(@Ctx() ctx: SessionContext) {
+    const s = ctx.session;
+    const summary = this.buildSummary(ctx);
+    const header = `➕ <b>Manual Transaction Entry</b>\n\n${summary}${summary ? '\n' : ''}`;
+
+    if (!s.manualTransactionType) {
+      s.manualTransactionState = 'waiting_type';
+      await ctx.reply(header + '\nWhat type of transaction is this?', {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '💰 Income', callback_data: 'manual_type_INCOME' },
+              { text: '💸 Expense', callback_data: 'manual_type_EXPENSE' },
+            ],
+            [{ text: '🚫 Cancel', callback_data: 'manual_cancel' }],
+          ],
+        },
+      });
+      return;
+    }
+
+    if (!s.manualTransactionPlatform) {
+      s.manualTransactionState = 'waiting_account';
+      await ctx.reply(header + '\nWhich account?', {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🏦 Banesco', callback_data: 'manual_account_BANESCO' }],
+            [{ text: '🏦 Bank of America', callback_data: 'manual_account_BANK_OF_AMERICA' }],
+            [{ text: '💱 Binance', callback_data: 'manual_account_BINANCE' }],
+            [
+              { text: '👛 Wallet', callback_data: 'manual_account_WALLET' },
+              { text: '💵 Cash Box', callback_data: 'manual_account_CASH_BOX' },
+            ],
+            [{ text: '🚫 Cancel', callback_data: 'manual_cancel' }],
+          ],
+        },
+      });
+      return;
+    }
+
+    const methods = this.transactionsService.getAvailablePaymentMethods(
+      s.manualTransactionPlatform as TransactionPlatform,
+    );
+    if (methods.length > 0 && !s.manualTransactionMethod) {
+      s.manualTransactionState = 'waiting_method';
+      const buttons = methods.map(m => [
+        { text: this.getMethodLabel(m), callback_data: `manual_method_${m}` },
+      ]);
+      buttons.push([{ text: '🚫 Cancel', callback_data: 'manual_cancel' }]);
+      await ctx.reply(header + '\nSelect payment method:', {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buttons },
+      });
+      return;
+    }
+
+    if (!s.manualTransactionAmount) {
+      s.manualTransactionState = 'waiting_amount';
+      await ctx.reply(header + '\nEnter the amount:', { parse_mode: 'HTML' });
+      return;
+    }
+
+    if (!s.manualTransactionDescription) {
+      s.manualTransactionState = 'waiting_description';
+      await ctx.reply(header + '\nEnter a description for this transaction:', { parse_mode: 'HTML' });
+      return;
+    }
+
+    if (s.manualTransactionDate) {
+      await this.showConfirmation(ctx);
+      return;
+    }
+
+    s.manualTransactionState = 'waiting_date_choice';
+    await ctx.reply(header + '\nWhen did this transaction occur?', {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '⏰ Now', callback_data: 'manual_date_now' },
+            { text: '📅 Custom', callback_data: 'manual_date_custom' },
+          ],
+          [{ text: '🚫 Cancel', callback_data: 'manual_cancel' }],
+        ],
+      },
+    });
   }
 
   @Action(/^manual_type_(.+)$/)
@@ -65,47 +244,10 @@ export class TelegramManualTransactionUpdate {
   async handleManualType(@Ctx() ctx: SessionContext) {
     try {
       const match = (ctx as any).match as RegExpMatchArray;
-      const type = match[1] as 'INCOME' | 'EXPENSE';
-
+      ctx.session.manualTransactionType = match[1] as 'INCOME' | 'EXPENSE';
       await ctx.answerCbQuery();
-
-      ctx.session.manualTransactionType = type;
-      ctx.session.manualTransactionState = 'waiting_account';
-
-      const typeLabels: Record<string, string> = {
-        'INCOME': '💰 Income',
-        'EXPENSE': '💸 Expense',
-      };
-      const typeLabel = typeLabels[type] || type;
-
-      await ctx.editMessageText(
-        `➕ <b>Manual Transaction Entry</b>\n\n` +
-        `Type: ${typeLabel}\n\n` +
-        'Which account?',
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '🏦 Banesco', callback_data: 'manual_account_BANESCO' },
-              ],
-              [
-                { text: '🏦 Bank of America', callback_data: 'manual_account_BANK_OF_AMERICA' },
-              ],
-              [
-                { text: '💱 Binance', callback_data: 'manual_account_BINANCE' },
-              ],
-              [
-                { text: '👛 Wallet', callback_data: 'manual_account_WALLET' },
-                { text: '💵 Cash Box', callback_data: 'manual_account_CASH_BOX' },
-              ],
-              [
-                { text: '🚫 Cancel', callback_data: 'manual_cancel' },
-              ],
-            ],
-          },
-        }
-      );
+      await this.collapseButtonsToSummary(ctx);
+      await this.resumeWizardAtFirstMissingField(ctx);
     } catch (error) {
       this.logger.error(`Error handling manual type: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -118,50 +260,11 @@ export class TelegramManualTransactionUpdate {
     try {
       const match = (ctx as any).match as RegExpMatchArray;
       const platform = match[1];
-
-      await ctx.answerCbQuery();
-
       ctx.session.manualTransactionPlatform = platform;
-
-      // Infer currency
-      const currency = this.transactionsService.getCurrencyForPlatform(platform as any);
-      ctx.session.manualTransactionCurrency = currency;
-
-      // Get available payment methods
-      const methods = this.transactionsService.getAvailablePaymentMethods(platform as any);
-
-      const summary = this.buildSummary(ctx);
-
-      if (methods.length === 0) {
-        // Skip payment method for Wallet/Cash Box
-        ctx.session.manualTransactionState = 'waiting_amount';
-
-        await ctx.editMessageText(
-          `➕ <b>Manual Transaction Entry</b>\n\n` +
-          summary +
-          '\nEnter the amount:',
-          { parse_mode: 'HTML' }
-        );
-      } else {
-        // Show payment method options
-        ctx.session.manualTransactionState = 'waiting_method';
-
-        const buttons = methods.map(method => [
-          { text: this.getMethodLabel(method), callback_data: `manual_method_${method}` }
-        ]);
-
-        buttons.push([{ text: '🚫 Cancel', callback_data: 'manual_cancel' }]);
-
-        await ctx.editMessageText(
-          `➕ <b>Manual Transaction Entry</b>\n\n` +
-          summary +
-          '\nSelect payment method:',
-          {
-            parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: buttons },
-          }
-        );
-      }
+      ctx.session.manualTransactionCurrency = this.transactionsService.getCurrencyForPlatform(platform as any);
+      await ctx.answerCbQuery();
+      await this.collapseButtonsToSummary(ctx);
+      await this.resumeWizardAtFirstMissingField(ctx);
     } catch (error) {
       this.logger.error(`Error handling manual account: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -173,24 +276,91 @@ export class TelegramManualTransactionUpdate {
   async handleManualMethod(@Ctx() ctx: SessionContext) {
     try {
       const match = (ctx as any).match as RegExpMatchArray;
-      const method = match[1];
-
+      ctx.session.manualTransactionMethod = match[1];
       await ctx.answerCbQuery();
-
-      ctx.session.manualTransactionMethod = method;
-      ctx.session.manualTransactionState = 'waiting_amount';
-
-      const summary = this.buildSummary(ctx);
-
-      await ctx.editMessageText(
-        `➕ <b>Manual Transaction Entry</b>\n\n` +
-        summary +
-        '\nEnter the amount:',
-        { parse_mode: 'HTML' }
-      );
+      await this.collapseButtonsToSummary(ctx);
+      await this.resumeWizardAtFirstMissingField(ctx);
     } catch (error) {
       this.logger.error(`Error handling manual method: ${error.message}`);
       await ctx.answerCbQuery('Error');
+    }
+  }
+
+  private async showConfirmation(ctx: SessionContext) {
+    ctx.session.manualTransactionState = 'waiting_confirmation';
+    const dateStr = ctx.session.manualTransactionDate!.toLocaleString('en-US', {
+      timeZone: 'America/Caracas',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    await ctx.reply(
+      `➕ <b>Confirm Transaction</b>\n\n${this.buildSummary(ctx)}\nDate: ${dateStr}\n\nIs this correct?`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Confirm', callback_data: 'manual_confirm' },
+              { text: '❌ Reject', callback_data: 'manual_reject' },
+            ],
+          ],
+        },
+      },
+    );
+  }
+
+  @Action('manual_confirm')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualConfirm(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery();
+      const date = ctx.session.manualTransactionDate;
+      await this.createTransactionAndFinish(ctx, true, date);
+    } catch (error) {
+      this.logger.error(`Error confirming transaction: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  @Action('manual_reject')
+  @UseGuards(TelegramAuthGuard)
+  async handleManualReject(@Ctx() ctx: SessionContext) {
+    try {
+      await ctx.answerCbQuery('Rejected');
+      this.baseHandler.clearSession(ctx);
+      ctx.session.manualTransactionState = 'waiting_freeform';
+      await ctx.editMessageText(
+        '➕ <b>Manual Transaction Entry</b>\n\n' +
+        'Rejected. Describe your transaction in one message, or use the step-by-step wizard:',
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🪄 Use Wizard', callback_data: 'manual_use_wizard' },
+                { text: '🚫 Cancel', callback_data: 'manual_cancel' },
+              ],
+            ],
+          },
+        },
+      );
+    } catch (error) {
+      this.logger.error(`Error rejecting transaction: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  private async collapseButtonsToSummary(ctx: SessionContext) {
+    try {
+      await ctx.editMessageText(
+        `➕ <b>Manual Transaction Entry</b>\n\n${this.buildSummary(ctx)}`,
+        { parse_mode: 'HTML' },
+      );
+    } catch (e) {
+      // Message may be too old to edit; ignore.
     }
   }
 
@@ -233,53 +403,16 @@ export class TelegramManualTransactionUpdate {
       }
 
       if (ctx.session.manualTransactionState === 'waiting_amount') {
-        // Parse amount
         const amount = parseFloat(text.replace(/,/g, ''));
-
         if (isNaN(amount) || amount <= 0) {
           await ctx.reply('Invalid amount. Please enter a positive number.');
           return;
         }
-
         ctx.session.manualTransactionAmount = amount;
-        ctx.session.manualTransactionState = 'waiting_description';
-
-        const summary = this.buildSummary(ctx);
-
-        await ctx.reply(
-          `➕ <b>Manual Transaction Entry</b>\n\n` +
-          summary +
-          '\nEnter a description for this transaction:',
-          { parse_mode: 'HTML' }
-        );
+        await this.resumeWizardAtFirstMissingField(ctx);
       } else if (ctx.session.manualTransactionState === 'waiting_description') {
-        // Save description and ask for date
-        const description = text;
-
-        ctx.session.manualTransactionDescription = description;
-        ctx.session.manualTransactionState = 'waiting_date_choice';
-
-        const summary = this.buildSummary(ctx);
-
-        await ctx.reply(
-          `➕ <b>Manual Transaction Entry</b>\n\n` +
-          summary +
-          '\nWhen did this transaction occur?',
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '⏰ Now', callback_data: 'manual_date_now' },
-                  { text: '📅 Custom', callback_data: 'manual_date_custom' },
-                ],
-                [
-                  { text: '🚫 Cancel', callback_data: 'manual_cancel' },
-                ],
-              ],
-            },
-          }
-        );
+        ctx.session.manualTransactionDescription = text;
+        await this.resumeWizardAtFirstMissingField(ctx);
       } else if (ctx.session.manualTransactionState === 'waiting_custom_date') {
         // Parse custom date input
         const dateInput = text;
@@ -349,12 +482,17 @@ export class TelegramManualTransactionUpdate {
     }
   }
 
-  @Action('manual_connect_group')
+  @Action(/^manual_connect_group(?:_(\d+))?$/)
   @UseGuards(TelegramAuthGuard)
   async handleManualConnectGroup(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery();
 
+      const match = (ctx as any).match as RegExpMatchArray | undefined;
+      const idFromCallback = match?.[1] ? parseInt(match[1], 10) : undefined;
+      if (idFromCallback) {
+        ctx.session.currentTransactionId = idFromCallback;
+      }
       const currentTxId = ctx.session.currentTransactionId;
 
       if (!currentTxId) {
@@ -594,86 +732,7 @@ export class TelegramManualTransactionUpdate {
     ctx.session.manualTransactionDescription = undefined;
     ctx.session.manualTransactionDate = undefined;
 
-    // Try sheet cell update first (exact matches like "Neyda" need priority over LLM)
-    try {
-      const sheetResult = await this.sheetUpdateService.trySheetUpdate(transaction);
-      if (sheetResult) {
-        await this.transactionsService.update(transaction.id, {
-          status: TransactionStatus.REGISTERED,
-        });
-
-        let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
-        if (transaction.currency === 'VES') {
-          try {
-            const latestRate = await this.exchangeRateService.findLatest();
-            if (latestRate) {
-              const usd = Number(transaction.amount) / Number(latestRate.value);
-              amountLine += ` (${usd.toFixed(2)} USD)`;
-            }
-          } catch (e) { /* rate unavailable */ }
-        }
-
-        const sheetMessage =
-          `✅ <b>Transaction Auto-Registered!</b>\n\n` +
-          `<b>${description}</b>\n\n` +
-          `${amountLine}\n` +
-          `Status: Registered`;
-
-        if (editMode) {
-          await ctx.editMessageText(sheetMessage, { parse_mode: 'HTML' });
-        } else {
-          await ctx.reply(sheetMessage, { parse_mode: 'HTML' });
-        }
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-    } catch (error) {
-      this.logger.error(`Sheet update error: ${error.message}`);
-      const errorMessage = `⚠️ <b>${description}</b>\n\n${error.message}`;
-      if (editMode) {
-        await ctx.editMessageText(errorMessage, { parse_mode: 'HTML' });
-      } else {
-        await ctx.reply(errorMessage, { parse_mode: 'HTML' });
-      }
-      // Don't return - fall through to normal flow so user can still manage the transaction
-    }
-
-    // Try auto-registration for known transaction types (journal entry creation)
-    const autoResult = await this.autoRegistrationService.tryAutoRegister(transaction);
-    if (autoResult) {
-      await this.transactionsService.update(transaction.id, {
-        status: TransactionStatus.REGISTERED,
-      });
-
-      let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
-      if (transaction.currency === 'VES') {
-        try {
-          const latestRate = await this.exchangeRateService.findLatest();
-          if (latestRate) {
-            const usd = Number(transaction.amount) / Number(latestRate.value);
-            amountLine += ` (${usd.toFixed(2)} USD)`;
-          }
-        } catch (e) { /* rate unavailable */ }
-      }
-
-      const autoMessage =
-        `✅ <b>Transaction Auto-Registered!</b>\n\n` +
-        `<b>${description}</b>\n\n` +
-        `${amountLine}\n` +
-        `Journal: ${autoResult.debitAccount} / ${autoResult.creditAccount}\n` +
-        `Category: ${autoResult.rule.category} / ${autoResult.rule.subcategory}\n` +
-        `Status: Registered`;
-
-      if (editMode) {
-        await ctx.editMessageText(autoMessage, { parse_mode: 'HTML' });
-      } else {
-        await ctx.reply(autoMessage, { parse_mode: 'HTML' });
-      }
-      this.baseHandler.clearSession(ctx);
-      return;
-    }
-
-    // Format success message
+    // Format success message — no DB queries here, render immediately.
     const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸' };
     const typeIcon = typeIcons[transaction.type] || '💸';
     const platformLabel = this.getPlatformLabel(transaction.platform);
@@ -687,58 +746,28 @@ export class TelegramManualTransactionUpdate {
       minute: '2-digit',
     });
 
-    // Check if there are other REVIEWED transactions or existing groups to connect to
-    const allTransactions = await this.transactionsService.findAll({});
-    const otherReviewedTransactions = allTransactions.filter(t =>
-      t.status === 'REVIEWED' &&
-      t.id !== transaction.id &&
-      t.groupId === null
-    );
-    const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
-
-    let amountLine = `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}`;
-    if (transaction.currency === 'VES') {
-      try {
-        const latestRate = await this.exchangeRateService.findLatest();
-        if (latestRate) {
-          const usd = Number(transaction.amount) / Number(latestRate.value);
-          amountLine += ` (${usd.toFixed(2)} USD)`;
-        }
-      } catch (e) { /* rate unavailable */ }
-    }
-
     const successMessage =
       `✅ <b>Transaction Created!</b>\n\n` +
       `${typeIcon} <b>${description}</b>\n\n` +
-      `${amountLine}\n` +
+      `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}\n` +
       `Account: ${platformLabel}\n` +
       `Method: ${methodLabel}\n` +
       `Date: ${dateStr}\n` +
       `Status: Reviewed (ready to register)`;
 
-    if (otherReviewedTransactions.length > 0 || existingGroups.length > 0) {
-      // Store the created transaction ID in session for grouping
-      ctx.session.currentTransactionId = transaction.id;
-
-      const keyboard = {
-        inline_keyboard: [
-          [{ text: '📎 Connect to Group', callback_data: 'manual_connect_group' }],
-        ],
-      };
-
-      if (editMode) {
-        await ctx.editMessageText(successMessage, { parse_mode: 'HTML', reply_markup: keyboard });
-      } else {
-        await ctx.reply(successMessage, { parse_mode: 'HTML', reply_markup: keyboard });
-      }
+    if (editMode) {
+      await ctx.editMessageText(successMessage, { parse_mode: 'HTML' });
     } else {
-      if (editMode) {
-        await ctx.editMessageText(successMessage, { parse_mode: 'HTML' });
-      } else {
-        await ctx.reply(successMessage, { parse_mode: 'HTML' });
-      }
-      this.baseHandler.clearSession(ctx);
+      await ctx.reply(successMessage, { parse_mode: 'HTML' });
     }
+    this.baseHandler.clearSession(ctx);
+
+    // Sheet update + auto-registration + USD conversion + group-connect lookup all run
+    // asynchronously via the listener so the user gets an instant "Created" response.
+    this.eventEmitter.emit(
+      'transaction.manual.created',
+      new TransactionManualCreatedEvent(transaction),
+    );
   }
 
   // ==================== Helpers ====================
