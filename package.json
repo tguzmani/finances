@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "serve": "nx serve backend",
-    "serve:debug": "nx serve backend --inspect",
+    "dev": "nx serve backend",
+    "dev:debug": "nx serve backend --inspect",
     "build": "nx build backend",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

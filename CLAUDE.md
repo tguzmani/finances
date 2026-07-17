@@ -3,8 +3,8 @@
 ## Build & Run
 
 - **Build**: `pnpm build`
-- **Build/serve**: `pnpm serve` (runs `nx serve backend`)
-- **Debug mode**: `pnpm serve:debug`
+- **Build/serve**: `pnpm dev` (runs `nx serve backend`)
+- **Debug mode**: `pnpm dev:debug`
 - **Prisma generate**: `pnpm prisma:generate`
 - **Prisma migrate**: `pnpm prisma:migrate`
 
