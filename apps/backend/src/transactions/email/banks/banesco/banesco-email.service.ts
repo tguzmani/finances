@@ -38,6 +38,9 @@ export class BanescoEmailService extends BaseEmailService implements IBankEmailS
         platform: TransactionPlatform.BANESCO,
         method: PaymentMethod.DEBIT_CARD,
         type: TransactionType.EXPENSE,
+        // Notification and summary emails report the same purchase with different
+        // references, so the amount is the only reliable duplicate signal.
+        dedupeByAmount: true,
       }));
 
       transactions.push(...enriched);

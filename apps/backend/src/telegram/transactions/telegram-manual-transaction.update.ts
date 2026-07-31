@@ -296,8 +296,9 @@ export class TelegramManualTransactionUpdate {
       hour: '2-digit',
       minute: '2-digit',
     });
+    const internalRate = await this.getInternalRate(ctx);
     await ctx.reply(
-      `➕ <b>Confirm Transaction</b>\n\n${this.buildSummary(ctx)}\nDate: ${dateStr}\n\nIs this correct?`,
+      `➕ <b>Confirm Transaction</b>\n\n${this.buildSummary(ctx, internalRate)}\nDate: ${dateStr}\n\nIs this correct?`,
       {
         parse_mode: 'HTML',
         reply_markup: {
@@ -772,7 +773,25 @@ export class TelegramManualTransactionUpdate {
 
   // ==================== Helpers ====================
 
-  private buildSummary(ctx: SessionContext): string {
+  /**
+   * Latest internal exchange rate (VES per USD), only when the amount is in VES.
+   * Returns undefined if not applicable or unavailable, so the summary just omits
+   * the USD equivalent instead of failing.
+   */
+  private async getInternalRate(ctx: SessionContext): Promise<number | undefined> {
+    if (ctx.session.manualTransactionCurrency !== 'VES') return undefined;
+
+    try {
+      const rate = await this.exchangeRateService.findLatest();
+      const value = rate ? Number(rate.value) : 0;
+      return value > 0 ? value : undefined;
+    } catch (error) {
+      this.logger.error(`Could not fetch internal exchange rate: ${error.message}`);
+      return undefined;
+    }
+  }
+
+  private buildSummary(ctx: SessionContext, internalRate?: number): string {
     const parts: string[] = [];
 
     if (ctx.session.manualTransactionType) {
@@ -795,7 +814,12 @@ export class TelegramManualTransactionUpdate {
 
     if (ctx.session.manualTransactionAmount) {
       const currency = ctx.session.manualTransactionCurrency || '';
-      parts.push(`Amount: ${currency} ${ctx.session.manualTransactionAmount.toFixed(2)}`);
+      const amount = ctx.session.manualTransactionAmount;
+      const usdEquivalent =
+        currency === 'VES' && internalRate
+          ? ` (USD ${(amount / internalRate).toFixed(2)})`
+          : '';
+      parts.push(`Amount: ${currency} ${amount.toFixed(2)}${usdEquivalent}`);
     }
 
     if (ctx.session.manualTransactionDescription) {

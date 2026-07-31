@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { TransactionsBinanceService } from './transactions-binance.service';
 import { JournalEntryCacheService } from '../journal-entry/journal-entry-cache.service';
+import { JournalEntryService } from '../journal-entry/journal-entry.service';
 import { SheetUpdateService } from '../journal-entry/sheet-update.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
@@ -19,6 +20,7 @@ export class TransactionsService {
     private readonly emailRegistry: EmailServiceRegistry,
     private readonly binanceTransactions: TransactionsBinanceService,
     private readonly journalEntryCache: JournalEntryCacheService,
+    private readonly journalEntryService: JournalEntryService,
     private readonly sheetUpdateService: SheetUpdateService,
   ) { }
 
@@ -158,24 +160,24 @@ export class TransactionsService {
 
       try {
         const emails = await service.fetchEmails(limitPerBank);
-        const transactions = service.parseEmails(emails);
+        const transactions = await service.parseEmails(emails);
 
         totalEmails += emails.length;
 
         for (const tx of transactions) {
           try {
-            // Check for amount-based duplicates (BANESCO only)
-            if (tx.platform === TransactionPlatform.BANESCO) {
+            // Check for amount-based duplicates (senders without a stable reference)
+            if (tx.dedupeByAmount) {
               const existingByAmount = await this.prisma.transaction.findFirst({
                 where: {
-                  platform: TransactionPlatform.BANESCO,
+                  platform: tx.platform,
                   amount: tx.amount,
                 },
               });
 
               if (existingByAmount) {
                 this.logger.warn(
-                  `Duplicate BANESCO transaction detected by amount: ${tx.amount} ${tx.currency}. ` +
+                  `Duplicate ${tx.platform} transaction detected by amount: ${tx.amount} ${tx.currency}. ` +
                   `Existing transaction ID: ${existingByAmount.id} (${existingByAmount.transactionId}), ` +
                   `New email transaction ID: ${tx.transactionId}. Skipping.`
                 );
@@ -216,7 +218,24 @@ export class TransactionsService {
                 this.logger.error(`Sheet update failed for transaction ${created.id}: ${err.message}`);
               }
 
-              // If no sheet rule matched, pre-compute journal entry classification
+              // If no sheet rule matched, auto-register the journal entry when the
+              // sender opts in — accounts and category are resolved by the LLM
+              if (tx.autoRegister) {
+                try {
+                  await this.journalEntryService.createJournalEntry(created);
+                  const registered = await this.prisma.transaction.update({
+                    where: { id: created.id },
+                    data: { status: TransactionStatus.REGISTERED },
+                  });
+                  autoRegistered.push(registered);
+                  this.logger.log(`Auto-registered transaction ${created.id} via journal entry`);
+                  continue;
+                } catch (err) {
+                  this.logger.error(`Journal entry auto-registration failed for transaction ${created.id}: ${err.message}`);
+                }
+              }
+
+              // Otherwise pre-compute the journal entry classification for manual review
               void this.journalEntryCache.classifyAndCache(created).catch((err) =>
                 this.logger.error(`Failed to cache journal entry for synced transaction ${created.id}: ${err.message}`),
               );

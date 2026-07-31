@@ -16,6 +16,17 @@ export interface ParsedTransaction {
   method: PaymentMethod;
   type: TransactionType;
   description?: string;
+  /**
+   * Deduplicate against existing transactions of the same platform with the same
+   * amount. Only for senders whose emails lack a stable reference across formats
+   * (Banesco). Sources with a real order/invoice number rely on transactionId.
+   */
+  dedupeByAmount?: boolean;
+  /**
+   * Register the journal entry in Google Sheets automatically when no sheet
+   * update rule matched, instead of leaving the transaction for manual review.
+   */
+  autoRegister?: boolean;
 }
 
 export interface BankEmailConfig {
@@ -25,6 +36,6 @@ export interface BankEmailConfig {
 
 export interface IBankEmailService {
   fetchEmails(limit: number): Promise<RawEmail[]>;
-  parseEmails(emails: RawEmail[]): ParsedTransaction[];
+  parseEmails(emails: RawEmail[]): ParsedTransaction[] | Promise<ParsedTransaction[]>;
   getBankPlatform(): TransactionPlatform;
 }

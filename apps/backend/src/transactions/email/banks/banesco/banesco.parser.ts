@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { parseVesAmount } from '../../amount.util';
 
 export interface ParsedTransaction {
   date: Date;
@@ -81,17 +82,7 @@ export class BanescoParser {
   }
 
   private parseAmount(amountStr: string): number {
-    // Handle both formats:
-    // - "20.703,03" (European: period = thousands, comma = decimal)
-    // - "20703.03" (US/VE: period = decimal)
-    if (amountStr.includes(',')) {
-      // European format: remove periods (thousands), replace comma with period
-      const normalized = amountStr.replace(/\./g, '').replace(',', '.');
-      return parseFloat(normalized);
-    } else {
-      // US/VE format: period is already decimal separator, just parse it
-      return parseFloat(amountStr);
-    }
+    return parseVesAmount(amountStr);
   }
 
   private parseDate(dateStr: string, timeStr: string): Date {
