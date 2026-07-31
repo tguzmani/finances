@@ -8,6 +8,14 @@ export const PLATFORM_TO_ACCOUNT: Record<string, string> = {
   CASH_BOX: 'Cash',
 };
 
+/**
+ * Merchants that are always delivery expenses.
+ * When a description matches one of these, the entry must be classified as
+ * debit "Gastos delivery" / category "Comida" / subcategory "Delivery".
+ * Extend this list as new delivery merchants show up.
+ */
+export const DELIVERY_MERCHANTS: string[] = ['Rollo', 'Plan B', 'Pollos Camper'];
+
 export const JOURNAL_CATEGORIES: Record<string, string[]> = {
   Esther:   ['Esther'],
   Comida:   ['Pescado', 'Carne', 'Mercado', 'Delivery', 'Local'],

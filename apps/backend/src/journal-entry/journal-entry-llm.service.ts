@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OpenRouterService } from '../common/open-router.service';
-import { JOURNAL_ACCOUNTS, JOURNAL_CATEGORIES } from './journal-entry.constants';
+import { DELIVERY_MERCHANTS, JOURNAL_ACCOUNTS, JOURNAL_CATEGORIES } from './journal-entry.constants';
 
 export interface JournalClassification {
   debit_account: string;
@@ -31,6 +31,9 @@ ${JOURNAL_ACCOUNTS.join(', ')}
 
 Available categories and subcategories (only for EXPENSE/INCOME, not TRANSFER):
 ${Object.entries(JOURNAL_CATEGORIES).map(([cat, subs]) => `${cat}: [${subs.join(', ')}]`).join('\n')}
+
+Special cases (these override the general rules):
+- If the description mentions any of these delivery merchants: ${DELIVERY_MERCHANTS.map((m) => `"${m}"`).join(', ')} — even as part of a longer text or with different casing — it is a delivery expense. Use debit_account "Gastos delivery", category "Comida", subcategory "Delivery". The credit_account is still the platform account.
 
 Respond ONLY with this JSON (no markdown, no explanation):
 {"debit_account": "...", "credit_account": "...", "category": "...", "subcategory": "..."}`;
