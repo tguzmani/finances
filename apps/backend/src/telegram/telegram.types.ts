@@ -46,15 +46,8 @@ export interface ReviewSession {
   manualTransactionAmount?: number;
   manualTransactionDescription?: string;
   manualTransactionDate?: Date;
-  // Transaction grouping flow
-  waitingForGroupDescription?: boolean;
-  pendingGroupTransactionId?: number;
-  currentGroupAction?: 'creating' | 'adding';
-  // Registration with groups
-  registerTransactionGroupIds?: number[];
-  lastRegisteredGroupIds?: number[];
   // Iterative registration flow
-  registerItems?: Array<{type: 'transaction' | 'group', id: number, data: any}>;
+  registerItems?: Array<{ id: number; data: any }>;
   registerCurrentIndex?: number;
   registerTotalCount?: number;
   registerMessageId?: number; // For editing messages instead of sending new ones
@@ -73,10 +66,6 @@ export interface ReviewSession {
   // Date/amount change flow (review)
   waitingForDateChange?: boolean;
   waitingForAmountChange?: boolean;
-  // /group command flow
-  groupFlowGroupId?: number;
-  groupFlowWaitingForDescription?: boolean;
-  groupFlowTransactionIds?: number[];
   // Notification edit flow
   notificationTransactionId?: number;
   // Banesco balance update flow
@@ -111,8 +100,6 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'convert', description: 'Convert between currencies' },
   { command: 'transactions', description: 'View recent expenses' },
   { command: 'exchanges', description: 'View recent exchanges' },
-  { command: 'group', description: 'Create or manage groups' },
-  { command: 'groups', description: 'View unregistered groups' },
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },

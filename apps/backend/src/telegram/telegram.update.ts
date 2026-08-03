@@ -11,10 +11,6 @@ import { TelegramRatesUpdate } from './rates/telegram-rates.update';
 import { TelegramAccountsUpdate } from './accounts/telegram-accounts.update';
 import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
-import { TransactionGroupsService } from '../transaction-groups/transaction-groups.service';
-import { ExchangeRateService } from '../exchanges/exchange-rate.service';
-import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
-import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
@@ -34,10 +30,6 @@ export class TelegramUpdate {
     private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly expensesUpdate: TelegramExpensesUpdate,
     private readonly baseHandler: TelegramBaseHandler,
-    private readonly transactionGroupsService: TransactionGroupsService,
-    private readonly exchangeRateService: ExchangeRateService,
-    private readonly groupsPresenter: TelegramGroupsPresenter,
-    private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly convertUpdate: TelegramConvertUpdate,
     private readonly equityUpdate: TelegramEquityUpdate,
     private readonly settingsUpdate: TelegramSettingsUpdate,
@@ -73,8 +65,6 @@ export class TelegramUpdate {
       '/convert - Convert between currencies\n' +
       '/equity - View equity (net worth) and chart\n' +
       '/exchanges - View recent exchanges\n' +
-      '/group - Create or manage groups\n' +
-      '/groups - View unregistered groups\n' +
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add manual transaction\n' +
@@ -84,46 +74,6 @@ export class TelegramUpdate {
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
-  }
-
-  @Command('group')
-  @UseGuards(TelegramAuthGuard)
-  async handleGroup(@Ctx() ctx: SessionContext) {
-    await this.groupFlowUpdate.startGroupFlow(ctx);
-  }
-
-  @Command('groups')
-  @UseGuards(TelegramAuthGuard)
-  async handleGroups(@Ctx() ctx: SessionContext) {
-    try {
-      const [groups, latestRate] = await Promise.all([
-        this.transactionGroupsService.findGroupsForRegistration(),
-        this.exchangeRateService.findLatest(),
-      ]);
-
-      if (groups.length === 0) {
-        await ctx.reply('📭 No unregistered groups.');
-        return;
-      }
-
-      const exchangeRate = latestRate ? Number(latestRate.value) : 0;
-
-      let message = `<b>Unregistered Groups (${groups.length}):</b>\n\n`;
-
-      for (const group of groups) {
-        const calculation = await this.transactionGroupsService.calculateGroupAmount(group.id, exchangeRate);
-        const groupDate = await this.transactionGroupsService.calculateGroupDate(group.id);
-
-        // Use presenter to format the group
-        message += this.groupsPresenter.formatGroupForDisplay(group, calculation, groupDate, exchangeRate);
-        message += '\n\n';
-      }
-
-      await ctx.reply(message, { parse_mode: 'HTML' });
-    } catch (error) {
-      this.logger.error(`Error in groups command: ${error.message}`);
-      await ctx.reply('Error getting groups.');
-    }
   }
 
   @Command('add_transaction')

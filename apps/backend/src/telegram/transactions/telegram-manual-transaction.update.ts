@@ -5,7 +5,6 @@ import { SessionContext } from '../telegram.types';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { TelegramBaseHandler } from '../telegram-base.handler';
-import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { DateParserService } from '../../common/date-parser.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TransactionPlatform } from '../../transactions/transaction.types';
@@ -20,7 +19,6 @@ export class TelegramManualTransactionUpdate {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly baseHandler: TelegramBaseHandler,
-    private readonly transactionGroupsService: TransactionGroupsService,
     private readonly dateParser: DateParserService,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly extractionService: TransactionExtractionService,
@@ -375,34 +373,6 @@ export class TelegramManualTransactionUpdate {
     try {
       const text = ctx.message.text.trim();
 
-      // Handle group description input (from manual connect group flow)
-      if (ctx.session.waitingForGroupDescription) {
-        const description = text;
-        const tx1Id = ctx.session.pendingGroupTransactionId;
-        const tx2Id = ctx.session.currentTransactionId;
-
-        if (!tx1Id || !tx2Id) {
-          await ctx.reply('⚠️ Session error. Please try again.');
-          this.baseHandler.clearSession(ctx);
-          return;
-        }
-
-        // Create group with both transactions
-        await this.transactionGroupsService.createGroupWithTransactions(
-          description,
-          [tx1Id, tx2Id]
-        );
-
-        await ctx.reply(
-          `✅ Group created: "${description}"\n` +
-          `Transactions ${tx1Id} and ${tx2Id} are now grouped.`
-        );
-
-        // Clear session
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
       if (ctx.session.manualTransactionState === 'waiting_amount') {
         const amount = parseFloat(text.replace(/,/g, ''));
         if (isNaN(amount) || amount <= 0) {
@@ -483,227 +453,6 @@ export class TelegramManualTransactionUpdate {
     }
   }
 
-  @Action(/^manual_connect_group(?:_(\d+))?$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleManualConnectGroup(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      const match = (ctx as any).match as RegExpMatchArray | undefined;
-      const idFromCallback = match?.[1] ? parseInt(match[1], 10) : undefined;
-      if (idFromCallback) {
-        ctx.session.currentTransactionId = idFromCallback;
-      }
-      const currentTxId = ctx.session.currentTransactionId;
-
-      if (!currentTxId) {
-        await ctx.editMessageText('⚠️ Transaction not found.', { parse_mode: 'HTML' });
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      // Get available transactions to group with
-      const allTransactions = await this.transactionsService.findAll({});
-      const available = allTransactions.filter(t =>
-        (t.status === 'NEW' || t.status === 'REVIEWED') &&
-        t.id !== currentTxId &&
-        t.groupId === null
-      );
-
-      // Get existing groups to append to
-      const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
-
-      if (available.length === 0 && existingGroups.length === 0) {
-        await ctx.editMessageText('No other transactions or groups available for grouping.', { parse_mode: 'HTML' });
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      // Build buttons (no text list)
-      const buttons = [];
-
-      // Show existing groups first
-      for (const group of existingGroups) {
-        const memberCount = group.transactions.length;
-        const desc = group.description;
-        const maxDescLength = 40;
-        const truncatedDesc = desc.length > maxDescLength
-          ? desc.substring(0, maxDescLength) + '...'
-          : desc;
-        const buttonText = `📦 ${truncatedDesc} (${memberCount} txns)`;
-        buttons.push([
-          Markup.button.callback(buttonText, `manual_group_add_to_${group.id}`)
-        ]);
-      }
-
-      // Then show individual ungrouped transactions
-      for (const tx of available) {
-        const amount = Number(tx.amount).toFixed(2);
-        const desc = tx.description || 'No description';
-
-        // Truncate long descriptions to fit in button
-        const maxDescLength = 45;
-        const truncatedDesc = desc.length > maxDescLength
-          ? desc.substring(0, maxDescLength) + '...'
-          : desc;
-
-        // Button format: "Description - Amount USD"
-        const buttonText = `${truncatedDesc} - ${amount} ${tx.currency}`;
-
-        buttons.push([
-          Markup.button.callback(buttonText, `manual_group_select_${tx.id}`)
-        ]);
-      }
-
-      buttons.push([Markup.button.callback('❌ Cancel', 'manual_group_cancel')]);
-
-      await ctx.editMessageText('<b>Select transaction or group:</b>', {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard(buttons),
-      });
-    } catch (error) {
-      this.logger.error(`Error in manual connect group: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error loading transactions.');
-      this.baseHandler.clearSession(ctx);
-    }
-  }
-
-  @Action(/^manual_group_add_to_(\d+)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleManualGroupAddTo(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
-        return;
-      }
-
-      const match = ctx.callbackQuery.data.match(/^manual_group_add_to_(\d+)$/);
-      if (!match) {
-        return;
-      }
-
-      const groupId = parseInt(match[1]);
-      const txId = ctx.session.currentTransactionId;
-
-      if (!txId) {
-        await ctx.editMessageText('⚠️ Transaction not found.', { parse_mode: 'HTML' });
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      // Add transaction to the existing group
-      await this.transactionGroupsService.addTransactionToGroup(txId, groupId);
-
-      const group = await this.transactionGroupsService.findOne(groupId);
-      const count = await this.transactionGroupsService.getGroupMemberCount(groupId);
-
-      await ctx.editMessageText(
-        `✅ Transaction added to group: "${group.description}"\n` +
-        `Group now contains ${count} transactions.`,
-        { parse_mode: 'HTML' }
-      );
-
-      this.baseHandler.clearSession(ctx);
-    } catch (error) {
-      this.logger.error(`Error adding to group: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error adding transaction to group.');
-      this.baseHandler.clearSession(ctx);
-    }
-  }
-
-  @Action(/^manual_group_select_(\d+)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleManualGroupSelect(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
-        return;
-      }
-
-      const match = ctx.callbackQuery.data.match(/^manual_group_select_(\d+)$/);
-      if (!match) {
-        return;
-      }
-
-      const tx1Id = parseInt(match[1]); // Selected from list
-      const tx2Id = ctx.session.currentTransactionId; // Newly created transaction
-
-      if (!tx2Id) {
-        await ctx.editMessageText('⚠️ Transaction not found.', { parse_mode: 'HTML' });
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      const [tx1, tx2] = await Promise.all([
-        this.transactionsService.findOne(tx1Id),
-        this.transactionsService.findOne(tx2Id),
-      ]);
-
-      if (!tx1 || !tx2) {
-        await ctx.editMessageText('❌ Transaction not found.', { parse_mode: 'HTML' });
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      // Scenario 1: Both have NO group - create new
-      if (!tx1.groupId && !tx2.groupId) {
-        ctx.session.waitingForGroupDescription = true;
-        ctx.session.pendingGroupTransactionId = tx1Id;
-
-        await ctx.editMessageText('📝 Please type a description for this new group:', { parse_mode: 'HTML' });
-        return;
-      }
-
-      // Scenario 2: tx1 HAS group, tx2 has NO group - add tx2 to group
-      if (tx1.groupId && !tx2.groupId) {
-        await this.transactionGroupsService.addTransactionToGroup(tx2Id, tx1.groupId);
-
-        const group = await this.transactionGroupsService.findOne(tx1.groupId);
-        const count = await this.transactionGroupsService.getGroupMemberCount(tx1.groupId);
-
-        await ctx.editMessageText(
-          `✅ Transaction added to group: "${group.description}"\n` +
-          `Group now contains ${count} transactions.`,
-          { parse_mode: 'HTML' }
-        );
-
-        this.baseHandler.clearSession(ctx);
-        return;
-      }
-
-      // Scenario 3: tx2 already HAS group - error
-      if (tx2.groupId) {
-        const group = await this.transactionGroupsService.findOne(tx2.groupId);
-        await ctx.editMessageText(
-          `⚠️ Transaction is already in group: "${group.description}"`,
-          { parse_mode: 'HTML' }
-        );
-        this.baseHandler.clearSession(ctx);
-      }
-    } catch (error) {
-      this.logger.error(`Error handling manual group select: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error processing selection.');
-      this.baseHandler.clearSession(ctx);
-    }
-  }
-
-  @Action('manual_group_cancel')
-  @UseGuards(TelegramAuthGuard)
-  async handleManualGroupCancel(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery('Cancelled');
-      await ctx.editMessageText('❌ Grouping cancelled.', { parse_mode: 'HTML' });
-      this.baseHandler.clearSession(ctx);
-    } catch (error) {
-      this.logger.error(`Error handling manual group cancel: ${error.message}`);
-    }
-  }
-
   /**
    * Create transaction with all collected data and handle post-creation flow
    * @param ctx Session context
@@ -763,7 +512,7 @@ export class TelegramManualTransactionUpdate {
     }
     this.baseHandler.clearSession(ctx);
 
-    // Sheet update + auto-registration + USD conversion + group-connect lookup all run
+    // Sheet update + auto-registration + USD conversion all run
     // asynchronously via the listener so the user gets an instant "Created" response.
     this.eventEmitter.emit(
       'transaction.manual.created',

@@ -1,7 +1,7 @@
 import { Update, Ctx, Command, Action, On } from 'nestjs-telegraf';
 import { Markup } from 'telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
-import { Transaction, TransactionGroup } from '@prisma/client';
+import { Transaction } from '@prisma/client';
 import { TelegramService } from '../telegram.service';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { SessionContext } from '../telegram.types';
@@ -15,10 +15,6 @@ import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.u
 import { TelegramAccountsUpdate } from '../accounts/telegram-accounts.update';
 import { TelegramSettingsUpdate } from '../settings/telegram-settings.update';
 import { TelegramConvertUpdate } from '../exchanges/convert/telegram-convert.update';
-import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
-import { TransactionGroupStatus } from '../../transaction-groups/transaction-group.types';
-import { TelegramGroupsPresenter } from './telegram-groups.presenter';
-import { TelegramGroupFlowUpdate } from './telegram-group-flow.update';
 import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from '../pago-movil/telegram-pago-movil.update';
 import { DateParserService } from '../../common/date-parser.service';
@@ -47,9 +43,6 @@ export class TelegramTransactionsUpdate {
     private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly settingsUpdate: TelegramSettingsUpdate,
     private readonly convertUpdate: TelegramConvertUpdate,
-    private readonly transactionGroupsService: TransactionGroupsService,
-    private readonly groupsPresenter: TelegramGroupsPresenter,
-    private readonly groupFlowUpdate: TelegramGroupFlowUpdate,
     private readonly dateParser: DateParserService,
     private readonly journalEntryService: JournalEntryService,
     private readonly autoRegistrationService: AutoRegistrationService,
@@ -122,26 +115,6 @@ export class TelegramTransactionsUpdate {
         return;
       }
 
-      // Check if transaction is in a group
-      const transaction = await this.transactionsService.findOne(transactionId);
-      let ungroupedMessage = '';
-
-      if (transaction?.groupId) {
-        const group = await this.transactionGroupsService.findOne(transaction.groupId);
-        const memberCount = await this.transactionGroupsService.getGroupMemberCount(transaction.groupId);
-
-        // Remove from group
-        await this.transactionGroupsService.removeTransactionFromGroup(transactionId);
-
-        ungroupedMessage = `\n\n🔗 Removed from group: "${group.description}"`;
-
-        // If group now has only 1 member, delete the group
-        if (memberCount === 2) {
-          await this.transactionGroupsService.delete(group.id);
-          ungroupedMessage += '\n⚠️ Group deleted (only 1 transaction remaining).';
-        }
-      }
-
       // Update transaction status to REJECTED
       await this.transactionsService.update(transactionId, {
         status: TransactionStatus.REJECTED,
@@ -157,7 +130,6 @@ export class TelegramTransactionsUpdate {
         await ctx.editMessageText(
           `<b>Transaction ID: ${transactionId}</b>\n\n` +
           message +
-          ungroupedMessage +
           '\n\n❌ <b>Rejected</b>',
           {
             parse_mode: 'HTML',
@@ -170,7 +142,7 @@ export class TelegramTransactionsUpdate {
         );
         this.baseHandler.clearSession(ctx);
       } else {
-        await ctx.reply(`❌ Transaction rejected${ungroupedMessage}`);
+        await ctx.reply('❌ Transaction rejected');
         await this.showNextTransaction(ctx);
       }
     } catch (error) {
@@ -201,11 +173,6 @@ export class TelegramTransactionsUpdate {
 
       const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
-      const hasGroup = transaction.groupId !== null;
-      const groupButton = hasGroup
-        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
-        : Markup.button.callback('📎 Group', 'group_transaction');
-
       const buttons = [];
 
       if (transaction.imageUrl) {
@@ -219,7 +186,6 @@ export class TelegramTransactionsUpdate {
 
       buttons.push([
         Markup.button.callback('💲 Change Amount', 'review_amount'),
-        groupButton,
       ]);
 
       buttons.push([Markup.button.callback('❌ Reject', 'review_reject')]);
@@ -520,36 +486,18 @@ export class TelegramTransactionsUpdate {
   async handleRegisterTxConfirm(@Ctx() ctx: SessionContext) {
     try {
       const transactionIds = ctx.session.registerTransactionIds || [];
-      const groupIds = ctx.session.registerTransactionGroupIds || [];
 
-      if (transactionIds.length === 0 && groupIds.length === 0) {
+      if (transactionIds.length === 0) {
         await ctx.answerCbQuery('Session expired. Please run /register again.');
         return;
       }
 
       await ctx.answerCbQuery('Registering...');
 
-      // Register singles
-      if (transactionIds.length > 0) {
-        await this.telegramService.transactions.registerTransactions(transactionIds);
-      }
-
-      // Register groups (NEW → REGISTERED) and their transactions
-      if (groupIds.length > 0) {
-        for (const groupId of groupIds) {
-          await this.transactionGroupsService.update(groupId, { status: TransactionGroupStatus.REGISTERED });
-          const group = await this.transactionGroupsService.findOneWithTransactions(groupId);
-          for (const tx of group.transactions) {
-            await this.transactionsService.update(tx.id, {
-              status: TransactionStatus.REGISTERED,
-            });
-          }
-        }
-      }
+      await this.telegramService.transactions.registerTransactions(transactionIds);
 
       // Store IDs in session for undo
       ctx.session.lastRegisteredTransactionIds = transactionIds;
-      ctx.session.lastRegisteredGroupIds = groupIds;
 
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('↩️ Undo', 'register_tx_undo')],
@@ -557,9 +505,7 @@ export class TelegramTransactionsUpdate {
 
       await ctx.reply(
         `✅ <b>Registration Complete!</b>\n\n` +
-        `Registered:\n` +
-        `- ${transactionIds.length} transaction(s)\n` +
-        `- ${groupIds.length} group(s)`,
+        `Registered ${transactionIds.length} transaction(s).`,
         { parse_mode: 'HTML', ...keyboard }
       );
 
@@ -577,9 +523,8 @@ export class TelegramTransactionsUpdate {
   async handleRegisterTxUndo(@Ctx() ctx: SessionContext) {
     try {
       const transactionIds = ctx.session.lastRegisteredTransactionIds || [];
-      const groupIds = ctx.session.lastRegisteredGroupIds || [];
 
-      if (transactionIds.length === 0 && groupIds.length === 0) {
+      if (transactionIds.length === 0) {
         await ctx.answerCbQuery('Nothing to undo.');
         return;
       }
@@ -587,34 +532,17 @@ export class TelegramTransactionsUpdate {
       await ctx.answerCbQuery('Undoing registration...');
 
       // Revert transactions back to REVIEWED status
-      if (transactionIds.length > 0) {
-        await Promise.all(
-          transactionIds.map(id =>
-            this.transactionsService.update(id, {
-              status: TransactionStatus.REVIEWED,
-            })
-          )
-        );
-      }
-
-      // Revert groups back to NEW status and their transactions to REVIEWED
-      if (groupIds.length > 0) {
-        for (const groupId of groupIds) {
-          await this.transactionGroupsService.update(groupId, { status: TransactionGroupStatus.NEW });
-          const group = await this.transactionGroupsService.findOneWithTransactions(groupId);
-          for (const tx of group.transactions) {
-            await this.transactionsService.update(tx.id, {
-              status: TransactionStatus.REVIEWED,
-            });
-          }
-        }
-      }
+      await Promise.all(
+        transactionIds.map(id =>
+          this.transactionsService.update(id, {
+            status: TransactionStatus.REVIEWED,
+          })
+        )
+      );
 
       await ctx.reply(
         `↩️ <b>Registration Undone!</b>\n\n` +
-        `Reverted:\n` +
-        `- ${transactionIds.length} transaction(s) to REVIEWED\n` +
-        `- ${groupIds.length} group(s) to NEW`,
+        `Reverted ${transactionIds.length} transaction(s) to REVIEWED.`,
         { parse_mode: 'HTML' }
       );
 
@@ -624,288 +552,6 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error undoing transaction registration: ${error.message}`);
       await ctx.answerCbQuery('Error');
       await ctx.reply('Error undoing registration. Please try again.');
-    }
-  }
-
-  @Action('group_transaction')
-  @UseGuards(TelegramAuthGuard)
-  async handleGroupTransaction(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      const currentTxId = ctx.session.currentTransactionId;
-
-      if (!currentTxId) {
-        await ctx.reply('⚠️ No active transaction to group.');
-        return;
-      }
-
-      // Get NEW and REVIEWED transactions, exclude current, exclude already grouped
-      const transactions = await this.transactionsService.findAll({});
-      const available = transactions.filter(t =>
-        (t.status === 'NEW' || t.status === 'REVIEWED') &&
-        t.id !== currentTxId &&
-        t.groupId === null
-      );
-
-      // Get existing groups to append to
-      const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
-
-      if (available.length === 0 && existingGroups.length === 0) {
-        await ctx.reply('No other transactions or groups available for grouping.');
-        return;
-      }
-
-      // Build buttons (no text list)
-      const buttons = [];
-
-      // Show existing groups first
-      for (const group of existingGroups) {
-        const memberCount = group.transactions.length;
-        const desc = group.description;
-        const maxDescLength = 40;
-        const truncatedDesc = desc.length > maxDescLength
-          ? desc.substring(0, maxDescLength) + '...'
-          : desc;
-        const buttonText = `📦 ${truncatedDesc} (${memberCount} txns)`;
-        buttons.push([
-          Markup.button.callback(buttonText, `group_add_to_${group.id}`)
-        ]);
-      }
-
-      // Then show individual ungrouped transactions
-      for (const tx of available) {
-        const amount = Number(tx.amount).toFixed(2);
-        const desc = tx.description || 'No description';
-
-        // Truncate long descriptions to fit in button
-        const maxDescLength = 45;
-        const truncatedDesc = desc.length > maxDescLength
-          ? desc.substring(0, maxDescLength) + '...'
-          : desc;
-
-        // Button format: "Description - Amount USD"
-        const buttonText = `${truncatedDesc} - ${amount} ${tx.currency}`;
-
-        buttons.push([
-          Markup.button.callback(buttonText, `group_select_${tx.id}`)
-        ]);
-      }
-
-      buttons.push([Markup.button.callback('❌ Cancel', 'group_cancel')]);
-
-      await ctx.reply('<b>Select transaction or group:</b>', {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard(buttons),
-      });
-    } catch (error) {
-      this.logger.error(`Error handling group transaction: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error loading transactions for grouping.');
-    }
-  }
-
-  @Action(/^group_add_to_(\d+)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleGroupAddTo(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
-        return;
-      }
-
-      const match = ctx.callbackQuery.data.match(/^group_add_to_(\d+)$/);
-      if (!match) {
-        return;
-      }
-
-      const groupId = parseInt(match[1]);
-      const txId = ctx.session.currentTransactionId;
-
-      if (!txId) {
-        await ctx.reply('⚠️ No active transaction.');
-        return;
-      }
-
-      // Add transaction to the existing group
-      await this.transactionGroupsService.addTransactionToGroup(txId, groupId);
-
-      const group = await this.transactionGroupsService.findOne(groupId);
-      const count = await this.transactionGroupsService.getGroupMemberCount(groupId);
-
-      // Mark current transaction as REVIEWED since it's been grouped
-      await this.transactionsService.update(txId, {
-        status: TransactionStatus.REVIEWED,
-      });
-
-      await ctx.reply(
-        `✅ Transaction added to group: "${group.description}"\n` +
-        `Group now contains ${count} transactions.`
-      );
-
-      // Continue review
-      if (ctx.session.reviewSingleItem) {
-        this.baseHandler.clearSession(ctx);
-      } else {
-        await this.showNextTransaction(ctx);
-      }
-    } catch (error) {
-      this.logger.error(`Error adding to group: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error adding transaction to group.');
-    }
-  }
-
-  @Action(/^group_select_(\d+)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleGroupSelect(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) {
-        return;
-      }
-
-      const match = ctx.callbackQuery.data.match(/^group_select_(\d+)$/);
-      if (!match) {
-        return;
-      }
-
-      const tx1Id = parseInt(match[1]); // Selected from list
-      const tx2Id = ctx.session.currentTransactionId; // Current transaction
-
-      if (!tx2Id) {
-        await ctx.reply('⚠️ No active transaction.');
-        return;
-      }
-
-      const [tx1, tx2] = await Promise.all([
-        this.transactionsService.findOne(tx1Id),
-        this.transactionsService.findOne(tx2Id),
-      ]);
-
-      if (!tx1 || !tx2) {
-        await ctx.reply('❌ Transaction not found.');
-        return;
-      }
-
-      // Scenario 1: Both have NO group - create new
-      if (!tx1.groupId && !tx2.groupId) {
-        ctx.session.waitingForGroupDescription = true;
-        ctx.session.pendingGroupTransactionId = tx1Id;
-
-        await ctx.reply('📝 Please type a description for this new group:');
-        return;
-      }
-
-      // Scenario 2: tx1 HAS group, tx2 has NO group - add tx2 to group
-      if (tx1.groupId && !tx2.groupId) {
-        await this.transactionGroupsService.addTransactionToGroup(tx2Id, tx1.groupId);
-
-        const group = await this.transactionGroupsService.findOne(tx1.groupId);
-        const count = await this.transactionGroupsService.getGroupMemberCount(tx1.groupId);
-
-        // Mark current transaction as REVIEWED since it's been grouped
-        await this.transactionsService.update(tx2Id, {
-          status: TransactionStatus.REVIEWED,
-        });
-
-        await ctx.reply(
-          `✅ Transaction added to group: "${group.description}"\n` +
-          `Group now contains ${count} transactions.`
-        );
-
-        // Continue review
-        if (ctx.session.reviewSingleItem) {
-          this.baseHandler.clearSession(ctx);
-        } else {
-          await this.showNextTransaction(ctx);
-        }
-        return;
-      }
-
-      // Scenario 3: tx2 already HAS group - error
-      if (tx2.groupId) {
-        const group = await this.transactionGroupsService.findOne(tx2.groupId);
-        await ctx.reply(
-          `⚠️ Current transaction is already in group: "${group.description}"\n` +
-          `Please ungroup it first.`
-        );
-      }
-    } catch (error) {
-      this.logger.error(`Error handling group select: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error processing group selection.');
-    }
-  }
-
-  @Action('group_cancel')
-  @UseGuards(TelegramAuthGuard)
-  async handleGroupCancel(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery('Cancelled');
-      await ctx.reply('❌ Grouping cancelled.');
-
-      // Continue review
-      if (ctx.session.reviewSingleItem) {
-        this.baseHandler.clearSession(ctx);
-      } else {
-        await this.showNextTransaction(ctx);
-      }
-    } catch (error) {
-      this.logger.error(`Error handling group cancel: ${error.message}`);
-    }
-  }
-
-  @Action('ungroup_transaction')
-  @UseGuards(TelegramAuthGuard)
-  async handleUngroupTransaction(@Ctx() ctx: SessionContext) {
-    try {
-      await ctx.answerCbQuery();
-
-      const txId = ctx.session.currentTransactionId;
-
-      if (!txId) {
-        await ctx.reply('⚠️ No active transaction.');
-        return;
-      }
-
-      const transaction = await this.transactionsService.findOne(txId);
-
-      if (!transaction?.groupId) {
-        await ctx.reply('Transaction is not in a group.');
-        return;
-      }
-
-      const group = await this.transactionGroupsService.findOne(transaction.groupId);
-      const memberCount = await this.transactionGroupsService.getGroupMemberCount(transaction.groupId);
-
-      // Remove from group
-      await this.transactionGroupsService.removeTransactionFromGroup(txId);
-
-      let message = `✅ Transaction removed from group: "${group.description}"`;
-
-      // If group now has only 1 member, delete the group
-      if (memberCount === 2) {
-        await this.transactionGroupsService.delete(group.id);
-        message += '\n\n⚠️ Group deleted (only 1 transaction remaining).';
-      } else {
-        message += `\n\nGroup now has ${memberCount - 1} transactions.`;
-      }
-
-      await ctx.reply(message);
-
-      // Continue review
-      if (ctx.session.reviewSingleItem) {
-        this.baseHandler.clearSession(ctx);
-      } else {
-        await this.showNextTransaction(ctx);
-      }
-    } catch (error) {
-      this.logger.error(`Error ungrouping transaction: ${error.message}`);
-      await ctx.answerCbQuery('Error');
-      await ctx.reply('Error ungrouping transaction.');
     }
   }
 
@@ -919,12 +565,6 @@ export class TelegramTransactionsUpdate {
     // Pago Móvil flow - delegate to pago móvil handler
     if (ctx.session.pagoMovilWaiting) {
       await this.pagoMovilUpdate.handleTextInput(ctx);
-      return;
-    }
-
-    // /group flow - description input
-    if (ctx.session.groupFlowWaitingForDescription) {
-      await this.groupFlowUpdate.handleDescriptionInput(ctx);
       return;
     }
 
@@ -974,55 +614,6 @@ export class TelegramTransactionsUpdate {
     if (ctx.session.reviewOneMode === 'waiting_for_ex_id') {
       await this.exchangesUpdate.handleReviewOneExchangeId(ctx);
       return;
-    }
-
-    // Handle group description input
-    if (ctx.session.waitingForGroupDescription) {
-      try {
-        const description = ctx.message.text;
-        const tx1Id = ctx.session.pendingGroupTransactionId;
-        const tx2Id = ctx.session.currentTransactionId;
-
-        if (!tx1Id || !tx2Id) {
-          await ctx.reply('⚠️ Session error. Please try again.');
-          ctx.session.waitingForGroupDescription = false;
-          ctx.session.pendingGroupTransactionId = undefined;
-          return;
-        }
-
-        // Create group with both transactions
-        await this.transactionGroupsService.createGroupWithTransactions(
-          description,
-          [tx1Id, tx2Id]
-        );
-
-        // Mark current transaction as REVIEWED since it's been grouped
-        await this.transactionsService.update(tx2Id, {
-          status: TransactionStatus.REVIEWED,
-        });
-
-        await ctx.reply(
-          `✅ Group created: "${description}"\n` +
-          `Transactions ${tx1Id} and ${tx2Id} are now grouped.`
-        );
-
-        // Clear flags and continue
-        ctx.session.waitingForGroupDescription = false;
-        ctx.session.pendingGroupTransactionId = undefined;
-
-        if (ctx.session.reviewSingleItem) {
-          this.baseHandler.clearSession(ctx);
-        } else {
-          await this.showNextTransaction(ctx);
-        }
-        return;
-      } catch (error) {
-        this.logger.error(`Error creating group: ${error.message}`);
-        await ctx.reply('Error creating group. Please try again.');
-        ctx.session.waitingForGroupDescription = false;
-        ctx.session.pendingGroupTransactionId = undefined;
-        return;
-      }
     }
 
     // Handle date change input
@@ -1805,16 +1396,10 @@ export class TelegramTransactionsUpdate {
         `<b>Transaction Review${progressText}</b>`
       );
 
-      // Check if transaction has a group
       const fullTransaction = await this.transactionsService.findOne(transaction.id);
-      const hasGroup = fullTransaction?.groupId !== null;
 
       // Add "Go Back" button if there's history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
-
-      const groupButton = hasGroup
-        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
-        : Markup.button.callback('📎 Group', 'group_transaction');
 
       const buttons = [];
 
@@ -1829,7 +1414,6 @@ export class TelegramTransactionsUpdate {
 
       buttons.push([
         Markup.button.callback('💲 Change Amount', 'review_amount'),
-        groupButton,
       ]);
 
       buttons.push([
@@ -1964,11 +1548,6 @@ export class TelegramTransactionsUpdate {
 
     const message = await this.telegramService.transactions.formatTransactionForReview(transaction);
 
-    const hasGroup = transaction.groupId !== null;
-    const groupButton = hasGroup
-      ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
-      : Markup.button.callback('📎 Group', 'group_transaction');
-
     const buttons = [];
 
     if (transaction.imageUrl) {
@@ -1982,7 +1561,6 @@ export class TelegramTransactionsUpdate {
 
     buttons.push([
       Markup.button.callback('💲 Change Amount', 'review_amount'),
-      groupButton,
     ]);
 
     buttons.push([Markup.button.callback('❌ Reject', 'review_reject')]);
@@ -2036,12 +1614,6 @@ export class TelegramTransactionsUpdate {
         `<b>Transaction Review${progressText}</b>`
       );
 
-      // Check if transaction has a group
-      const hasGroup = transaction.groupId !== null;
-      const groupButton = hasGroup
-        ? Markup.button.callback('🔗 Ungroup', 'ungroup_transaction')
-        : Markup.button.callback('📎 Group', 'group_transaction');
-
       // Check if there's still more history
       const hasHistory = this.baseHandler.hasReviewHistory(ctx, 'transactions');
 
@@ -2058,7 +1630,6 @@ export class TelegramTransactionsUpdate {
 
       buttons.push([
         Markup.button.callback('💲 Change Amount', 'review_amount'),
-        groupButton,
       ]);
 
       buttons.push([
@@ -2102,58 +1673,37 @@ export class TelegramTransactionsUpdate {
 
   async startTransactionRegistration(ctx: SessionContext) {
     try {
-      const result = await this.telegramService.transactions.getRegistrationDataWithGroups();
+      const result = await this.telegramService.transactions.getRegistrationData();
 
-      if (!result.hasItems) {
-        await ctx.reply('No reviewed transactions or groups to register.');
+      if (!result.hasTransactions) {
+        await ctx.reply('No reviewed transactions to register.');
         return;
       }
 
-      // Validate exchange rate for VES transactions/groups
-      const hasVES = result.singleTransactions.some(t => t.currency === 'VES') ||
-        result.groups.some(g => g.transactions.some(t => t.currency === 'VES'));
+      // Validate exchange rate for VES transactions
+      const hasVES = result.transactions.some(t => t.currency === 'VES');
 
       if (hasVES && !result.exchangeRate) {
-        await ctx.reply('Cannot register VES transactions/groups: Exchange rate not available. Please register exchanges first.');
+        await ctx.reply('Cannot register VES transactions: Exchange rate not available. Please register exchanges first.');
         return;
       }
 
       // Store exchange rate in session
       ctx.session.registerTransactionExchangeRate = result.exchangeRate || null;
 
-      // Combine transactions and groups into a single chronologically ordered list
-      const combinedItems: Array<{ type: 'transaction' | 'group', date: Date, id: number, data: any }> = [
-        ...result.singleTransactions.map(tx => ({
-          type: 'transaction' as const,
-          date: new Date(tx.date),
-          id: tx.id,
-          data: tx,
-        })),
-        ...result.groupsWithDates.map(item => ({
-          type: 'group' as const,
-          date: item.date,
-          id: item.group.id,
-          data: item.group,
-        })),
-      ];
-
-      // Sort by date (oldest first)
-      combinedItems.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-      // Store items in session for iterative flow
-      ctx.session.registerItems = combinedItems.map(item => ({
-        type: item.type,
-        id: item.id,
-        data: item.data,
+      // Store items in session for iterative flow (already sorted oldest first)
+      ctx.session.registerItems = result.transactions.map(tx => ({
+        id: tx.id,
+        data: tx,
       }));
       ctx.session.registerCurrentIndex = 0;
-      ctx.session.registerTotalCount = combinedItems.length;
+      ctx.session.registerTotalCount = result.transactions.length;
 
       // Show link to Google Sheets
       const sheetId = await this.googleSheetConfigService.getCurrentSheetId();
       if (sheetId) {
         const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?gid=1400547069#gid=1400547069`;
-        await ctx.reply(`📊 <b>Registration started</b> — ${combinedItems.length} item(s) to process.`, {
+        await ctx.reply(`📊 <b>Registration started</b> — ${result.transactions.length} item(s) to process.`, {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.url('Open Google Sheets', sheetUrl)],
@@ -2192,12 +1742,7 @@ export class TelegramTransactionsUpdate {
     const item = items[currentIndex];
     const progress = `(${currentIndex + 1}/${totalCount})`;
 
-    // Show item details
-    if (item.type === 'transaction') {
-      await this.showTransactionForRegisterIterative(ctx, item.data, exchangeRate, progress, editMode);
-    } else {
-      await this.showGroupForRegisterIterative(ctx, item.data, exchangeRate, progress, editMode);
-    }
+    await this.showTransactionForRegisterIterative(ctx, item.data, exchangeRate, progress, editMode);
   }
 
   private async showTransactionForRegisterIterative(ctx: SessionContext, transaction: any, exchangeRate: number, progress: string, editMode = false) {
@@ -2274,60 +1819,6 @@ export class TelegramTransactionsUpdate {
     }
   }
 
-  private async showGroupForRegisterIterative(ctx: SessionContext, group: TransactionGroup & { transactions: Transaction[] }, exchangeRate: number, progress: string, editMode = false) {
-    try {
-      const calculation = await this.transactionGroupsService.calculateGroupAmount(group.id, exchangeRate);
-      const groupDate = await this.transactionGroupsService.calculateGroupDate(group.id);
-
-      // Use presenter to format the message
-      const message = this.groupsPresenter.formatGroupForDisplay(group, calculation, groupDate, exchangeRate);
-
-      // Build keyboard with Commit/Revert buttons
-      const buttons: any[][] = [];
-
-      // If it's a group with monetary value, add copy buttons
-      if (calculation.hasMonetaryValue && calculation.type !== 'NEUTRAL') {
-        const dateFormatted = `${groupDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' })}-${groupDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' })}`;
-        buttons.push([{ text: 'Copy Date', copy_text: { text: dateFormatted } } as any]);
-        buttons.push([{ text: 'Copy Description', copy_text: { text: group.description } } as any]);
-        buttons.push([{ text: `${calculation.totalAmount.toFixed(2)} USD`, copy_text: { text: calculation.excelFormula } } as any]);
-      }
-
-      // Show Commit if NEW, Revert if already REGISTERED
-      const isRegistered = group.status === TransactionGroupStatus.REGISTERED;
-      const actionButton = isRegistered
-        ? { text: '↩️ Revert', callback_data: 'register_item_revert' }
-        : { text: '✅ Commit', callback_data: 'register_item_commit' };
-      buttons.push([actionButton]);
-
-      // Add Undo button if not on first item
-      const currentIndex = ctx.session.registerCurrentIndex ?? 0;
-      if (currentIndex > 0) {
-        buttons.push([{ text: '⬅️ Undo', callback_data: 'register_item_undo' }]);
-      }
-
-      // Always add Cancel button
-      buttons.push([{ text: '❌ Cancel', callback_data: 'register_item_cancel' }]);
-
-      const fullMessage = `<b>Group ${progress}</b>\n\n${message}`;
-
-      if (editMode) {
-        await ctx.editMessageText(fullMessage, {
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: buttons } as any,
-        });
-      } else {
-        await ctx.reply(fullMessage, {
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: buttons } as any,
-        });
-      }
-    } catch (error) {
-      this.logger.error(`Error showing group for register: ${error.message}`);
-      await ctx.reply('Error displaying group.');
-    }
-  }
-
   @Action('register_item_commit')
   @UseGuards(TelegramAuthGuard)
   async handleRegisterItemCommit(@Ctx() ctx: SessionContext) {
@@ -2343,28 +1834,13 @@ export class TelegramTransactionsUpdate {
       const item = items[currentIndex];
 
       // Mark as REGISTERED
-      if (item.type === 'transaction') {
-        await this.transactionsService.update(item.id, {
-          status: TransactionStatus.REGISTERED,
-        });
-        // Update the cached data as well
-        item.data.status = TransactionStatus.REGISTERED;
-      } else {
-        await this.transactionGroupsService.update(item.id, {
-          status: TransactionGroupStatus.REGISTERED,
-        });
-        // Also mark all transactions in the group as REGISTERED
-        const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
-        for (const tx of group.transactions) {
-          await this.transactionsService.update(tx.id, {
-            status: TransactionStatus.REGISTERED,
-          });
-        }
-        // Update the cached data as well
-        item.data.status = TransactionGroupStatus.REGISTERED;
-      }
+      await this.transactionsService.update(item.id, {
+        status: TransactionStatus.REGISTERED,
+      });
+      // Update the cached data as well
+      item.data.status = TransactionStatus.REGISTERED;
 
-      await ctx.answerCbQuery(`✅ ${item.type === 'transaction' ? 'Transaction' : 'Group'} committed`);
+      await ctx.answerCbQuery('✅ Transaction committed');
 
       // Delete bill photo if it was shown
       await this.deleteBillMessage(ctx);
@@ -2394,28 +1870,13 @@ export class TelegramTransactionsUpdate {
       const item = items[currentIndex];
 
       // Mark as REVIEWED (revert from ready-to-register state)
-      if (item.type === 'transaction') {
-        await this.transactionsService.update(item.id, {
-          status: TransactionStatus.REVIEWED,
-        });
-        // Update the cached data as well
-        item.data.status = TransactionStatus.REVIEWED;
-      } else {
-        await this.transactionGroupsService.update(item.id, {
-          status: TransactionGroupStatus.NEW,
-        });
-        // Also revert all transactions in the group to REVIEWED
-        const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
-        for (const tx of group.transactions) {
-          await this.transactionsService.update(tx.id, {
-            status: TransactionStatus.REVIEWED,
-          });
-        }
-        // Update the cached data as well
-        item.data.status = TransactionGroupStatus.NEW;
-      }
+      await this.transactionsService.update(item.id, {
+        status: TransactionStatus.REVIEWED,
+      });
+      // Update the cached data as well
+      item.data.status = TransactionStatus.REVIEWED;
 
-      await ctx.answerCbQuery(`↩️ ${item.type === 'transaction' ? 'Transaction' : 'Group'} reverted`);
+      await ctx.answerCbQuery('↩️ Transaction reverted');
 
       // Delete bill photo if it was shown
       await this.deleteBillMessage(ctx);
@@ -2447,28 +1908,13 @@ export class TelegramTransactionsUpdate {
       const previousItem = items[previousIndex];
 
       // Revert previous item's status
-      if (previousItem.type === 'transaction') {
-        await this.transactionsService.update(previousItem.id, {
-          status: TransactionStatus.REVIEWED,
-        });
-        // Update the cached data as well
-        previousItem.data.status = TransactionStatus.REVIEWED;
-      } else {
-        await this.transactionGroupsService.update(previousItem.id, {
-          status: TransactionGroupStatus.NEW,
-        });
-        // Also revert all transactions in the group to REVIEWED
-        const group = await this.transactionGroupsService.findOneWithTransactions(previousItem.id);
-        for (const tx of group.transactions) {
-          await this.transactionsService.update(tx.id, {
-            status: TransactionStatus.REVIEWED,
-          });
-        }
-        // Update the cached data as well
-        previousItem.data.status = TransactionGroupStatus.NEW;
-      }
+      await this.transactionsService.update(previousItem.id, {
+        status: TransactionStatus.REVIEWED,
+      });
+      // Update the cached data as well
+      previousItem.data.status = TransactionStatus.REVIEWED;
 
-      await ctx.answerCbQuery(`⬅️ Undone: ${previousItem.type === 'transaction' ? 'Transaction' : 'Group'}`);
+      await ctx.answerCbQuery('⬅️ Undone: Transaction');
 
       // Delete bill photo if it was shown
       await this.deleteBillMessage(ctx);
@@ -2513,29 +1959,12 @@ export class TelegramTransactionsUpdate {
       // Revert all items that were registered during this flow back to reviewed
       let revertedCount = 0;
       for (const item of items) {
-        if (item.type === 'transaction') {
-          // Check if it was registered (from cached data)
-          if (item.data.status === TransactionStatus.REGISTERED) {
-            await this.transactionsService.update(item.id, {
-              status: TransactionStatus.REVIEWED,
-            });
-            revertedCount++;
-          }
-        } else {
-          // Check if group was registered
-          if (item.data.status === TransactionGroupStatus.REGISTERED) {
-            await this.transactionGroupsService.update(item.id, {
-              status: TransactionGroupStatus.NEW,
-            });
-            // Also revert all transactions in the group to REVIEWED
-            const group = await this.transactionGroupsService.findOneWithTransactions(item.id);
-            for (const tx of group.transactions) {
-              await this.transactionsService.update(tx.id, {
-                status: TransactionStatus.REVIEWED,
-              });
-            }
-            revertedCount++;
-          }
+        // Check if it was registered (from cached data)
+        if (item.data.status === TransactionStatus.REGISTERED) {
+          await this.transactionsService.update(item.id, {
+            status: TransactionStatus.REVIEWED,
+          });
+          revertedCount++;
         }
       }
 

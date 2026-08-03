@@ -9,7 +9,6 @@ import { TelegramExchangesService } from './exchanges/telegram-exchanges.service
 import { TelegramExchangesPresenter } from './exchanges/telegram-exchanges.presenter';
 import { TelegramTransactionsService } from './transactions/telegram-transactions.service';
 import { TelegramTransactionsPresenter } from './transactions/telegram-transactions.presenter';
-import { TelegramGroupsPresenter } from './transactions/telegram-groups.presenter';
 import { TelegramNotificationListener } from './listeners/telegram-notification.listener';
 import { ExchangeAutoRegistrationListener } from './listeners/exchange-auto-registration.listener';
 import { TelegramBaseHandler } from './telegram-base.handler';
@@ -17,7 +16,6 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TransactionExtractionService } from './transactions/transaction-extraction.service';
 import { ManualTransactionPostListener } from './listeners/manual-transaction-post.listener';
-import { TelegramGroupFlowUpdate } from './transactions/telegram-group-flow.update';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
 import { TelegramConvertService } from './exchanges/convert/telegram-convert.service';
@@ -32,7 +30,6 @@ import { TelegramAccountsService } from './accounts/telegram-accounts.service';
 import { TelegramAccountsPresenter } from './accounts/telegram-accounts.presenter';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
-import { TransactionGroupsModule } from '../transaction-groups/transaction-groups.module';
 import { AccountsModule } from '../accounts/accounts.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
 import { ExpensesModule } from '../expenses/expenses.module';
@@ -103,7 +100,6 @@ import * as https from 'https';
     }),
     TransactionsModule, // Para usar TransactionsService
     ExchangesModule, // Para usar ExchangesService
-    TransactionGroupsModule, // Para usar TransactionGroupsService
     AccountsModule, // Para usar BinanceAccountService
     JournalEntryModule, // Para usar JournalEntryService
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
@@ -120,7 +116,6 @@ import * as https from 'https';
     TelegramExchangesPresenter,
     TelegramTransactionsService,
     TelegramTransactionsPresenter,
-    TelegramGroupsPresenter,
     TelegramNotificationListener,
     ExchangeAutoRegistrationListener,
     TelegramBaseHandler,
@@ -128,7 +123,6 @@ import * as https from 'https';
     TelegramManualTransactionUpdate,
     TransactionExtractionService,
     ManualTransactionPostListener,
-    TelegramGroupFlowUpdate,
     TelegramExchangesUpdate,
     TelegramRatesUpdate,
     TelegramRatesService,

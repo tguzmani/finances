@@ -7,7 +7,6 @@ import { SheetUpdateService } from '../../journal-entry/sheet-update.service';
 import { AutoRegistrationService } from '../../journal-entry/auto-registration.service';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
-import { TransactionGroupsService } from '../../transaction-groups/transaction-groups.service';
 import { TransactionStatus } from '../../transactions/transaction.types';
 
 @Injectable()
@@ -21,7 +20,6 @@ export class ManualTransactionPostListener {
     private readonly autoRegistrationService: AutoRegistrationService,
     private readonly transactionsService: TransactionsService,
     private readonly exchangeRateService: ExchangeRateService,
-    private readonly transactionGroupsService: TransactionGroupsService,
   ) {
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
   }
@@ -62,36 +60,6 @@ export class ManualTransactionPostListener {
       }
     } catch (error) {
       this.logger.error(`Auto-registration error for tx ${transaction.id}: ${error.message}`);
-    }
-
-    // Not auto-registered — offer to connect to an existing group if any candidates exist.
-    await this.maybeOfferGrouping(transaction);
-  }
-
-  private async maybeOfferGrouping(transaction: any) {
-    try {
-      const allTransactions = await this.transactionsService.findAll({});
-      const otherReviewed = allTransactions.filter(t =>
-        t.status === 'REVIEWED' && t.id !== transaction.id && t.groupId === null,
-      );
-      const existingGroups = await this.transactionGroupsService.findGroupsForRegistration();
-
-      if (otherReviewed.length === 0 && existingGroups.length === 0) return;
-
-      await this.bot.telegram.sendMessage(
-        this.chatId,
-        `📎 Want to connect this transaction to a group?`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '📎 Connect to Group', callback_data: `manual_connect_group_${transaction.id}` }],
-            ],
-          },
-        },
-      );
-    } catch (error) {
-      this.logger.error(`Group-offer error for tx ${transaction.id}: ${error.message}`);
     }
   }
 
