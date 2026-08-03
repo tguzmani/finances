@@ -45,9 +45,6 @@ export class TransactionsService {
       where,
       take: limit,
       orderBy: { date: 'desc' },
-      include: {
-        group: true,
-      },
     });
   }
 
@@ -100,7 +97,6 @@ export class TransactionsService {
       where,
       orderBy: { date: 'desc' },
       take: 10,
-      include: { group: true },
     });
   }
 
