@@ -38,7 +38,7 @@ export interface ReviewSession {
   lastRegisteredExchangeIds?: number[];
   lastRegisteredWavg?: number;
   // Manual transaction entry flow
-  manualTransactionState?: 'waiting_freeform' | 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date' | 'waiting_confirmation';
+  manualTransactionState?: 'waiting_type' | 'waiting_account' | 'waiting_method' | 'waiting_amount' | 'waiting_description' | 'waiting_date_choice' | 'waiting_custom_date' | 'waiting_confirmation';
   manualTransactionType?: 'INCOME' | 'EXPENSE';
   manualTransactionPlatform?: string;
   manualTransactionCurrency?: string;
@@ -103,7 +103,7 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },
   { command: 'register', description: 'Register reviewed items' },
-  { command: 'add_transaction', description: 'Add manual transaction' },
+  { command: 'add_transaction', description: 'Add a transaction with the wizard' },
   { command: 'transfer', description: 'Register a transfer between accounts' },
   { command: 'pago_movil', description: 'Parse Pago Móvil payment data' },
   { command: 'settings', description: 'Update settings' },

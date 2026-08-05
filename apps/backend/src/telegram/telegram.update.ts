@@ -67,7 +67,7 @@ export class TelegramUpdate {
       '/exchanges - View recent exchanges\n' +
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
-      '/add_transaction - Add manual transaction\n' +
+      '/add_transaction - Add a transaction with the wizard (or just describe it in any message)\n' +
       '/transfer - Register a transfer between accounts\n' +
       '/pago_movil - Parse Pago Móvil payment data\n' +
       '/settings - Update settings\n' +

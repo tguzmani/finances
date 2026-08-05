@@ -556,6 +556,7 @@ export class TelegramTransactionsUpdate {
   }
 
   @On('text')
+  @UseGuards(TelegramAuthGuard)
   async handleText(@Ctx() ctx: SessionContext) {
     // Type guard for text messages
     if (!('text' in ctx.message)) {
@@ -592,11 +593,7 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
-    // Manual transaction flow is handled by TelegramManualTransactionUpdate
-    if (ctx.session.manualTransactionState === 'waiting_freeform') {
-      await this.manualTransactionUpdate.handleManualFreeform(ctx);
-      return;
-    }
+    // Manual transaction wizard is handled by TelegramManualTransactionUpdate
     if (ctx.session.manualTransactionState === 'waiting_amount' ||
       ctx.session.manualTransactionState === 'waiting_description' ||
       ctx.session.manualTransactionState === 'waiting_custom_date') {
@@ -680,8 +677,13 @@ export class TelegramTransactionsUpdate {
       }
     }
 
-    // Only process if we're waiting for a description
     if (!ctx.session.waitingForDescription || !ctx.session.currentTransactionId) {
+      // Nothing pending: plain text is the app's main action — a new transaction.
+      // Every explicit input wait is checked above, so this is the last resort.
+      // The wizard's own steps are excluded: there the bot expects a button tap.
+      if (!ctx.session.manualTransactionState) {
+        await this.manualTransactionUpdate.handleManualFreeform(ctx);
+      }
       return;
     }
 
