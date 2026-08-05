@@ -34,7 +34,7 @@ export class TelegramManualTransactionUpdate {
 
       await ctx.reply(
         '➕ <b>Manual Transaction Entry</b>\n\n' +
-        'Describe your transaction in one message.\n\n' +
+        'Just describe your transaction in any message — no command needed.\n\n' +
         'Or use the step-by-step wizard:',
         {
           parse_mode: 'HTML',
@@ -48,8 +48,6 @@ export class TelegramManualTransactionUpdate {
           },
         }
       );
-
-      ctx.session.manualTransactionState = 'waiting_freeform';
     } catch (error) {
       this.logger.error(`Error starting manual transaction: ${error.message}`);
       await ctx.reply('Error starting manual entry. Please try again.');
@@ -83,9 +81,27 @@ export class TelegramManualTransactionUpdate {
     }
   }
 
+  /**
+   * Free-form text is the app's main entry point: any message that is not part
+   * of another flow is read as a transaction. Messages that cannot plausibly be
+   * one are ignored silently, so stray chatter never reaches the LLM.
+   */
+  private looksLikeTransaction(text: string): boolean {
+    // Unmatched commands (typos, /start@otherbot) reach the text handler too
+    if (text.startsWith('/')) return false;
+
+    // Every transaction states an amount
+    return /\d/.test(text);
+  }
+
   async handleManualFreeform(@Ctx() ctx: SessionContext) {
     if (!ctx.message || !('text' in ctx.message)) return;
     const text = ctx.message.text.trim();
+
+    if (!this.looksLikeTransaction(text)) {
+      this.logger.log(`Ignoring message that does not look like a transaction: "${text}"`);
+      return;
+    }
 
     let draft: TransactionDraft;
     try {
@@ -294,7 +310,7 @@ export class TelegramManualTransactionUpdate {
       hour: '2-digit',
       minute: '2-digit',
     });
-    const internalRate = await this.getInternalRate(ctx);
+    const internalRate = await this.getInternalRate(ctx.session.manualTransactionCurrency);
     await ctx.reply(
       `➕ <b>Confirm Transaction</b>\n\n${this.buildSummary(ctx, internalRate)}\nDate: ${dateStr}\n\nIs this correct?`,
       {
@@ -330,22 +346,7 @@ export class TelegramManualTransactionUpdate {
     try {
       await ctx.answerCbQuery('Rejected');
       this.baseHandler.clearSession(ctx);
-      ctx.session.manualTransactionState = 'waiting_freeform';
-      await ctx.editMessageText(
-        '➕ <b>Manual Transaction Entry</b>\n\n' +
-        'Rejected. Describe your transaction in one message, or use the step-by-step wizard:',
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '🪄 Use Wizard', callback_data: 'manual_use_wizard' },
-                { text: '🚫 Cancel', callback_data: 'manual_cancel' },
-              ],
-            ],
-          },
-        },
-      );
+      await ctx.editMessageText('❌ <b>Rejected</b>', { parse_mode: 'HTML' });
     } catch (error) {
       this.logger.error(`Error rejecting transaction: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -482,7 +483,11 @@ export class TelegramManualTransactionUpdate {
     ctx.session.manualTransactionDescription = undefined;
     ctx.session.manualTransactionDate = undefined;
 
-    // Format success message — no DB queries here, render immediately.
+    // Same USD equivalent shown in the confirmation summary
+    const internalRate = await this.getInternalRate(transaction.currency);
+    const amount = Number(transaction.amount);
+    const usdEquivalent = internalRate ? ` (USD ${(amount / internalRate).toFixed(2)})` : '';
+
     const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸' };
     const typeIcon = typeIcons[transaction.type] || '💸';
     const platformLabel = this.getPlatformLabel(transaction.platform);
@@ -499,7 +504,7 @@ export class TelegramManualTransactionUpdate {
     const successMessage =
       `✅ <b>Transaction Created!</b>\n\n` +
       `${typeIcon} <b>${description}</b>\n\n` +
-      `Amount: ${transaction.currency} ${Number(transaction.amount).toFixed(2)}\n` +
+      `Amount: ${transaction.currency} ${amount.toFixed(2)}${usdEquivalent}\n` +
       `Account: ${platformLabel}\n` +
       `Method: ${methodLabel}\n` +
       `Date: ${dateStr}\n` +
@@ -510,6 +515,7 @@ export class TelegramManualTransactionUpdate {
     } else {
       await ctx.reply(successMessage, { parse_mode: 'HTML' });
     }
+
     this.baseHandler.clearSession(ctx);
 
     // Sheet update + auto-registration + USD conversion all run
@@ -527,8 +533,8 @@ export class TelegramManualTransactionUpdate {
    * Returns undefined if not applicable or unavailable, so the summary just omits
    * the USD equivalent instead of failing.
    */
-  private async getInternalRate(ctx: SessionContext): Promise<number | undefined> {
-    if (ctx.session.manualTransactionCurrency !== 'VES') return undefined;
+  private async getInternalRate(currency?: string): Promise<number | undefined> {
+    if (currency !== 'VES') return undefined;
 
     try {
       const rate = await this.exchangeRateService.findLatest();
