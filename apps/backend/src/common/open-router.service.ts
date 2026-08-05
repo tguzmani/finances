@@ -30,10 +30,10 @@ export interface OpenRouterResponse {
   };
 }
 
+/** Shape of GET /credits — the account's lifetime totals, with no balance field */
 export interface OpenRouterCredits {
   total_credits: number;
   total_usage: number;
-  balance: number;
 }
 
 @Injectable()
@@ -256,7 +256,14 @@ export class OpenRouterService {
 
   async checkBalance(): Promise<{ balance: number; isLow: boolean }> {
     const credits = await this.getCredits();
-    const balance = credits.balance;
+
+    if (typeof credits?.total_credits !== 'number' || typeof credits?.total_usage !== 'number') {
+      throw new Error(
+        `Unexpected /credits response: ${JSON.stringify(credits)}`,
+      );
+    }
+
+    const balance = credits.total_credits - credits.total_usage;
     const isLow = balance < this.LOW_BALANCE_THRESHOLD;
 
     if (isLow) {
