@@ -36,6 +36,9 @@ export interface OpenRouterCredits {
   total_usage: number;
 }
 
+/** A response that came back fine over HTTP but cannot be used: truncated, unparseable or off-schema */
+class UnusableResponseError extends Error {}
+
 @Injectable()
 export class OpenRouterService {
   private readonly logger = new Logger(OpenRouterService.name);
@@ -44,6 +47,7 @@ export class OpenRouterService {
   private readonly CREDITS_URL = `${this.API_BASE}/credits`;
   private readonly DEFAULT_MODEL = 'google/gemini-2.5-flash-lite';
   private readonly LOW_BALANCE_THRESHOLD = 1.5; // USD
+  private readonly STRUCTURED_ATTEMPTS = 3;
   private readonly apiKey: string | undefined;
 
   constructor() {
@@ -123,6 +127,48 @@ export class OpenRouterService {
     const jsonSchema = z.toJSONSchema(schema, { target: 'draft-7' });
     delete (jsonSchema as any).$schema;
 
+    // The model occasionally returns a truncated body (a bare `{`), which is a
+    // transient upstream glitch: the same prompt succeeds on the next call.
+    // Retry those instead of surfacing the failure to the caller.
+    let lastUnusableResponse: Error | undefined;
+
+    for (let attempt = 1; attempt <= this.STRUCTURED_ATTEMPTS; attempt++) {
+      try {
+        return await this.requestStructured(messages, schema, {
+          model,
+          schemaName,
+          jsonSchema,
+          temperature: options.temperature ?? 0.1,
+          maxTokens: options.maxTokens ?? 500,
+        });
+      } catch (error) {
+        if (!(error instanceof UnusableResponseError)) {
+          throw error;
+        }
+
+        lastUnusableResponse = error;
+        this.logger.warn(
+          `Unusable structured response (attempt ${attempt}/${this.STRUCTURED_ATTEMPTS}): ${error.message}`,
+        );
+      }
+    }
+
+    throw lastUnusableResponse;
+  }
+
+  private async requestStructured<T>(
+    messages: OpenRouterMessage[],
+    schema: ZodType<T>,
+    params: {
+      model: string;
+      schemaName: string;
+      jsonSchema: unknown;
+      temperature: number;
+      maxTokens: number;
+    },
+  ): Promise<T> {
+    const { model, schemaName, jsonSchema } = params;
+
     try {
       this.logger.log(`Sending structured request to OpenRouter (model: ${model}, schema: ${schemaName})`);
 
@@ -131,8 +177,8 @@ export class OpenRouterService {
         {
           model,
           messages,
-          temperature: options.temperature ?? 0.1,
-          max_tokens: options.maxTokens ?? 500,
+          temperature: params.temperature,
+          max_tokens: params.maxTokens,
           response_format: {
             type: 'json_schema',
             json_schema: {
@@ -155,7 +201,7 @@ export class OpenRouterService {
 
       const content = response.data.choices[0]?.message?.content;
       if (!content) {
-        throw new Error('Empty response from OpenRouter');
+        throw new UnusableResponseError('Empty response from OpenRouter');
       }
 
       let jsonStr = content.trim();
@@ -169,13 +215,13 @@ export class OpenRouterService {
         parsed = JSON.parse(jsonStr);
       } catch (e) {
         this.logger.error(`Structured response not valid JSON: ${content}`);
-        throw new Error(`LLM returned invalid JSON: ${e.message}`);
+        throw new UnusableResponseError(`LLM returned invalid JSON: ${e.message}`);
       }
 
       const result = schema.safeParse(parsed);
       if (!result.success) {
         this.logger.error(`Schema validation failed: ${JSON.stringify(result.error.issues)}. Raw: ${content}`);
-        throw new Error(`LLM response failed schema validation: ${result.error.message}`);
+        throw new UnusableResponseError(`LLM response failed schema validation: ${result.error.message}`);
       }
 
       this.logger.log(
