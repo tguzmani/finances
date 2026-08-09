@@ -6,10 +6,15 @@ import { BanescoParser } from './banesco.parser';
 
 @Injectable()
 export class BanescoEmailService extends BaseEmailService implements IBankEmailService {
-  private readonly BANESCO_SENDER = 'Notificacion@banesco.com';
+  // Card alerts and Pago Directo notices come from different Banesco addresses.
+  private readonly BANESCO_SENDER = [
+    'Notificacion@banesco.com',
+    'notificaciones@banesco.com',
+  ];
   private readonly VALID_SUBJECTS = [
     'Notificación Banesco',
     'Resumen de Operaciones con TDD Banesco',
+    'Cobro Inmediato',
   ];
 
   constructor(private readonly banescoParser: BanescoParser) {
@@ -33,14 +38,15 @@ export class BanescoEmailService extends BaseEmailService implements IBankEmailS
     for (const email of emails) {
       const parsed = this.banescoParser.parse(email.subject, email.body);
 
-      const enriched = parsed.map((tx) => ({
+      const enriched = parsed.map(({ hasStableReference, method, ...tx }) => ({
         ...tx,
         platform: TransactionPlatform.BANESCO,
-        method: PaymentMethod.DEBIT_CARD,
+        method: method ?? PaymentMethod.DEBIT_CARD,
         type: TransactionType.EXPENSE,
         // Notification and summary emails report the same purchase with different
-        // references, so the amount is the only reliable duplicate signal.
-        dedupeByAmount: true,
+        // references, so the amount is the only reliable duplicate signal. Emails
+        // that carry their own reference (Pago Directo) dedupe by transactionId.
+        dedupeByAmount: !hasStableReference,
       }));
 
       transactions.push(...enriched);

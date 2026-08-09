@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PaymentMethod } from '@prisma/client';
 import { parseVesAmount } from '../../amount.util';
 
 export interface ParsedTransaction {
@@ -6,6 +7,10 @@ export interface ParsedTransaction {
   amount: number;
   currency: string;
   transactionId: string;
+  method?: PaymentMethod;
+  description?: string;
+  /** Set when the email carries a stable reference, so amount dedupe must not apply. */
+  hasStableReference?: boolean;
 }
 
 @Injectable()
@@ -81,6 +86,36 @@ export class BanescoParser {
     };
   }
 
+  /**
+   * Parse "Pago exitoso por Operaciones de Cobro Inmediato" email (Pago Directo),
+   * a direct debit charged against the account by the beneficiary's bank.
+   */
+  parsePagoDirecto(body: string): ParsedTransaction | null {
+    const amountMatch = body.match(/Monto:\s*Bs\.?\s*([\d.,]+)/i);
+    const receiptMatch = body.match(/Recibo\s*N[°ºo]?\s*:?\s*(\d+)/i);
+    const dateMatch = body.match(/Fecha:\s*(\d{2}\/\d{2}\/\d{4})/);
+    const timeMatch = body.match(/Hora:\s*(\d{2}:\d{2}:\d{2})/);
+    const bankMatch = body.match(/Banco Beneficiario:\s*(.+?)\s*(?:Recibo|Fecha|Hora|$)/is);
+
+    if (!amountMatch || !receiptMatch || !dateMatch) return null;
+
+    const [day, month, year] = dateMatch[1].split('/');
+    const timeStr = timeMatch ? timeMatch[1] : '00:00:00';
+
+    const beneficiaryBank = bankMatch ? bankMatch[1].trim() : '';
+
+    return {
+      // Dates in email body are Venezuela time (UTC-4)
+      date: new Date(`${year}-${month}-${day}T${timeStr}-04:00`),
+      amount: this.parseAmount(amountMatch[1]),
+      currency: this.CURRENCY,
+      transactionId: receiptMatch[1],
+      method: PaymentMethod.ELECTRONIC_TRANSFER,
+      description: beneficiaryBank ? `Pago Directo - ${beneficiaryBank}` : 'Pago Directo',
+      hasStableReference: true,
+    };
+  }
+
   private parseAmount(amountStr: string): number {
     return parseVesAmount(amountStr);
   }
@@ -101,6 +136,11 @@ export class BanescoParser {
 
     if (subject.includes('Notificación Banesco')) {
       const transaction = this.parseNotification(body);
+      return transaction ? [transaction] : [];
+    }
+
+    if (subject.includes('Cobro Inmediato')) {
+      const transaction = this.parsePagoDirecto(body);
       return transaction ? [transaction] : [];
     }
 

@@ -30,7 +30,8 @@ export interface ParsedTransaction {
 }
 
 export interface BankEmailConfig {
-  sender: string;
+  /** One address, or several when the sender notifies from more than one. */
+  sender: string | string[];
   subjectPatterns: string[];
 }
 

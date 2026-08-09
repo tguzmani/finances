@@ -27,22 +27,26 @@ export abstract class BaseEmailService {
 
   async fetchEmails(limit = 30): Promise<RawEmail[]> {
     const config = this.getBankConfig();
+    const senders = Array.isArray(config.sender) ? config.sender : [config.sender];
+    const senderLabel = senders.join(', ');
     const client = this.createClient();
     const emails: RawEmail[] = [];
 
     try {
       await client.connect();
-      this.logger.log(`Connected to IMAP for ${config.sender}`);
+      this.logger.log(`Connected to IMAP for ${senderLabel}`);
 
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        const searchResults = await client.search({
-          from: config.sender,
-        });
+        const searchResults = await client.search(
+          senders.length === 1
+            ? { from: senders[0] }
+            : { or: senders.map((from) => ({ from })) },
+        );
 
         if (!searchResults || !Array.isArray(searchResults) || searchResults.length === 0) {
-          this.logger.log(`No emails found from ${config.sender}`);
+          this.logger.log(`No emails found from ${senderLabel}`);
           return [];
         }
 
@@ -76,7 +80,7 @@ export abstract class BaseEmailService {
       await client.logout();
     }
 
-    this.logger.log(`Fetched ${emails.length} valid emails from ${config.sender}`);
+    this.logger.log(`Fetched ${emails.length} valid emails from ${senderLabel}`);
     return emails;
   }
 
