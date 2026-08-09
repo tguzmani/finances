@@ -23,9 +23,6 @@ import { RenderEmailService } from './email/subscriptions/render/render-email.se
 import { RenderParser } from './email/subscriptions/render/render.parser';
 import { OneMetaEmailService } from './email/incomes/onemeta/onemeta-email.service';
 import { OneMetaParser } from './email/incomes/onemeta/onemeta.parser';
-import { FarmatodoEmailService } from './email/merchants/farmatodo/farmatodo-email.service';
-import { FarmatodoParser } from './email/merchants/farmatodo/farmatodo.parser';
-import { FarmatodoDescriptionService } from './email/merchants/farmatodo/farmatodo-description.service';
 import { CommonModule } from '../common/common.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
 import { TransactionsSheetsService } from './transactions-sheets.service';
@@ -65,10 +62,6 @@ import { TransactionSearchService } from './transaction-search.service';
     OneMetaEmailService,
     OneMetaParser,
 
-    FarmatodoEmailService,
-    FarmatodoParser,
-    FarmatodoDescriptionService,
-
     // OCR - LLM-based parsing
     TransactionOcrParser,
     TransactionLlmParserService,
@@ -88,7 +81,6 @@ import { TransactionSearchService } from './transaction-search.service';
 export class TransactionsModule {
   constructor(
     private readonly registry: EmailServiceRegistry,
-    private readonly farmatodoService: FarmatodoEmailService,
     private readonly banescoService: BanescoEmailService,
     private readonly bofaService: BofaEmailService,
     private readonly googlePlayService: GooglePlayEmailService,
@@ -96,9 +88,6 @@ export class TransactionsModule {
     private readonly renderService: RenderEmailService,
     private readonly oneMetaService: OneMetaEmailService,
   ) {
-    // Farmatodo runs before Banesco: it describes the same purchase in detail, so
-    // creating it first lets the generic Banesco notification be deduped by amount.
-    this.registry.register(this.farmatodoService);
     this.registry.register(this.banescoService);
     this.registry.register(this.bofaService);
     this.registry.register(this.googlePlayService);
