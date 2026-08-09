@@ -8,6 +8,7 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TelegramRatesUpdate } from './rates/telegram-rates.update';
+import { TelegramDcaUpdate } from './dca/telegram-dca.update';
 import { TelegramAccountsUpdate } from './accounts/telegram-accounts.update';
 import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
@@ -27,6 +28,7 @@ export class TelegramUpdate {
     private readonly exchangesUpdate: TelegramExchangesUpdate,
     private readonly manualTransactionUpdate: TelegramManualTransactionUpdate,
     private readonly ratesUpdate: TelegramRatesUpdate,
+    private readonly dcaUpdate: TelegramDcaUpdate,
     private readonly accountsUpdate: TelegramAccountsUpdate,
     private readonly expensesUpdate: TelegramExpensesUpdate,
     private readonly baseHandler: TelegramBaseHandler,
@@ -64,6 +66,7 @@ export class TelegramUpdate {
       '/transactions - View recent expenses\n' +
       '/convert - Convert between currencies\n' +
       '/equity - View equity (net worth) and chart\n' +
+      '/dca_prices - Refresh DCA crypto prices from Binance\n' +
       '/exchanges - View recent exchanges\n' +
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
@@ -92,6 +95,12 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRates(@Ctx() ctx: SessionContext) {
     await this.ratesUpdate.handleRates(ctx);
+  }
+
+  @Command('dca_prices')
+  @UseGuards(TelegramAuthGuard)
+  async handleDcaPrices(@Ctx() ctx: SessionContext) {
+    await this.dcaUpdate.handleDcaPrices(ctx);
   }
 
   @Command('accounts')

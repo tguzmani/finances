@@ -21,6 +21,7 @@ import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.upda
 import { TelegramConvertService } from './exchanges/convert/telegram-convert.service';
 import { TelegramConvertPresenter } from './exchanges/convert/telegram-convert.presenter';
 import { TelegramRatesUpdate } from './rates/telegram-rates.update';
+import { TelegramDcaUpdate } from './dca/telegram-dca.update';
 import { TelegramRatesService } from './rates/telegram-rates.service';
 import { TelegramRatesPresenter } from './rates/telegram-rates.presenter';
 import { TelegramRatesScheduler } from './rates/telegram-rates.scheduler';
@@ -46,6 +47,7 @@ import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update
 import { TelegramPagoMovilService } from './pago-movil/telegram-pago-movil.service';
 import { TelegramPagoMovilPresenter } from './pago-movil/telegram-pago-movil.presenter';
 import { EquityModule } from '../equity/equity.module';
+import { DcaModule } from '../dca/dca.module';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
 import { TelegramEquityPresenter } from './equity/telegram-equity.presenter';
@@ -104,6 +106,7 @@ import * as https from 'https';
     JournalEntryModule, // Para usar JournalEntryService
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
     EquityModule, // Para usar EquityService, EquityChartService
+    DcaModule, // Para usar DcaPricesService
     CommonModule, // Para usar DateParserService
     GoogleSheetConfigModule, // Para usar GoogleSheetConfigService
   ],
@@ -125,6 +128,7 @@ import * as https from 'https';
     ManualTransactionPostListener,
     TelegramExchangesUpdate,
     TelegramRatesUpdate,
+    TelegramDcaUpdate,
     TelegramRatesService,
     TelegramRatesPresenter,
     TelegramRatesScheduler,

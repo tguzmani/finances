@@ -79,6 +79,32 @@ export class BinanceApiClient {
     }
   }
 
+  /** Spot price for one or more symbols. Public endpoint, no API key involved. */
+  async getSymbolPriceTicker(params?: { symbol?: string; symbols?: string[] }) {
+    try {
+      return await this.client.getSymbolPriceTicker(params);
+    } catch (err) {
+      this.logger.error(`getSymbolPriceTicker failed: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  /** Candlesticks, used to read the price a symbol had on a past date. */
+  async getKlines(params: {
+    symbol: string;
+    interval: '1h' | '1d';
+    startTime?: number;
+    endTime?: number;
+    limit?: number;
+  }) {
+    try {
+      return await this.client.getKlines(params);
+    } catch (err) {
+      this.logger.error(`getKlines failed for ${params.symbol}: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
   // Simple Earn Locked Position
   async getSimpleEarnLockedPosition(params?: { asset?: string }) {
     try {
