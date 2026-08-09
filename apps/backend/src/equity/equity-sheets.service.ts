@@ -15,12 +15,34 @@ export class EquitySheetsService {
     return this.readCellAsNumber(this.EQUITY_VALUE_CELL);
   }
 
+  /**
+   * A broken formula in the DCA sheet reads as #VALUE!, which used to fall back
+   * to 0 and silently understate the snapshot by the whole allocated amount, so
+   * these two cells fail loudly and abort the capture instead.
+   */
   async getBinancePnl(): Promise<number> {
     const [allocated, current] = await Promise.all([
-      this.readCellAsNumber(this.BINANCE_ALLOCATED_CELL),
-      this.readCellAsNumber(this.BINANCE_CURRENT_CELL),
+      this.readRequiredCellAsNumber(this.BINANCE_ALLOCATED_CELL),
+      this.readRequiredCellAsNumber(this.BINANCE_CURRENT_CELL),
     ]);
     return current - allocated;
+  }
+
+  private async readRequiredCellAsNumber(cell: string): Promise<number> {
+    const values = await this.sheetsRepository.getSheetValues(cell);
+    const rawValue = values?.[0]?.[0];
+
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      throw new Error(`${cell} is empty`);
+    }
+
+    const parsed = parseFloat(String(rawValue).replace(/[$\s,]/g, ''));
+
+    if (isNaN(parsed)) {
+      throw new Error(`${cell} is not a number: ${rawValue}`);
+    }
+
+    return parsed;
   }
 
   async getSheetsEvo25Value(): Promise<number> {

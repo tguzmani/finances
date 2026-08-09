@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EquityName } from '@prisma/client';
 import { EquitySheetsService } from './equity-sheets.service';
 import { EquityItaFetchService } from './equity-ita-fetch.service';
+import { DcaPricesService } from '../dca/dca-prices.service';
 
 @Injectable()
 export class EquityService {
@@ -12,6 +13,7 @@ export class EquityService {
     private readonly prisma: PrismaService,
     private readonly sheetsService: EquitySheetsService,
     private readonly itaFetchService: EquityItaFetchService,
+    private readonly dcaPricesService: DcaPricesService,
   ) {}
 
   async findLatestByName(name: EquityName) {
@@ -32,6 +34,10 @@ export class EquityService {
 
   async captureAllSnapshots(): Promise<void> {
     this.logger.log('Capturing equity snapshots...');
+
+    // The crypto PnL comes from the DCA sheet, so refresh its prices before
+    // reading it instead of trusting whenever the price cron last ran
+    await this.dcaPricesService.refreshPrices();
 
     // ITA first — if it fails (e.g. locked session), stop the entire capture
     const itaEvo25Value = await this.itaFetchService.getItaAccountValue();
