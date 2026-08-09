@@ -1,8 +1,9 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { EquityService } from './equity.service';
 import { EquitySheetsService } from './equity-sheets.service';
 import { EquityItaFetchService } from './equity-ita-fetch.service';
 import { EquityChartService } from './equity-chart.service';
+import { EquityRepairService } from './equity-repair.service';
 import { EquityName } from '@prisma/client';
 
 @Controller('equity')
@@ -12,6 +13,7 @@ export class EquityController {
     private readonly sheetsService: EquitySheetsService,
     private readonly itaFetchService: EquityItaFetchService,
     private readonly chartService: EquityChartService,
+    private readonly repairService: EquityRepairService,
   ) {}
 
   @Get('sheets')
@@ -28,6 +30,12 @@ export class EquityController {
   async testIta() {
     const accountValue = await this.itaFetchService.getItaAccountValue();
     return { accountValue };
+  }
+
+  /** Rebuilds snapshots captured while the DCA sheet reported #VALUE!. */
+  @Post('repair-crypto-snapshots')
+  async repairCryptoSnapshots(@Query('apply') apply?: string) {
+    return this.repairService.repairCryptoSnapshots(apply !== 'true');
   }
 
   @Post('capture')
