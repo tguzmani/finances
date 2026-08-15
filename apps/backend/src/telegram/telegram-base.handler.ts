@@ -21,6 +21,29 @@ export class TelegramBaseHandler {
   }
 
   /**
+   * Runs work that takes a noticeable while (an LLM round trip) with the chat
+   * showing "typing...", so the user sees the bot is busy instead of silence.
+   * Telegram clears the indicator after about five seconds, so it is resent
+   * until the work settles.
+   */
+  async withTyping<T>(ctx: SessionContext, work: () => Promise<T>): Promise<T> {
+    let result!: T;
+    let failure: unknown;
+
+    // persistentChatAction swallows the callback's result, so it is captured here
+    await ctx.persistentChatAction('typing', async () => {
+      try {
+        result = await work();
+      } catch (error) {
+        failure = error;
+      }
+    });
+
+    if (failure) throw failure;
+    return result;
+  }
+
+  /**
    * Gets the review type from session
    */
   getReviewTypeFromSession(ctx: SessionContext): 'transactions' | 'exchanges' | null {

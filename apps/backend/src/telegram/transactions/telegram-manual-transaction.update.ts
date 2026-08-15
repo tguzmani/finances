@@ -105,7 +105,7 @@ export class TelegramManualTransactionUpdate {
 
     let draft: TransactionDraft;
     try {
-      draft = await this.extractionService.extract(text);
+      draft = await this.baseHandler.withTyping(ctx, () => this.extractionService.extract(text));
     } catch (error) {
       this.logger.error(`Extraction failed: ${error.message}`);
       await ctx.reply(
