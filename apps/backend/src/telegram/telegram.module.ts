@@ -43,6 +43,7 @@ import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramSettingsService } from './settings/telegram-settings.service';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
 import { TelegramTransferService } from './transfers/telegram-transfer.service';
+import { TransferExtractionService } from './transfers/transfer-extraction.service';
 import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update';
 import { TelegramPagoMovilService } from './pago-movil/telegram-pago-movil.service';
 import { TelegramPagoMovilPresenter } from './pago-movil/telegram-pago-movil.presenter';
@@ -150,6 +151,7 @@ import * as https from 'https';
     TelegramSettingsService,
     TelegramTransferUpdate,
     TelegramTransferService,
+    TransferExtractionService,
     TelegramPagoMovilUpdate,
     TelegramPagoMovilService,
     TelegramPagoMovilPresenter,

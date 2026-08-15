@@ -71,7 +71,7 @@ export class TelegramUpdate {
       '/review - Review pending transactions\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add a transaction with the wizard (or just describe it in any message)\n' +
-      '/transfer - Register a transfer between accounts\n' +
+      '/transfer - Register a transfer between accounts (describe it in one message)\n' +
       '/pago_movil - Parse Pago Móvil payment data\n' +
       '/settings - Update settings\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +

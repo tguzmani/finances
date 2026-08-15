@@ -80,10 +80,17 @@ export interface ReviewSession {
   pagoMovilWaiting?: boolean;
   pagoMovilMessageId?: number;
   // Transfer flow
-  transferState?: 'waiting_amount' | 'waiting_debit' | 'waiting_credit' | 'waiting_description';
+  transferState?:
+    | 'waiting_input'
+    | 'waiting_amount'
+    | 'waiting_debit'
+    | 'waiting_credit'
+    | 'waiting_description'
+    | 'waiting_confirmation';
   transferAmount?: number;
   transferDebitAccount?: string;
   transferCreditAccount?: string;
+  transferDescription?: string;
 }
 
 export interface SessionContext extends Context {
