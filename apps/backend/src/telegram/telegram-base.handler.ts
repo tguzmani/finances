@@ -21,6 +21,19 @@ export class TelegramBaseHandler {
   }
 
   /**
+   * Strips the inline keyboard from the message a button belongs to, so a
+   * decision that was already taken cannot be taken again. Editing fails when
+   * the message is gone or carries no keyboard, which is not worth surfacing.
+   */
+  async removeButtons(ctx: SessionContext): Promise<void> {
+    try {
+      await ctx.editMessageReplyMarkup(undefined);
+    } catch {
+      // The decision stands regardless of whether the keyboard could be cleared
+    }
+  }
+
+  /**
    * Runs work that takes a noticeable while (an LLM round trip) with the chat
    * showing "typing...", so the user sees the bot is busy instead of silence.
    * Telegram clears the indicator after about five seconds, so it is resent

@@ -332,6 +332,7 @@ export class TelegramManualTransactionUpdate {
   async handleManualConfirm(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery();
+      await this.baseHandler.removeButtons(ctx);
       const date = ctx.session.manualTransactionDate;
       await this.createTransactionAndFinish(ctx, true, date);
     } catch (error) {
@@ -344,9 +345,9 @@ export class TelegramManualTransactionUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleManualReject(@Ctx() ctx: SessionContext) {
     try {
-      await ctx.answerCbQuery('Rejected');
+      await ctx.answerCbQuery('Cancelled');
       this.baseHandler.clearSession(ctx);
-      await ctx.editMessageText('❌ <b>Rejected</b>', { parse_mode: 'HTML' });
+      await ctx.editMessageText('🚫 Transaction cancelled.');
     } catch (error) {
       this.logger.error(`Error rejecting transaction: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -447,7 +448,7 @@ export class TelegramManualTransactionUpdate {
   async handleManualCancel(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery('Cancelled');
-      await ctx.editMessageText('❌ Manual transaction entry cancelled.', { parse_mode: 'HTML' });
+      await ctx.editMessageText('🚫 Manual transaction cancelled.');
       this.baseHandler.clearSession(ctx);
     } catch (error) {
       this.logger.error(`Error cancelling manual transaction: ${error.message}`);

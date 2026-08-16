@@ -69,7 +69,7 @@ export class TelegramTransferUpdate {
           await this.handleAccount(ctx, text, 'credit');
           break;
         case 'waiting_description':
-          // Reached only from "Name and accept", which registers straight away
+          // Reached only from the Name button, which registers straight away
           ctx.session.transferDescription = text;
           await this.registerTransfer(ctx);
           break;
@@ -215,6 +215,7 @@ export class TelegramTransferUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleRename(@Ctx() ctx: SessionContext) {
     await ctx.answerCbQuery();
+    await this.baseHandler.removeButtons(ctx);
     ctx.session.transferState = 'waiting_description';
     await ctx.reply('✏️ Enter a <b>description</b> for this transfer:', { parse_mode: 'HTML' });
   }
@@ -223,6 +224,7 @@ export class TelegramTransferUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleConfirm(@Ctx() ctx: SessionContext) {
     await ctx.answerCbQuery();
+    await this.baseHandler.removeButtons(ctx);
     await this.registerTransfer(ctx);
   }
 
@@ -283,6 +285,7 @@ export class TelegramTransferUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleCancel(@Ctx() ctx: SessionContext) {
     await ctx.answerCbQuery();
+    await this.baseHandler.removeButtons(ctx);
     this.baseHandler.clearSession(ctx);
     await ctx.reply('🚫 Transfer cancelled.');
   }
