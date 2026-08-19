@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { TransactionsBinanceService } from './transactions-binance.service';
+import { ConvertResult, TransactionsBinanceConvertService } from './transactions-binance-convert.service';
 import { JournalEntryCacheService } from '../journal-entry/journal-entry-cache.service';
 import { JournalEntryService } from '../journal-entry/journal-entry.service';
 import { SheetUpdateService } from '../journal-entry/sheet-update.service';
@@ -22,6 +23,7 @@ export class TransactionsService {
     private readonly journalEntryCache: JournalEntryCacheService,
     private readonly journalEntryService: JournalEntryService,
     private readonly sheetUpdateService: SheetUpdateService,
+    private readonly binanceConvert: TransactionsBinanceConvertService,
   ) { }
 
   async findAll(query: QueryTransactionsDto) {
@@ -297,11 +299,14 @@ export class TransactionsService {
     transactionsSkipped: number;
     totalFetched: number;
     autoRegistered: Transaction[];
+    converted: ConvertResult | null;
+    convertError: string | null;
   }> {
     this.logger.log(`Starting Binance sync with limit ${limitPerType} per type`);
 
     let totalCreated = 0;
     let totalSkipped = 0;
+    let newUsdcDeposit = false;
     const autoRegistered: Transaction[] = [];
 
     // Fetch all types in parallel
@@ -329,6 +334,11 @@ export class TransactionsService {
           },
         });
         totalCreated++;
+
+        // Duplicates never reach here, so this only trips on a genuinely new one
+        if (tx.currency === 'USDC' && tx.method === PaymentMethod.DEPOSIT) {
+          newUsdcDeposit = true;
+        }
 
         if (created.description) {
           try {
@@ -363,12 +373,37 @@ export class TransactionsService {
       `Binance sync complete: ${totalCreated} created, ${totalSkipped} skipped from ${allTransactions.length} transactions`
     );
 
+    // A fresh USDC deposit is the Codebay payment landing; every other flow
+    // treats Binance money as USDT, so sweep it over as soon as it shows up
+    const { converted, convertError } = newUsdcDeposit
+      ? await this.convertNewUsdc()
+      : { converted: null, convertError: null };
+
     return {
       transactionsCreated: totalCreated,
       transactionsSkipped: totalSkipped,
       totalFetched: allTransactions.length,
       autoRegistered,
+      converted,
+      convertError,
     };
+  }
+
+  /**
+   * Never lets a conversion failure take the sync down with it. The reason is
+   * carried out so it can be reported instead of dying in the logs — this only
+   * runs once a month, so a silent failure would go unnoticed for weeks.
+   */
+  private async convertNewUsdc(): Promise<{
+    converted: ConvertResult | null;
+    convertError: string | null;
+  }> {
+    try {
+      return { converted: await this.binanceConvert.convertUsdcToUsdt(), convertError: null };
+    } catch (err) {
+      this.logger.error(`USDC to USDT conversion failed: ${err.message}`);
+      return { converted: null, convertError: err.message };
+    }
   }
 
   /**

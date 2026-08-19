@@ -9,9 +9,11 @@ import {
   Body,
   ParseIntPipe,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { TransactionsImageCleanupService } from './transactions-image-cleanup.service';
+import { TransactionsBinanceConvertService } from './transactions-binance-convert.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { SyncTransactionsDto } from './dto/sync-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
@@ -21,7 +23,30 @@ export class TransactionsController {
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly cleanupService: TransactionsImageCleanupService,
+    private readonly binanceConvert: TransactionsBinanceConvertService,
   ) {}
+
+  /** USDC sitting in the funding wallet, waiting to be swept into USDT. */
+  @Get('usdc-balance')
+  async usdcBalance() {
+    return { usdc: await this.binanceConvert.getBalance() };
+  }
+
+  /**
+   * Converts USDC to USDT by hand. Without `amount` it sweeps the whole balance,
+   * which is what the sync does on its own when a deposit lands.
+   */
+  @Post('convert-usdc')
+  async convertUsdc(@Query('amount') amount?: string) {
+    const parsed = amount === undefined ? undefined : Number(amount);
+
+    if (parsed !== undefined && (!Number.isFinite(parsed) || parsed <= 0)) {
+      throw new BadRequestException('amount must be a positive number');
+    }
+
+    const result = await this.binanceConvert.convertUsdcToUsdt(parsed);
+    return result ?? { converted: false, reason: 'nothing above the minimum' };
+  }
 
   @Get()
   findAll(@Query() query: QueryTransactionsDto) {

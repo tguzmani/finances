@@ -105,6 +105,42 @@ export class BinanceApiClient {
     }
   }
 
+  /** Convert: ask for a quote. It expires within seconds of being issued. */
+  async getConvertQuote(params: {
+    fromAsset: string;
+    toAsset: string;
+    fromAmount?: number;
+    toAmount?: number;
+    walletType?: string;
+    validTime?: string;
+  }) {
+    try {
+      return await this.client.convertQuoteRequest(params);
+    } catch (err) {
+      this.logger.error(`getConvertQuote failed: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  /** Convert: execute a quote. This moves real balance. */
+  async acceptConvertQuote(params: { quoteId: string }) {
+    try {
+      return await this.client.acceptQuoteRequest(params);
+    } catch (err) {
+      this.logger.error(`acceptConvertQuote failed: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  async getConvertOrderStatus(params: { orderId?: string; quoteId?: string }) {
+    try {
+      return await this.client.getOrderStatus(params);
+    } catch (err) {
+      this.logger.error(`getConvertOrderStatus failed: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
   // Simple Earn Locked Position
   async getSimpleEarnLockedPosition(params?: { asset?: string }) {
     try {

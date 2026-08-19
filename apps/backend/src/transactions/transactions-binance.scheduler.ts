@@ -36,6 +36,18 @@ export class TransactionsBinanceScheduler {
         `Binance sync completed: ${result.transactionsCreated} created, ${result.transactionsSkipped} skipped`
       );
 
+      if (result.converted) {
+        this.eventEmitter.emit('binance.usdc-converted', result.converted);
+        this.logger.log(
+          `[EVENT] Emitted usdc-converted for ${result.converted.fromAmount} USDC`
+        );
+      }
+
+      if (result.convertError) {
+        this.eventEmitter.emit('binance.usdc-convert-failed', result.convertError);
+        this.logger.warn(`[EVENT] Emitted usdc-convert-failed: ${result.convertError}`);
+      }
+
       if (result.autoRegistered.length > 0) {
         const totalAmount = result.autoRegistered.reduce(
           (sum, t) => sum + Number(t.amount), 0

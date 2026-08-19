@@ -5,6 +5,7 @@ import { TransactionsScheduler } from './transactions.scheduler';
 import { TransactionsImageCleanupService } from './transactions-image-cleanup.service';
 import { TransactionsImageCleanupScheduler } from './transactions-image-cleanup.scheduler';
 import { TransactionsBinanceService } from './transactions-binance.service';
+import { TransactionsBinanceConvertService } from './transactions-binance-convert.service';
 import { TransactionsBinanceScheduler } from './transactions-binance.scheduler';
 import { TransactionOcrParser } from './ocr/parsers/transaction-ocr-parser';
 import { TransactionLlmParserService } from './ocr/parsers/transaction-llm-parser.service';
@@ -37,6 +38,7 @@ import { TransactionSearchService } from './transaction-search.service';
     TransactionsImageCleanupService,
     TransactionsImageCleanupScheduler,
     TransactionsBinanceService,
+    TransactionsBinanceConvertService,
     TransactionsBinanceScheduler,
     TransactionsSheetsService,
 

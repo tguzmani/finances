@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
 import { NewTransactionsEvent } from '../../transactions/events/new-transactions.event';
+import { ConvertResult } from '../../transactions/transactions-binance-convert.service';
 import { NewExchangesEvent } from '../../exchanges/events/new-exchanges.event';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TelegramTransactionsPresenter } from '../transactions/telegram-transactions.presenter';
@@ -66,6 +67,41 @@ export class TelegramNotificationListener {
       }
     } catch (error) {
       this.logger.error(`Failed to send transaction notification: ${error.message}`);
+    }
+  }
+
+  @OnEvent('binance.usdc-converted')
+  async handleUsdcConverted(event: ConvertResult) {
+    if (!this.chatId) return;
+
+    try {
+      const message =
+        `🔁 <b>USDC converted</b>\n\n` +
+        `${event.fromAmount.toFixed(2)} USDC → ${event.toAmount.toFixed(2)} USDT\n` +
+        `Rate: ${event.ratio}\n` +
+        `Order: ${event.orderId} (${event.status})`;
+
+      await this.bot.telegram.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      this.logger.log(`Sent USDC conversion notification for order ${event.orderId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send conversion notification: ${error.message}`);
+    }
+  }
+
+  @OnEvent('binance.usdc-convert-failed')
+  async handleUsdcConvertFailed(reason: string) {
+    if (!this.chatId) return;
+
+    try {
+      const message =
+        `⚠️ <b>USDC conversion failed</b>\n\n` +
+        `The USDC deposit landed but could not be converted to USDT.\n` +
+        `Reason: ${reason}\n\n` +
+        `Convert it by hand in Binance, or retry with /sync.`;
+
+      await this.bot.telegram.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+    } catch (error) {
+      this.logger.error(`Failed to send conversion failure notification: ${error.message}`);
     }
   }
 
