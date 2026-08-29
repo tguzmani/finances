@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SheetsRepository } from '../../common/sheets.repository';
+import { BANESCO_MOVEMENT_EVENT, BanescoMovementEvent } from '../../accounts/events/banesco-movement.event';
+import { touchesBanesco } from '../../journal-entry/journal-entry.constants';
 import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
 import { LedgerRowService } from '../../journal-entry/ledger-row.service';
@@ -14,6 +17,7 @@ export class TelegramTransferService {
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
     private readonly ledgerRowService: LedgerRowService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async matchAccount(userInput: string): Promise<string | null> {
@@ -105,6 +109,13 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     this.logger.log(
       `Transfer registered: debit=${debitAccount}, credit=${creditAccount}, $${amount.toFixed(2)}`,
     );
+
+    if (touchesBanesco(debitAccount, creditAccount)) {
+      this.eventEmitter.emit(
+        BANESCO_MOVEMENT_EVENT,
+        new BanescoMovementEvent(description),
+      );
+    }
   }
 
   private formatDate(date: Date): string {

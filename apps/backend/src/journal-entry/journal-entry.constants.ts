@@ -1,5 +1,8 @@
 export { JOURNAL_ACCOUNTS } from '../accounts/account.constants';
 
+/** Ledger account name for Banesco, and the platform that maps onto it. */
+export const BANESCO_ACCOUNT = 'Banesco';
+
 export const PLATFORM_TO_ACCOUNT: Record<string, string> = {
   BANESCO: 'Banesco',
   BINANCE: 'Binance',
@@ -28,3 +31,13 @@ export const JOURNAL_CATEGORIES: Record<string, string[]> = {
   Wishlist: ['Wishlist'],
   Casa:     ['Neyda', 'Casa'],
 };
+
+/** True when a transaction's platform books against the Banesco ledger account. */
+export function isBanescoPlatform(platform: string): boolean {
+  return PLATFORM_TO_ACCOUNT[platform] === BANESCO_ACCOUNT;
+}
+
+/** True when either leg of a journal entry touches Banesco. */
+export function touchesBanesco(...accounts: (string | null | undefined)[]): boolean {
+  return accounts.some((account) => account === BANESCO_ACCOUNT);
+}

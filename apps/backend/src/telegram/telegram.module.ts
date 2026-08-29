@@ -16,6 +16,7 @@ import { TelegramTransactionsUpdate } from './transactions/telegram-transactions
 import { TelegramManualTransactionUpdate } from './transactions/telegram-manual-transaction.update';
 import { TransactionExtractionService } from './transactions/transaction-extraction.service';
 import { ManualTransactionPostListener } from './listeners/manual-transaction-post.listener';
+import { BanescoBalanceListener } from './listeners/banesco-balance.listener';
 import { TelegramExchangesUpdate } from './exchanges/telegram-exchanges.update';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
 import { TelegramConvertService } from './exchanges/convert/telegram-convert.service';
@@ -127,6 +128,7 @@ import * as https from 'https';
     TelegramManualTransactionUpdate,
     TransactionExtractionService,
     ManualTransactionPostListener,
+    BanescoBalanceListener,
     TelegramExchangesUpdate,
     TelegramRatesUpdate,
     TelegramDcaUpdate,

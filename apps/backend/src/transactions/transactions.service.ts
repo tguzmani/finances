@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
+import { BANESCO_MOVEMENT_EVENT, BanescoMovementEvent } from '../accounts/events/banesco-movement.event';
+import { isBanescoPlatform } from '../journal-entry/journal-entry.constants';
 import { EmailServiceRegistry } from './email/email-service.registry';
 import { TransactionsBinanceService } from './transactions-binance.service';
 import { ConvertResult, TransactionsBinanceConvertService } from './transactions-binance-convert.service';
@@ -24,7 +27,28 @@ export class TransactionsService {
     private readonly journalEntryService: JournalEntryService,
     private readonly sheetUpdateService: SheetUpdateService,
     private readonly binanceConvert: TransactionsBinanceConvertService,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
+
+  /**
+   * A Banesco transaction counts against the balance the moment it reaches
+   * REVIEWED — at that point the money is already gone from the bank, whether or
+   * not the ledger has caught up. Announce the balance on both transitions:
+   * REVIEWED moves the estimate, REGISTERED moves the ledger.
+   */
+  private announceIfBanesco(transaction: Transaction): void {
+    if (!isBanescoPlatform(transaction.platform)) return;
+
+    const isCandidate =
+      transaction.status === TransactionStatus.REVIEWED ||
+      transaction.status === TransactionStatus.REGISTERED;
+    if (!isCandidate) return;
+
+    this.eventEmitter.emit(
+      BANESCO_MOVEMENT_EVENT,
+      new BanescoMovementEvent(transaction.description || 'Banesco transaction'),
+    );
+  }
 
   async findAll(query: QueryTransactionsDto) {
     const { fromDate, toDate, limit, minAmount, maxAmount } = query;
@@ -125,6 +149,10 @@ export class TransactionsService {
       where: { id },
       data,
     });
+
+    if (dto.status !== undefined) {
+      this.announceIfBanesco(updated);
+    }
 
     // Fire-and-forget: classify on description change
     if (dto.description) {
@@ -506,6 +534,8 @@ export class TransactionsService {
         status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status
       },
     });
+
+    this.announceIfBanesco(transaction);
 
     // Fire-and-forget: pre-compute journal entry classification
     void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BinanceStablecoinStatus, StablecoinOverview } from '../../accounts/interfaces/binance-account.interface';
-import { BanescoStatus } from '../../accounts/accounts-banesco.service';
+import { BanescoBalanceSnapshot, BanescoStatus } from '../../accounts/accounts-banesco.service';
 import { CashAccountStatus } from '../../accounts/accounts-cash.service';
 
 @Injectable()
@@ -15,6 +15,47 @@ export class TelegramAccountsPresenter {
     message += `Sheets Balance: <b>${sheetsBalance.toFixed(2)} VES</b>\n`;
     message += `Estimated Balance: <b>${estimatedBalance.toFixed(2)} VES</b>\n\n`;
     message += `<i>${pendingTxCount} pending transactions, ${pendingExchangeCount} pending exchanges</i>`;
+    return message;
+  }
+
+  /**
+   * The "how much is left in Banesco" message, shown after every movement that
+   * touches the account.
+   *
+   * The headline is what is actually left in the bank: the ledger balance minus
+   * every Banesco movement that has not been registered yet. The ledger figure
+   * follows only when the two differ, so the gap is visible.
+   */
+  formatBanescoBalance(snapshot: BanescoBalanceSnapshot, reason?: string): string {
+    const money = (ves: number, usd: number | null): string => {
+      const vesText = ves.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const usdText = usd === null ? '' : ` (${usd.toFixed(2)} USD)`;
+      return `${vesText} VES${usdText}`;
+    };
+
+    const pendingVes = snapshot.ves - snapshot.estimatedVes;
+    const pendingCount = snapshot.pendingTxCount + snapshot.pendingExchangeCount;
+
+    let message = '🏦 <b>Banesco balance</b>\n';
+    if (reason) {
+      message += `<i>after ${reason}</i>\n`;
+    }
+
+    message += `\n<b>${money(snapshot.estimatedVes, snapshot.estimatedUsd)}</b>\n`;
+
+    if (pendingCount > 0) {
+      message += `\nSheet: ${money(snapshot.ves, snapshot.usd)}\n`;
+      message += `Pending: −${money(pendingVes, snapshot.rate ? pendingVes / snapshot.rate : null)}\n`;
+      message += `<i>${snapshot.pendingTxCount} tx, ${snapshot.pendingExchangeCount} exchanges not registered yet</i>\n`;
+    }
+
+    if (snapshot.rate !== null) {
+      message += `\n<i>Rate: ${snapshot.rate.toFixed(2)} VES/USD</i>`;
+    }
+
     return message;
   }
 

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
+import { BANESCO_MOVEMENT_EVENT, BanescoMovementEvent } from '../accounts/events/banesco-movement.event';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { JournalEntryLlmService } from './journal-entry-llm.service';
 import { JournalEntryCacheService } from './journal-entry-cache.service';
@@ -16,6 +18,7 @@ export class JournalEntryService {
     private readonly llmService: JournalEntryLlmService,
     private readonly cacheService: JournalEntryCacheService,
     private readonly ledgerRowService: LedgerRowService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async createJournalEntry(transaction: Transaction): Promise<void> {
@@ -96,7 +99,7 @@ export class JournalEntryService {
     const range = `Libro!B${nextRow}:K${nextRow + 1}`;
     this.logger.log(`Inserting journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, [row1, row2]);
-        this.logger.log(`Journal entry inserted for transaction ${transaction.id}`);
+    this.logger.log(`Journal entry inserted for transaction ${transaction.id}`);
   }
 
   async createExchangeJournalEntry(sumFormula: string, wavg: number): Promise<void> {
@@ -135,7 +138,12 @@ export class JournalEntryService {
     const range = `Libro!B${nextRow}:K${nextRow + 1}`;
     this.logger.log(`Inserting exchange journal entry at ${range}`);
     await this.sheetsRepository.updateSheetValues(range, [row1, row2]);
-        this.logger.log(`Exchange journal entry inserted: Binance a Banesco`);
+    this.logger.log(`Exchange journal entry inserted: Binance a Banesco`);
+
+    this.eventEmitter.emit(
+      BANESCO_MOVEMENT_EVENT,
+      new BanescoMovementEvent('Binance a Banesco'),
+    );
   }
 
   private formatDate(date: Date): string {
