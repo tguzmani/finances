@@ -5,12 +5,13 @@ import { JournalEntryCacheService } from './journal-entry-cache.service';
 import { AutoRegistrationService } from './auto-registration.service';
 import { SheetUpdateService } from './sheet-update.service';
 import { LedgerRowService } from './ledger-row.service';
+import { LedgerWriterService } from './ledger-writer.service';
 import { CommonModule } from '../common/common.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 
 @Module({
   imports: [CommonModule, ExchangesModule],
-  providers: [JournalEntryService, JournalEntryLlmService, JournalEntryCacheService, AutoRegistrationService, SheetUpdateService, LedgerRowService],
-  exports: [JournalEntryService, JournalEntryCacheService, AutoRegistrationService, SheetUpdateService, LedgerRowService],
+  providers: [JournalEntryService, JournalEntryLlmService, JournalEntryCacheService, AutoRegistrationService, SheetUpdateService, LedgerRowService, LedgerWriterService],
+  exports: [JournalEntryService, JournalEntryCacheService, AutoRegistrationService, SheetUpdateService, LedgerRowService, LedgerWriterService],
 })
 export class JournalEntryModule {}

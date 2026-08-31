@@ -97,9 +97,11 @@ export class TelegramTransactionsService {
     try {
       await Promise.all(
         transactionIds.map(id =>
-          this.transactionsService.update(id, {
-            status: TransactionStatus.REGISTERED,
-          })
+          this.transactionsService.update(
+            id,
+            { status: TransactionStatus.REGISTERED },
+            { silent: true },
+          )
         )
       );
 

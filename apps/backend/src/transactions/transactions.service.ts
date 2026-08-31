@@ -15,6 +15,15 @@ import { TransactionStatus, TransactionType } from './transaction.types';
 import { TransactionSearchCriteria } from './transaction-search.service';
 import { Prisma, TransactionPlatform, PaymentMethod, Transaction, TransactionType as PrismaTransactionType } from '@prisma/client';
 
+export interface UpdateTransactionOptions {
+  /**
+   * Skip the Banesco balance message for this update. The /register flow steps
+   * through transactions one at a time and the sheet is edited by hand as it
+   * goes, so a balance after every step would be both noisy and stale.
+   */
+  silent?: boolean;
+}
+
 @Injectable()
 export class TransactionsService {
   private readonly logger = new Logger(TransactionsService.name);
@@ -33,16 +42,19 @@ export class TransactionsService {
   /**
    * A Banesco transaction counts against the balance the moment it reaches
    * REVIEWED — at that point the money is already gone from the bank, whether or
-   * not the ledger has caught up. Announce the balance on both transitions:
-   * REVIEWED moves the estimate, REGISTERED moves the ledger.
+   * not the ledger has caught up. Every status below moves the balance, so each
+   * one announces it: REVIEWED moves the estimate, REGISTERED moves the ledger,
+   * and REJECTED gives back what a discarded movement was holding.
    */
+  private static readonly BALANCE_MOVING_STATUSES: string[] = [
+    TransactionStatus.REVIEWED,
+    TransactionStatus.REGISTERED,
+    TransactionStatus.REJECTED,
+  ];
+
   private announceIfBanesco(transaction: Transaction): void {
     if (!isBanescoPlatform(transaction.platform)) return;
-
-    const isCandidate =
-      transaction.status === TransactionStatus.REVIEWED ||
-      transaction.status === TransactionStatus.REGISTERED;
-    if (!isCandidate) return;
+    if (!TransactionsService.BALANCE_MOVING_STATUSES.includes(transaction.status)) return;
 
     this.eventEmitter.emit(
       BANESCO_MOVEMENT_EVENT,
@@ -126,7 +138,11 @@ export class TransactionsService {
     });
   }
 
-  async update(id: number, dto: UpdateTransactionDto) {
+  async update(
+    id: number,
+    dto: UpdateTransactionDto,
+    options: UpdateTransactionOptions = {},
+  ) {
     const data: Prisma.TransactionUpdateInput = {};
 
     if (dto.status !== undefined) {
@@ -150,7 +166,7 @@ export class TransactionsService {
       data,
     });
 
-    if (dto.status !== undefined) {
+    if (dto.status !== undefined && !options.silent) {
       this.announceIfBanesco(updated);
     }
 

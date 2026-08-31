@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SheetsRepository } from '../common/sheets.repository';
+import { LedgerWriterService } from '../journal-entry/ledger-writer.service';
 import { TransactionData } from './interfaces/transaction-data.interface';
 
 @Injectable()
@@ -7,7 +8,10 @@ export class TransactionsSheetsService {
   private readonly logger = new Logger(TransactionsSheetsService.name);
   private readonly TRANSACTIONS_RANGE = 'Libro!B:I';
 
-  constructor(private readonly sheetsRepository: SheetsRepository) {}
+  constructor(
+    private readonly sheetsRepository: SheetsRepository,
+    private readonly ledgerWriter: LedgerWriterService,
+  ) {}
 
   async insertTransactionToSheet(data: TransactionData): Promise<void> {
     try {
@@ -51,7 +55,7 @@ export class TransactionsSheetsService {
       const range = `Libro!B${nextRowNumber}:I${nextRowNumber + rows.length - 1}`;
 
       this.logger.debug(`Inserting transaction to ${range}: ${JSON.stringify(data)}`);
-      await this.sheetsRepository.updateSheetValues(range, rows);
+      await this.ledgerWriter.writeEntry(range, rows);
       this.logger.log(`Transaction inserted successfully at ${range}`);
     } catch (error) {
       this.logger.error(`Failed to insert transaction to sheets: ${error.message}`);
@@ -65,7 +69,7 @@ export class TransactionsSheetsService {
       return amount;
     }
 
-    // Otherwise format as currency
-    return `$${amount}`;
+    // Plain number: the cell's accounting format renders the "$"
+    return String(amount);
   }
 }

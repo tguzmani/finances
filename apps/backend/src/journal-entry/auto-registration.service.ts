@@ -6,6 +6,7 @@ import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
 import { LedgerRowService } from './ledger-row.service';
+import { LedgerWriterService } from './ledger-writer.service';
 import { AUTO_REGISTRATION_RULES, AutoRegistrationRule } from './auto-registration.rules';
 
 export interface AutoRegistrationResult {
@@ -23,6 +24,7 @@ export class AutoRegistrationService {
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly ledgerRowService: LedgerRowService,
+    private readonly ledgerWriter: LedgerWriterService,
   ) {
     this.fuse = new Fuse(AUTO_REGISTRATION_RULES, {
       keys: ['keywords', 'patterns'],
@@ -101,7 +103,7 @@ export class AutoRegistrationService {
 
     const haberValue = isVes
       ? `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`
-      : `$${amount.toFixed(2)}`;
+      : amount.toFixed(2);
 
     const dateFormatted = this.formatDate(transaction.date);
 
@@ -121,7 +123,7 @@ export class AutoRegistrationService {
       .build();
 
     this.logger.log(`Auto-registration: inserting journal entry at ${range}`);
-    await this.sheetsRepository.updateSheetValues(range, rows);
+    await this.ledgerWriter.writeEntry(range, rows);
     this.logger.log(`Auto-registered transaction ${transaction.id} via rule "${rule.name}"`);
   }
 

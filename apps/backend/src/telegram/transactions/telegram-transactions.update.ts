@@ -534,9 +534,11 @@ export class TelegramTransactionsUpdate {
       // Revert transactions back to REVIEWED status
       await Promise.all(
         transactionIds.map(id =>
-          this.transactionsService.update(id, {
-            status: TransactionStatus.REVIEWED,
-          })
+          this.transactionsService.update(
+            id,
+            { status: TransactionStatus.REVIEWED },
+            { silent: true },
+          )
         )
       );
 
@@ -1836,9 +1838,11 @@ export class TelegramTransactionsUpdate {
       const item = items[currentIndex];
 
       // Mark as REGISTERED
-      await this.transactionsService.update(item.id, {
-        status: TransactionStatus.REGISTERED,
-      });
+      await this.transactionsService.update(
+        item.id,
+        { status: TransactionStatus.REGISTERED },
+        { silent: true },
+      );
       // Update the cached data as well
       item.data.status = TransactionStatus.REGISTERED;
 
@@ -1872,9 +1876,11 @@ export class TelegramTransactionsUpdate {
       const item = items[currentIndex];
 
       // Mark as REVIEWED (revert from ready-to-register state)
-      await this.transactionsService.update(item.id, {
-        status: TransactionStatus.REVIEWED,
-      });
+      await this.transactionsService.update(
+        item.id,
+        { status: TransactionStatus.REVIEWED },
+        { silent: true },
+      );
       // Update the cached data as well
       item.data.status = TransactionStatus.REVIEWED;
 
@@ -1910,9 +1916,11 @@ export class TelegramTransactionsUpdate {
       const previousItem = items[previousIndex];
 
       // Revert previous item's status
-      await this.transactionsService.update(previousItem.id, {
-        status: TransactionStatus.REVIEWED,
-      });
+      await this.transactionsService.update(
+        previousItem.id,
+        { status: TransactionStatus.REVIEWED },
+        { silent: true },
+      );
       // Update the cached data as well
       previousItem.data.status = TransactionStatus.REVIEWED;
 
@@ -1963,9 +1971,11 @@ export class TelegramTransactionsUpdate {
       for (const item of items) {
         // Check if it was registered (from cached data)
         if (item.data.status === TransactionStatus.REGISTERED) {
-          await this.transactionsService.update(item.id, {
-            status: TransactionStatus.REVIEWED,
-          });
+          await this.transactionsService.update(
+            item.id,
+            { status: TransactionStatus.REVIEWED },
+            { silent: true },
+          );
           revertedCount++;
         }
       }

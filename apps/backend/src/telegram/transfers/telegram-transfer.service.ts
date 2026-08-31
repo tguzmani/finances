@@ -6,6 +6,7 @@ import { touchesBanesco } from '../../journal-entry/journal-entry.constants';
 import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
 import { LedgerRowService } from '../../journal-entry/ledger-row.service';
+import { LedgerWriterService } from '../../journal-entry/ledger-writer.service';
 import { REAL_ACCOUNTS } from '../../accounts/account.constants';
 import { TRANSFER_RULES, TransferRule } from './transfer.rules';
 
@@ -17,6 +18,7 @@ export class TelegramTransferService {
     private readonly sheetsRepository: SheetsRepository,
     private readonly openRouter: OpenRouterService,
     private readonly ledgerRowService: LedgerRowService,
+    private readonly ledgerWriter: LedgerWriterService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -100,12 +102,12 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
       })
       .addCreditRow({
         account: creditAccount,
-        value: `$${amount.toFixed(2)}`,
+        value: amount.toFixed(2),
       })
       .build();
 
     this.logger.log(`Transfer: inserting journal entry at ${range}`);
-    await this.sheetsRepository.updateSheetValues(range, rows);
+    await this.ledgerWriter.writeEntry(range, rows);
     this.logger.log(
       `Transfer registered: debit=${debitAccount}, credit=${creditAccount}, $${amount.toFixed(2)}`,
     );
