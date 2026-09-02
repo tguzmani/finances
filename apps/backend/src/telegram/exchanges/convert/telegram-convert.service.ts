@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ExchangeRatesAggregatorService, RatesSnapshot } from '../../../exchanges/exchange-rates-aggregator.service';
+import { AmountExtractionService } from '../../../common/amount-extraction.service';
 import { BanescoAccountService } from '../../../accounts/accounts-banesco.service';
 import { TelegramConvertPresenter } from './telegram-convert.presenter';
 
@@ -12,14 +13,21 @@ export interface ConvertResponse {
   rates?: RatesSnapshot;
 }
 
+/** One "X = Y" line of a conversion, with the rate that produced it. */
+export interface ConversionLine {
+  label: string;
+  amount: number;
+  rateName: string;
+  rate: number;
+}
+
 export interface ConversionResult {
   inputAmount: number;
   inputCurrency: Currency;
-  outputAmount: number;
-  outputCurrency: string;
-  rateUsed: number;
-  rateName: string;
+  lines: ConversionLine[];
+  /** VES at the BCV rate, for the copy button and the Banesco check. */
   vesAmount: number | null;
+  /** VES at the internal rate, for the copy button. */
   vesAmountInternal: number | null;
   rates: RatesSnapshot;
 }
@@ -31,17 +39,17 @@ export class TelegramConvertService {
   constructor(
     private readonly ratesAggregator: ExchangeRatesAggregatorService,
     private readonly banescoService: BanescoAccountService,
+    private readonly amountExtraction: AmountExtractionService,
     private readonly presenter: TelegramConvertPresenter,
   ) {}
 
   async handleConvert(input: string): Promise<ConvertResponse> {
-    const parsed = this.parseInput(input);
+    const { amount, currency } = await this.amountExtraction.extract(input);
 
-    if (!parsed) {
+    if (amount === null || currency === null) {
       return { message: this.presenter.formatUsage() };
     }
 
-    const { amount, currency } = parsed;
     const rates = await this.ratesAggregator.getRatesSnapshot();
 
     const result = this.convert(amount, currency, rates);
@@ -72,27 +80,6 @@ export class TelegramConvertService {
     return this.presenter.formatBanescoAvailability({ available: false, differenceVes: shortfall, differenceUsd: diffUsd });
   }
 
-  private parseInput(input: string): { amount: number; currency: Currency } | null {
-    const trimmed = input.trim();
-    const parts = trimmed.split(/\s+/);
-
-    if (parts.length !== 2) {
-      return null;
-    }
-
-    const amount = parseFloat(parts[0]);
-    if (isNaN(amount) || amount <= 0) {
-      return null;
-    }
-
-    const currency = parts[1].toUpperCase();
-    if (!['VES', 'USD', 'EUR'].includes(currency)) {
-      return null;
-    }
-
-    return { amount, currency: currency as Currency };
-  }
-
   private convert(amount: number, currency: Currency, rates: RatesSnapshot): ConversionResult | null {
     const { internalRate, bcvUsd, bcvEur } = rates;
 
@@ -100,55 +87,50 @@ export class TelegramConvertService {
       return null;
     }
 
+    const lines: ConversionLine[] = [];
+
     switch (currency) {
       case 'VES': {
-        const outputAmount = amount / internalRate;
-        return {
-          inputAmount: amount,
-          inputCurrency: currency,
-          outputAmount,
-          outputCurrency: 'USD',
-          rateUsed: internalRate,
-          rateName: 'Internal',
-          vesAmount: null,
-          vesAmountInternal: null,
-          rates,
-        };
+        // Bolivares are worth a different number of dollars under each rate, so
+        // show all three rather than picking one.
+        if (bcvUsd) {
+          lines.push({ label: 'USD BCV', amount: amount / bcvUsd, rateName: 'BCV USD', rate: bcvUsd });
+        }
+        if (bcvEur) {
+          lines.push({ label: 'EUR BCV', amount: amount / bcvEur, rateName: 'BCV EUR', rate: bcvEur });
+        }
+        lines.push({ label: 'USD Internal', amount: amount / internalRate, rateName: 'Internal', rate: internalRate });
+
+        return { inputAmount: amount, inputCurrency: currency, lines, vesAmount: null, vesAmountInternal: null, rates };
       }
 
       case 'USD': {
         if (!bcvUsd) return null;
-        const outputAmount = (amount * bcvUsd) / internalRate;
+
         const vesAmount = amount * bcvUsd;
         const vesAmountInternal = amount * internalRate;
-        return {
-          inputAmount: amount,
-          inputCurrency: currency,
-          outputAmount,
-          outputCurrency: 'USD',
-          rateUsed: bcvUsd,
-          rateName: 'BCV USD',
-          vesAmount,
-          vesAmountInternal,
-          rates,
-        };
+
+        lines.push({ label: 'VES BCV', amount: vesAmount, rateName: 'BCV USD', rate: bcvUsd });
+        lines.push({ label: 'VES Internal', amount: vesAmountInternal, rateName: 'Internal', rate: internalRate });
+        lines.push({ label: 'USD Internal', amount: vesAmount / internalRate, rateName: 'Internal', rate: internalRate });
+
+        return { inputAmount: amount, inputCurrency: currency, lines, vesAmount, vesAmountInternal, rates };
       }
 
       case 'EUR': {
         if (!bcvEur) return null;
-        const outputAmount = (amount * bcvEur) / internalRate;
+
         const vesAmount = amount * bcvEur;
-        return {
-          inputAmount: amount,
-          inputCurrency: currency,
-          outputAmount,
-          outputCurrency: 'USD',
-          rateUsed: bcvEur,
-          rateName: 'BCV EUR',
-          vesAmount,
-          vesAmountInternal: null,
-          rates,
-        };
+        // The internal rate is the yardstick whatever the input currency is:
+        // it answers "what would this cost me in bolivares", not "what is a
+        // euro worth". So it applies to the amount directly, same as for USD.
+        const vesAmountInternal = amount * internalRate;
+
+        lines.push({ label: 'VES BCV', amount: vesAmount, rateName: 'BCV EUR', rate: bcvEur });
+        lines.push({ label: 'VES Internal', amount: vesAmountInternal, rateName: 'Internal', rate: internalRate });
+        lines.push({ label: 'USD Internal', amount: vesAmount / internalRate, rateName: 'Internal', rate: internalRate });
+
+        return { inputAmount: amount, inputCurrency: currency, lines, vesAmount, vesAmountInternal, rates };
       }
     }
   }

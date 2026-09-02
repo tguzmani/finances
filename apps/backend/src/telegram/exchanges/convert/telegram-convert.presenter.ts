@@ -4,24 +4,17 @@ import { ConversionResult } from './telegram-convert.service';
 @Injectable()
 export class TelegramConvertPresenter {
   formatConversion(result: ConversionResult): string {
-    const { inputAmount, inputCurrency, outputAmount, outputCurrency, rateUsed, rateName, vesAmount, vesAmountInternal, rates } = result;
+    const { inputAmount, inputCurrency, lines } = result;
 
-    const rateLabel = inputCurrency === 'VES' ? '' : ' BCV';
-    const outLabel = inputCurrency === 'VES' ? '' : ' Internal';
+    let message = '<b>💱 Conversion</b>\n';
+    message += `<i>Read as ${this.formatNumber(inputAmount)} ${inputCurrency}</i>\n\n`;
 
-    let message = '<b>💱 Conversion</b>\n\n';
-    message += `${this.formatNumber(inputAmount)} ${inputCurrency}${rateLabel} = <b>${this.formatNumber(outputAmount)} ${outputCurrency}${outLabel}</b>\n`;
-    if (vesAmount !== null) {
-      message += `${this.formatNumber(inputAmount)} ${inputCurrency}${rateLabel} = <b>${this.formatNumber(vesAmount)} VES</b>\n`;
-    }
-    if (vesAmountInternal !== null) {
-      message += `${this.formatNumber(inputAmount)} ${inputCurrency} Internal = <b>${this.formatNumber(vesAmountInternal)} VES</b>\n`;
+    for (const line of lines) {
+      message += `${line.label}: <b>${this.formatNumber(line.amount)}</b>`;
+      message += ` <i>@ ${this.formatNumber(line.rate)}</i>\n`;
     }
 
-    message += `\n<i>Rate used: ${rateName} @ ${this.formatNumber(rateUsed)}</i>\n`;
-    message += `<i>Internal rate: ${rates.internalRate ? this.formatNumber(rates.internalRate) : 'N/A'}</i>`;
-
-    return message;
+    return message.trimEnd();
   }
 
   formatBanescoAvailability(availability: { available: boolean; differenceVes: number; differenceUsd: number }): string {
@@ -33,9 +26,9 @@ export class TelegramConvertPresenter {
 
   formatUsage(): string {
     return (
-      '<b>Usage:</b> /convert {amount} {currency}\n\n' +
+      'Could not read an amount and a currency from that.\n\n' +
       'Supported currencies: VES, USD, EUR\n' +
-      'Example: <code>/convert 8177.49 VES</code>'
+      '<i>Write it however you like: 100 USD, $18,68, 27.837,82 bs, 50 euros</i>'
     );
   }
 

@@ -3,6 +3,7 @@ import { UseGuards, Logger } from '@nestjs/common';
 import { TelegramAuthGuard } from '../../guards/telegram-auth.guard';
 import { SessionContext } from '../../telegram.types';
 import { TelegramConvertService } from './telegram-convert.service';
+import { TelegramBaseHandler } from '../../telegram-base.handler';
 
 @Update()
 export class TelegramConvertUpdate {
@@ -10,6 +11,7 @@ export class TelegramConvertUpdate {
 
   constructor(
     private readonly convertService: TelegramConvertService,
+    private readonly baseHandler: TelegramBaseHandler,
   ) {}
 
   @Command('convert')
@@ -18,7 +20,7 @@ export class TelegramConvertUpdate {
     ctx.session.convertWaitingForInput = true;
     await ctx.reply(
       'Enter amount and currency:\n' +
-      '<i>Example: 100 USD, 8177.49 VES, 50 EUR</i>',
+      '<i>Any format works: 100 USD, $18,68, 27.837,82 bs, 50 euros</i>',
       { parse_mode: 'HTML' },
     );
   }
@@ -29,7 +31,9 @@ export class TelegramConvertUpdate {
     try {
       ctx.session.convertWaitingForInput = false;
 
-      const result = await this.convertService.handleConvert(ctx.message.text);
+      const result = await this.baseHandler.withTyping(ctx, () =>
+        this.convertService.handleConvert((ctx.message as { text: string }).text),
+      );
 
       const buttons: any[][] = [];
       if (result.bcvAmount) {
