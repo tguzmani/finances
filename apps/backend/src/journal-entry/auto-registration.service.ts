@@ -7,6 +7,7 @@ import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
 import { LedgerRowService } from './ledger-row.service';
 import { LedgerWriterService } from './ledger-writer.service';
+import { formatLedgerDate } from './ledger-date';
 import { AUTO_REGISTRATION_RULES, AutoRegistrationRule } from './auto-registration.rules';
 
 export interface AutoRegistrationResult {
@@ -105,7 +106,7 @@ export class AutoRegistrationService {
       ? `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`
       : amount.toFixed(2);
 
-    const dateFormatted = this.formatDate(transaction.date);
+    const dateFormatted = formatLedgerDate(transaction.date);
 
     const builder = new JournalEntryBuilder(nextRow);
     const { rows, range } = builder
@@ -127,10 +128,4 @@ export class AutoRegistrationService {
     this.logger.log(`Auto-registered transaction ${transaction.id} via rule "${rule.name}"`);
   }
 
-  private formatDate(date: Date): string {
-    const d = new Date(date);
-    const day = d.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' });
-    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' });
-    return `${day}-${month}`;
-  }
 }

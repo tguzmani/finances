@@ -7,6 +7,7 @@ import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
 import { LedgerRowService } from '../../journal-entry/ledger-row.service';
 import { LedgerWriterService } from '../../journal-entry/ledger-writer.service';
+import { formatLedgerDate } from '../../journal-entry/ledger-date';
 import { REAL_ACCOUNTS } from '../../accounts/account.constants';
 import { TRANSFER_RULES, TransferRule } from './transfer.rules';
 
@@ -91,7 +92,7 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     description: string,
   ): Promise<void> {
     const nextRow = await this.ledgerRowService.getNextRow();
-    const dateFormatted = this.formatDate(new Date());
+    const dateFormatted = formatLedgerDate(new Date());
 
     const builder = new JournalEntryBuilder(nextRow);
     const { rows, range } = builder
@@ -120,13 +121,4 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     }
   }
 
-  private formatDate(date: Date): string {
-    const d = new Date(date);
-    const day = d.getUTCDate();
-    const month = d.toLocaleDateString('en-US', {
-      month: 'short',
-      timeZone: 'UTC',
-    });
-    return `${day}-${month}`;
-  }
 }

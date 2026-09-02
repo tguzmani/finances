@@ -8,6 +8,7 @@ import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { TransactionsSheetsService } from '../transactions/transactions-sheets.service';
 import { TransactionData } from '../transactions/interfaces/transaction-data.interface';
 import { BANESCO_MOVEMENT_EVENT, BanescoMovementEvent } from './events/banesco-movement.event';
+import { formatLedgerDate } from '../journal-entry/ledger-date';
 
 export interface BanescoStatus {
   sheetsBalance: number;
@@ -156,7 +157,7 @@ export class BanescoAccountService {
       const amountFormula = `=ABS(${currentBalance}-${newBalance})/${exchangeRate}`;
 
       const transaction: TransactionData = {
-        date: new Date().toLocaleDateString('en-US'),
+        date: formatLedgerDate(new Date()),
         description: 'Ajustes balance Banesco',
         debit_accounts: [],
         credit_accounts: [],

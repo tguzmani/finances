@@ -8,6 +8,7 @@ import { JournalEntryLlmService } from './journal-entry-llm.service';
 import { JournalEntryCacheService } from './journal-entry-cache.service';
 import { LedgerRowService } from './ledger-row.service';
 import { LedgerWriterService } from './ledger-writer.service';
+import { formatLedgerDate } from './ledger-date';
 
 @Injectable()
 export class JournalEntryService {
@@ -68,7 +69,7 @@ export class JournalEntryService {
       );
     }
 
-    const dateFormatted = this.formatDate(transaction.date);
+    const dateFormatted = formatLedgerDate(transaction.date);
 
     // Row 1: Date | Description | Debe.1 | (empty) | Debe (=ref to Haber) | (empty) | Category | Subcategory | (empty) | (empty)
     const row1 = [
@@ -107,7 +108,7 @@ export class JournalEntryService {
   async createExchangeJournalEntry(sumFormula: string, wavg: number): Promise<void> {
     const nextRow = await this.ledgerRowService.getNextRow();
 
-    const dateFormatted = this.formatDate(new Date());
+    const dateFormatted = formatLedgerDate(new Date());
 
     // Row 1 (Debit): Banesco receives the money, Debe references Haber
     const row1 = [
@@ -148,10 +149,4 @@ export class JournalEntryService {
     );
   }
 
-  private formatDate(date: Date): string {
-    const d = new Date(date);
-    const day = d.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Caracas' });
-    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Caracas' });
-    return `${day}-${month}`;
-  }
 }
