@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OpenRouterService } from '../../../common/open-router.service';
 import { formatBankList } from '../../../common/venezuelan-banks';
+import { AMOUNT_FORMAT_RULES } from '../../../common/amount-format.rules';
 
 export interface PagoMovilData {
   bankCode: string | null;
@@ -32,7 +33,7 @@ Typical Pago Móvil data contains exactly these fields:
 Rules:
 - bankCode: Extract the 4-digit bank code. Match against the bank list provided below.
 - bankName: The full name of the bank matching the code from the list. If no exact code match, use the name as provided in the text.
-- amount: Parse Venezuelan number format (1.234,56 = 1234.56). May be null if not provided in the data.
+- amount: The payment amount. May be null if not provided in the data. Read it by the number format rules below.
 - phone: Phone number, typically starts with 04XX. Remove dashes/spaces. Keep the full number.
 - idDocument: The identity document (cédula or RIF number). This is usually a number with dots like 14.480.811 or with a prefix like V-14.480.811. Always include the letter prefix (V for cédula, J/G for RIF). Remove dots and dashes. If no letter prefix is present, assume V (cédula).
   - "RIF" in the text usually means it's a company ID (J-XXXXXXXX or similar)
@@ -43,6 +44,8 @@ IMPORTANT - Additional context priority:
 - If "Additional context" is provided, values there OVERRIDE values from the OCR text.
 - The additional context often contains the amount (e.g. "7350 VES" means amount is 7350).
 - The OCR text typically contains bank, phone, and ID document. The amount usually comes from the additional context.
+
+${AMOUNT_FORMAT_RULES}
 
 Venezuelan Bank List:
 ${formatBankList()}
