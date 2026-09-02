@@ -26,7 +26,7 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
   {
     name: 'gym',
     keywords: ['gym'],
-    exactMatch: false,
+    exactMatch: true,
     sheet: 'Libro',
     cells: [{ cell: 'F8' }],
   },
