@@ -16,6 +16,13 @@
 - This includes: bot messages, UI labels, logs, comments, variable names, etc.
 - Maintain consistency with the rest of the app which is already in English
 
+## Ubiquitous Language
+
+- **Freeform entry** — plain text sent to the bot without invoking a command. The LLM reads it and drafts a transaction from it (`handleManualFreeform`). This is the bot's default action: anything typed that is not a command and that no active flow is waiting for lands here.
+- **Command flow** — anything started with a `/command` that then waits for input (`/convert`, `/transfer`, `/pago_movil`, `/add_transaction`). While a command flow is waiting, its session flag routes the next message to it and freeform entry does not run.
+
+Session state lives in memory, so a restart drops any command flow that was mid-way and the next message is read as a freeform entry. Re-invoking the command is the recovery; nothing persists it on purpose.
+
 ## Manual Transactions
 
 "Manual transactions" refers to all user-initiated transaction flows:
@@ -28,6 +35,22 @@ All manual transaction flows must support both auto-registration systems:
 2. `AutoRegistrationService.tryAutoRegister()` — matches `AUTO_REGISTRATION_RULES` for journal entries
 
 Sheet update rules take priority; auto-registration is attempted only if no sheet rule matched.
+
+## Waiting Feedback
+
+**Any handler that awaits something slow MUST show the Telegram typing indicator.** Silence reads as a dead bot; typing reads as one that is working.
+
+This covers every LLM call (`OpenRouterService`), OCR, and any Google Sheets or Binance round-trip a user is waiting on.
+
+Wrap the awaited work with `TelegramBaseHandler.withTyping`:
+
+```typescript
+const draft = await this.baseHandler.withTyping(ctx, () =>
+  this.extractionService.extract(text),
+);
+```
+
+`withTyping` keeps the indicator alive for as long as the work runs and rethrows whatever the work threw, so error handling is unchanged. Inject `TelegramBaseHandler` in the update that owns the handler.
 
 ## Clean Code
 
