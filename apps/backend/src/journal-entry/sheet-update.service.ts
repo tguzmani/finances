@@ -46,14 +46,9 @@ export class SheetUpdateService {
     const cell = await this.findAvailableCell(rule);
     const fullRange = `${rule.sheet}!${cell}`;
 
-    if (rule.accumulate) {
-      const formula = await this.buildAccumulatedFormula(fullRange, formulaFragment);
-      this.logger.log(`Sheet update: accumulating ${formulaFragment} to ${fullRange} via rule "${rule.name}" → ${formula}`);
-      await this.sheetsRepository.updateSheetValues(fullRange, [[formula]]);
-    } else {
-      this.logger.log(`Sheet update: writing ${formulaFragment} to ${fullRange} via rule "${rule.name}"`);
-      await this.sheetsRepository.updateSheetValues(fullRange, [[`=${formulaFragment}`]]);
-    }
+    const formula = await this.buildAccumulatedFormula(fullRange, formulaFragment);
+    this.logger.log(`Sheet update: accumulating ${formulaFragment} to ${fullRange} via rule "${rule.name}" → ${formula}`);
+    await this.sheetsRepository.updateSheetValues(fullRange, [[formula]]);
 
     return { rule, cell: fullRange, amount };
   }

@@ -8,9 +8,13 @@ export interface SheetUpdateRule {
   exactMatch: boolean;
   sheet: string;
   cells: SheetUpdateCell[];
-  accumulate?: boolean;
 }
 
+/**
+ * Writes are always additive: a second match adds to whatever the cell holds
+ * instead of replacing it. Replacing silently destroyed budget figures that had
+ * been typed by hand.
+ */
 export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
   {
     name: 'saldo',
@@ -18,7 +22,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F6' }],
-    accumulate: true,
   },
   {
     name: 'gym',
@@ -47,7 +50,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F4' }],
-    accumulate: true,
   },
   {
     name: 'google_play_subscription',
@@ -55,7 +57,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F4' }],
-    accumulate: true,
   },
   {
     name: 'claude_subscription',
@@ -63,7 +64,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F4' }],
-    accumulate: true,
   },
   {
     name: 'anthropic_subscription',
@@ -71,7 +71,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F4' }],
-    accumulate: true,
   },
   {
     name: 'render_subscription',
@@ -79,7 +78,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'F4' }],
-    accumulate: true,
   },
   {
     name: 'onemeta_income',
@@ -94,7 +92,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     exactMatch: false,
     sheet: 'Libro',
     cells: [{ cell: 'G25' }],
-    accumulate: true,
   },
   {
     name: 'codebay_income',
