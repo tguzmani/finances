@@ -36,7 +36,11 @@ export class TelegramAccountsPresenter {
       return `${vesText} VES${usdText}`;
     };
 
+    // What the unregistered movements take out of the sheet balance. Exchanges
+    // bring bolivares in, so this flips positive when they outweigh the
+    // transactions going out, and the sign has to follow.
     const pendingVes = snapshot.ves - snapshot.estimatedVes;
+    const pendingSign = pendingVes < 0 ? '+' : '−';
     const pendingCount = snapshot.pendingTxCount + snapshot.pendingExchangeCount;
 
     let message = '🏦 <b>Banesco balance</b>\n';
@@ -48,7 +52,8 @@ export class TelegramAccountsPresenter {
 
     if (pendingCount > 0) {
       message += `\nSheet: ${money(snapshot.ves, snapshot.usd)}\n`;
-      message += `Pending: −${money(pendingVes, snapshot.rate ? pendingVes / snapshot.rate : null)}\n`;
+      const pendingAbs = Math.abs(pendingVes);
+      message += `Pending: ${pendingSign}${money(pendingAbs, snapshot.rate ? pendingAbs / snapshot.rate : null)}\n`;
       message += `<i>${snapshot.pendingTxCount} tx, ${snapshot.pendingExchangeCount} exchanges not registered yet</i>\n`;
     }
 
