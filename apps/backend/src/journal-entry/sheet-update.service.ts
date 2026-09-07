@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
-import Fuse from 'fuse.js';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { containsAnyKeyword, equalsAnyKeyword } from './keyword-match';
 import { SHEET_UPDATE_RULES, SheetUpdateRule } from './sheet-update.rules';
 
 export interface SheetUpdateResult {
@@ -14,18 +14,11 @@ export interface SheetUpdateResult {
 @Injectable()
 export class SheetUpdateService {
   private readonly logger = new Logger(SheetUpdateService.name);
-  private readonly fuse: Fuse<SheetUpdateRule>;
 
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
-  ) {
-    this.fuse = new Fuse(SHEET_UPDATE_RULES, {
-      keys: ['keywords'],
-      threshold: 0.4,
-      includeScore: true,
-    });
-  }
+  ) {}
 
   /**
    * Attempts to match a transaction description against sheet update rules.
@@ -36,8 +29,7 @@ export class SheetUpdateService {
   async trySheetUpdate(transaction: Transaction): Promise<SheetUpdateResult | null> {
     if (!transaction.description) return null;
 
-    const rule = this.simpleMatch(transaction.description)
-      ?? this.fuzzyMatch(transaction.description);
+    const rule = this.findRule(transaction.description);
 
     if (!rule) return null;
 
@@ -53,52 +45,18 @@ export class SheetUpdateService {
     return { rule, cell: fullRange, amount };
   }
 
-  private simpleMatch(description: string): SheetUpdateRule | null {
-    const normalized = description.toLowerCase().trim();
+  private findRule(description: string): SheetUpdateRule | null {
+    const rule = SHEET_UPDATE_RULES.find((candidate) =>
+      candidate.exactMatch
+        ? equalsAnyKeyword(description, candidate.keywords)
+        : containsAnyKeyword(description, candidate.keywords),
+    );
 
-    for (const rule of SHEET_UPDATE_RULES) {
-      if (rule.exactMatch) {
-        const allKeywordsMatch = rule.keywords.every(
-          (keyword) => normalized.includes(keyword.toLowerCase()),
-        );
-        // For exact match, description should only contain the keywords (no extra words)
-        const words = normalized.split(/\s+/);
-        const keywordsNormalized = rule.keywords.map((k) => k.toLowerCase());
-        const isExact = words.length === keywordsNormalized.length
-          && words.every((w) => keywordsNormalized.includes(w));
-
-        if (allKeywordsMatch && isExact) {
-          this.logger.log(`Simple exact match found: "${description}" → ${rule.name}`);
-          return rule;
-        }
-      } else {
-        const allKeywordsMatch = rule.keywords.every(
-          (keyword) => normalized.includes(keyword.toLowerCase()),
-        );
-        if (allKeywordsMatch) {
-          this.logger.log(`Simple match found: "${description}" → ${rule.name}`);
-          return rule;
-        }
-      }
-    }
-    return null;
-  }
-
-  private fuzzyMatch(description: string): SheetUpdateRule | null {
-    const results = this.fuse.search(description);
-    if (results.length === 0) return null;
-
-    const best = results[0];
-    if (best.score !== undefined && best.score > 0.4) return null;
-
-    const rule = best.item;
-    if (rule.exactMatch) {
-      const words = description.toLowerCase().trim().split(/\s+/);
-      if (words.length !== rule.keywords.length) return null;
+    if (rule) {
+      this.logger.log(`Matched "${description}" to rule ${rule.name}`);
     }
 
-    this.logger.log(`Fuzzy match found: "${description}" → ${rule.name} (score: ${best.score?.toFixed(3)})`);
-    return rule;
+    return rule ?? null;
   }
 
   private async buildAmountFragment(transaction: Transaction): Promise<string> {

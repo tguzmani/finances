@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
-import Fuse from 'fuse.js';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { containsAllKeywords } from './keyword-match';
 import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
 import { LedgerRowService } from './ledger-row.service';
@@ -19,20 +19,13 @@ export interface AutoRegistrationResult {
 @Injectable()
 export class AutoRegistrationService {
   private readonly logger = new Logger(AutoRegistrationService.name);
-  private readonly fuse: Fuse<AutoRegistrationRule>;
 
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
     private readonly ledgerRowService: LedgerRowService,
     private readonly ledgerWriter: LedgerWriterService,
-  ) {
-    this.fuse = new Fuse(AUTO_REGISTRATION_RULES, {
-      keys: ['keywords', 'patterns'],
-      threshold: 0.4,
-      includeScore: true,
-    });
-  }
+  ) {}
 
   /**
    * Attempts to auto-register a transaction by matching its description
@@ -43,8 +36,7 @@ export class AutoRegistrationService {
   async tryAutoRegister(transaction: Transaction): Promise<AutoRegistrationResult | null> {
     if (!transaction.description) return null;
 
-    const rule = this.simpleMatch(transaction.description)
-      ?? this.fuzzyMatch(transaction.description);
+    const rule = this.findRule(transaction.description);
 
     if (!rule) return null;
 
@@ -59,29 +51,18 @@ export class AutoRegistrationService {
     return { rule, debitAccount: rule.debitAccount, creditAccount };
   }
 
-  private simpleMatch(description: string): AutoRegistrationRule | null {
-    const normalized = description.toLowerCase().trim();
-    for (const rule of AUTO_REGISTRATION_RULES) {
-      const allKeywordsMatch = rule.keywords.every(
-        (keyword) => normalized.includes(keyword.toLowerCase()),
-      );
-      if (allKeywordsMatch) {
-        this.logger.log(`Simple match found: "${description}" → ${rule.name}`);
-        return rule;
-      }
+  private findRule(description: string): AutoRegistrationRule | null {
+    // Every keyword has to be present: they name the parts of one description
+    // ("gasolina" + "lancer"), so a single one on its own means nothing.
+    const rule = AUTO_REGISTRATION_RULES.find((candidate) =>
+      containsAllKeywords(description, candidate.keywords),
+    );
+
+    if (rule) {
+      this.logger.log(`Matched "${description}" to rule ${rule.name}`);
     }
-    return null;
-  }
 
-  private fuzzyMatch(description: string): AutoRegistrationRule | null {
-    const results = this.fuse.search(description);
-    if (results.length === 0) return null;
-
-    const best = results[0];
-    if (best.score !== undefined && best.score > 0.4) return null;
-
-    this.logger.log(`Fuzzy match found: "${description}" → ${best.item.name} (score: ${best.score?.toFixed(3)})`);
-    return best.item;
+    return rule ?? null;
   }
 
   private async createJournalEntry(
