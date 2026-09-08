@@ -34,6 +34,19 @@ export class TelegramBaseHandler {
   }
 
   /**
+   * Asks for a typed answer with Telegram's reply box already open.
+   *
+   * The answer arrives attached to the question, so the user can see what they
+   * are answering, and the keyboard is up without them reaching for it.
+   */
+  async askForReply(ctx: SessionContext, question: string): Promise<void> {
+    await ctx.reply(question, {
+      parse_mode: 'HTML',
+      reply_markup: { force_reply: true },
+    });
+  }
+
+  /**
    * Runs work that takes a noticeable while (an LLM round trip) with the chat
    * showing "typing...", so the user sees the bot is busy instead of silence.
    * Telegram clears the indicator after about five seconds, so it is resent

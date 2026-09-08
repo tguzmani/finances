@@ -222,9 +222,9 @@ export class TelegramUpdate {
         // No exchanges — go directly to transaction search
         ctx.session.reviewOneMode = 'waiting_for_tx_search';
         ctx.session.reviewOneType = 'transaction';
-        await ctx.reply(
+        await this.baseHandler.askForReply(
+          ctx,
           '🔍 <b>Search transaction</b>\n\n<i>Type name, amount, date, platform, or any combination</i>',
-          { parse_mode: 'HTML', reply_markup: { force_reply: true } },
         );
         return;
       }

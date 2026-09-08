@@ -27,6 +27,9 @@ import { GoogleSheetConfigService } from '../../google-sheet-config/google-sheet
 import axios from 'axios';
 import * as https from 'https';
 
+/** Asked whenever a transaction needs a name before it can be registered. */
+const DESCRIPTION_PROMPT = '✏️ Please type a description for this transaction:';
+
 @Update()
 export class TelegramTransactionsUpdate {
   private readonly logger = new Logger(TelegramTransactionsUpdate.name);
@@ -94,9 +97,9 @@ export class TelegramTransactionsUpdate {
       ctx.session.reviewOneMode = 'waiting_for_tx_search';
       ctx.session.reviewOneType = 'transaction';
 
-      await ctx.reply(
+      await this.baseHandler.askForReply(
+        ctx,
         '🔍 <b>Search transaction</b>\n\n<i>Type name, amount, date, platform, or any combination</i>',
-        { parse_mode: 'HTML', reply_markup: { force_reply: true } },
       );
     } catch (error) {
       await ctx.answerCbQuery('Error');
@@ -221,10 +224,7 @@ export class TelegramTransactionsUpdate {
       ctx.session.waitingForDescription = true;
 
       await ctx.answerCbQuery();
-      await ctx.reply(
-        '✏️ Please type a description for this transaction:',
-        { reply_markup: { force_reply: true } }
-      );
+      await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
     } catch (error) {
       await ctx.answerCbQuery('Error');
     }
@@ -245,10 +245,10 @@ export class TelegramTransactionsUpdate {
       ctx.session.waitingForDescription = false;
 
       await ctx.answerCbQuery();
-      await ctx.reply(
+      await this.baseHandler.askForReply(
+        ctx,
         '📅 <b>Enter new date/time</b>\n\n' +
         'You can use natural language (e.g. "ayer 2pm", "Feb 10 3:30 PM", "hace 2 horas")',
-        { parse_mode: 'HTML', reply_markup: { force_reply: true } }
       );
     } catch (error) {
       await ctx.answerCbQuery('Error');
@@ -270,10 +270,7 @@ export class TelegramTransactionsUpdate {
       ctx.session.waitingForDescription = false;
 
       await ctx.answerCbQuery();
-      await ctx.reply(
-        '💲 <b>Enter new amount</b>',
-        { parse_mode: 'HTML', reply_markup: { force_reply: true } }
-      );
+      await this.baseHandler.askForReply(ctx, '💲 <b>Enter new amount</b>');
     } catch (error) {
       await ctx.answerCbQuery('Error');
     }
@@ -354,14 +351,10 @@ export class TelegramTransactionsUpdate {
       ctx.session.waitingForDescription = true;
       ctx.session.reviewSingleItem = true; // Important: close session after
 
-      // Edit the notification message to show we're waiting for input
-      const currentText = 'message' in ctx.callbackQuery && 'text' in ctx.callbackQuery.message
-        ? ctx.callbackQuery.message.text
-        : '';
-      await ctx.editMessageText(
-        currentText + '\n\n✏️ <i>Type a description for this transaction:</i>',
-        { parse_mode: 'HTML' },
-      );
+      // Drop the buttons so the notification cannot be answered twice, then ask
+      // with the reply box open, the same as every other naming prompt.
+      await this.baseHandler.removeButtons(ctx);
+      await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
     } catch (error) {
       this.logger.error(`Error handling notification name: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -945,10 +938,7 @@ export class TelegramTransactionsUpdate {
         ctx.session.waitingForDescription = true;
         ctx.session.reviewSingleItem = true;
 
-        await ctx.reply(
-          '✏️ Please type a description for this transaction:',
-          { reply_markup: { force_reply: true } }
-        );
+        await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
       }
 
       // Clear session
@@ -1002,10 +992,7 @@ export class TelegramTransactionsUpdate {
       ctx.session.waitingForDescription = true;
       ctx.session.reviewSingleItem = true; // End session after description
 
-      await ctx.reply(
-        '✏️ Please type a description for this transaction:',
-        { reply_markup: { force_reply: true } }
-      );
+      await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
     } catch (error) {
       this.logger.error(`Error handling add description: ${error.message}`);
       await ctx.answerCbQuery('Error');
@@ -1137,10 +1124,7 @@ export class TelegramTransactionsUpdate {
           ctx.session.waitingForDescription = true;
           ctx.session.reviewSingleItem = true;
 
-          await ctx.reply(
-            '✏️ Please type a description for this transaction:',
-            { reply_markup: { force_reply: true } }
-          );
+          await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
         }
 
         // Clear pending data

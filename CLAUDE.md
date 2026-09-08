@@ -52,6 +52,20 @@ const draft = await this.baseHandler.withTyping(ctx, () =>
 
 `withTyping` keeps the indicator alive for as long as the work runs and rethrows whatever the work threw, so error handling is unchanged. Inject `TelegramBaseHandler` in the update that owns the handler.
 
+## Asking For Input
+
+**Any prompt that expects the user to type an answer MUST open Telegram's reply box.** The answer arrives attached to the question, so the user sees what they are answering and the keyboard is already up.
+
+Use `TelegramBaseHandler.askForReply`:
+
+```typescript
+await this.baseHandler.askForReply(ctx, '✏️ Please type a description for this transaction:');
+```
+
+Never hand-roll `reply_markup: { force_reply: true }`.
+
+When the prompt comes from tapping an inline button, strip the keyboard first with `removeButtons` so the same decision cannot be taken twice.
+
 ## Clean Code
 
 - **No duplicated logic**: If the same pattern appears in multiple places, extract it to a single source of truth (e.g., a service method or shared utility). Every behavior should live in one place.

@@ -224,7 +224,7 @@ export class TelegramExchangesUpdate {
       ctx.session.reviewOneMode = 'waiting_for_ex_id';
       ctx.session.reviewOneType = 'exchange';
 
-      await ctx.reply('🔢 Please enter the Exchange ID:', { reply_markup: { force_reply: true } });
+      await this.baseHandler.askForReply(ctx, '🔢 Please enter the Exchange ID:');
     } catch (error) {
       await ctx.answerCbQuery('Error');
     }
