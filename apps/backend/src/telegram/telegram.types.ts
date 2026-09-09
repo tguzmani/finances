@@ -1,5 +1,6 @@
 import { Context } from 'telegraf';
 import { PaymentMethod } from '../transactions/transaction.types';
+import { PagoMovilData } from '../transactions/ocr/parsers/pago-movil-llm-parser.service';
 
 export interface StatusResponse {
   newBanescoTransactions: number;
@@ -79,6 +80,7 @@ export interface ReviewSession {
   // Pago Móvil data parsing flow
   pagoMovilWaiting?: boolean;
   pagoMovilMessageId?: number;
+  pagoMovilData?: PagoMovilData;
   // Transfer flow
   transferState?:
     | 'waiting_input'

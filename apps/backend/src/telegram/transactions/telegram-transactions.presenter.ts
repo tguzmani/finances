@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
 
+/** Asked whenever a transaction needs a name before it can be registered. */
+export const DESCRIPTION_PROMPT = '✏️ Please type a description for this transaction:';
+
 @Injectable()
 export class TelegramTransactionsPresenter {
   formatForReview(transaction: Transaction, exchangeRate?: number): string {

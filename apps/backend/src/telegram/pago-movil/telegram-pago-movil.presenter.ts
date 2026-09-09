@@ -30,6 +30,9 @@ export class TelegramPagoMovilPresenter {
       return '❌ Could not extract any Pago Móvil data.';
     }
 
+    // Banesco rejects the payment when it goes out through a VPN
+    lines.push('', '⚠️ <i>Remember to turn off your VPN</i>');
+
     return lines.join('\n');
   }
 

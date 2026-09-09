@@ -3,7 +3,11 @@ import { Markup } from 'telegraf';
 import { SessionContext } from '../telegram.types';
 import { TelegramPagoMovilService } from './telegram-pago-movil.service';
 import { TelegramPagoMovilPresenter } from './telegram-pago-movil.presenter';
+import { DESCRIPTION_PROMPT } from '../transactions/telegram-transactions.presenter';
 import { PagoMovilData } from '../../transactions/ocr/parsers/pago-movil-llm-parser.service';
+import { TransactionsService } from '../../transactions/transactions.service';
+import { TelegramBaseHandler } from '../telegram-base.handler';
+import { PaymentMethod, TransactionPlatform, TransactionType } from '../../transactions/transaction.types';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -14,6 +18,8 @@ export class TelegramPagoMovilUpdate {
   constructor(
     private readonly pagoMovilService: TelegramPagoMovilService,
     private readonly presenter: TelegramPagoMovilPresenter,
+    private readonly transactionsService: TransactionsService,
+    private readonly baseHandler: TelegramBaseHandler,
   ) {}
 
   async handlePagoMovil(ctx: SessionContext) {
@@ -107,10 +113,70 @@ export class TelegramPagoMovilUpdate {
       [{ text: 'Copy', copy_text: { text: copyText } }],
     ];
 
+    // Only offer to book it when there is an amount to book
+    if (data.amount != null) {
+      ctx.session.pagoMovilData = data;
+      buttons.push([{ text: '💾 Store as Tx', callback_data: 'pago_movil_store_tx' }]);
+    }
+
     await ctx.reply(message, {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: buttons } as any,
     });
+  }
+
+  /**
+   * Books the parsed payment as a Banesco expense, the same as a Pago Móvil
+   * photo would, using the data already on screen instead of a receipt. The
+   * description is asked for afterwards, which is what puts the transaction
+   * through auto-registration.
+   */
+  async handleStoreAsTx(ctx: SessionContext): Promise<void> {
+    const data = ctx.session.pagoMovilData;
+
+    if (!data?.amount) {
+      await ctx.answerCbQuery('No payment data left to store');
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+      await this.baseHandler.removeButtons(ctx);
+
+      const transaction = await this.transactionsService.createManualTransaction({
+        type: TransactionType.EXPENSE,
+        platform: TransactionPlatform.BANESCO,
+        currency: 'VES',
+        amount: data.amount,
+        description: this.buildDescription(data),
+        method: PaymentMethod.PAGO_MOVIL,
+      });
+
+      ctx.session.pagoMovilData = undefined;
+      ctx.session.currentTransactionId = transaction.id;
+      ctx.session.waitingForDescription = true;
+      ctx.session.reviewSingleItem = true;
+
+      await ctx.reply(
+        `✅ <b>Transaction Created!</b>\n\n` +
+        `💸 Amount: VES ${data.amount.toFixed(2)}\n` +
+        `Account: Banesco\n` +
+        `Method: Pago Móvil\n` +
+        `Status: Reviewed (ready to register)`,
+        { parse_mode: 'HTML' },
+      );
+
+      await this.baseHandler.askForReply(ctx, DESCRIPTION_PROMPT);
+    } catch (error) {
+      this.logger.error(`Storing Pago Móvil as transaction failed: ${error?.message}`);
+      await ctx.reply('❌ Error storing the transaction. Please try again.');
+    }
+  }
+
+  /** A placeholder until the user names it, so the row is never blank. */
+  private buildDescription(data: PagoMovilData): string {
+    const target = data.bankName || data.phone || data.idDocument;
+    return target ? `Pago Móvil ${target}` : 'Pago Móvil';
   }
 
   private async downloadImage(fileId: string, ctx: SessionContext): Promise<Buffer> {

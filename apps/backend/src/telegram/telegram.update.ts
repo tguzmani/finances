@@ -277,6 +277,12 @@ export class TelegramUpdate {
     }
   }
 
+  @Action('pago_movil_store_tx')
+  @UseGuards(TelegramAuthGuard)
+  async handlePagoMovilStoreTx(@Ctx() ctx: SessionContext) {
+    await this.pagoMovilUpdate.handleStoreAsTx(ctx);
+  }
+
   @Action('pago_movil_cancel')
   @UseGuards(TelegramAuthGuard)
   async handlePagoMovilCancel(@Ctx() ctx: SessionContext) {

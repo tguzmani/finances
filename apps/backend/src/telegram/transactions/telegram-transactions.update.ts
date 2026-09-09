@@ -1,4 +1,5 @@
 import { Update, Ctx, Command, Action, On } from 'nestjs-telegraf';
+import { DESCRIPTION_PROMPT } from './telegram-transactions.presenter';
 import { Markup } from 'telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
@@ -26,9 +27,6 @@ import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { GoogleSheetConfigService } from '../../google-sheet-config/google-sheet-config.service';
 import axios from 'axios';
 import * as https from 'https';
-
-/** Asked whenever a transaction needs a name before it can be registered. */
-const DESCRIPTION_PROMPT = '✏️ Please type a description for this transaction:';
 
 @Update()
 export class TelegramTransactionsUpdate {
