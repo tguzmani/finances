@@ -45,13 +45,6 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     cells: [{ cell: 'G13' }, { cell: 'G17' }],
   },
   {
-    name: 'cursor_subscription',
-    keywords: ['cursor'],
-    exactMatch: false,
-    sheet: 'Libro',
-    cells: [{ cell: 'F4' }],
-  },
-  {
     name: 'google_play_subscription',
     keywords: ['google play'],
     exactMatch: false,

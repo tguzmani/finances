@@ -19,7 +19,6 @@ import { GooglePlayEmailService } from './email/subscriptions/google-play/google
 import { GooglePlayParser } from './email/subscriptions/google-play/google-play.parser';
 import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic-email.service';
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
-import { CursorScheduler } from './email/subscriptions/cursor/cursor.scheduler';
 import { RenderEmailService } from './email/subscriptions/render/render-email.service';
 import { RenderParser } from './email/subscriptions/render/render.parser';
 import { OneMetaEmailService } from './email/incomes/onemeta/onemeta-email.service';
@@ -56,7 +55,6 @@ import { TransactionSearchService } from './transaction-search.service';
     AnthropicEmailService,
     AnthropicParser,
 
-    CursorScheduler,
 
     RenderEmailService,
     RenderParser,
