@@ -3,7 +3,13 @@ import { JournalEntry, Transaction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JournalEntryLlmService, JournalClassification } from './journal-entry-llm.service';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
-import { JOURNAL_ACCOUNTS, PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
+import {
+  JOURNAL_ACCOUNTS,
+  PLATFORM_TO_ACCOUNT,
+  SPLIT_SHARE,
+  hasSplitMarker,
+  stripSplitMarker,
+} from './journal-entry.constants';
 
 // Asset and liability accounts only (exclude Gastos, Ingresos, Patrimonio)
 const TRANSFER_ACCOUNTS = JOURNAL_ACCOUNTS
@@ -46,19 +52,35 @@ export class JournalEntryCacheService {
       where: { transactionId: transaction.id },
     });
 
-    // Create DEBIT and CREDIT rows
+    // Debits first, in the order they are written to the ledger, then the
+    // single credit for the full amount. A split adds one more debit; each
+    // debit takes an equal share.
+    const debits = [
+      {
+        transactionId: transaction.id,
+        type: 'DEBIT' as const,
+        account: classification.debit_account,
+        category: classification.category,
+        subcategory: classification.subcategory,
+      },
+    ];
+
+    if (hasSplitMarker(transaction.description)) {
+      debits.push({
+        transactionId: transaction.id,
+        type: 'DEBIT' as const,
+        account: SPLIT_SHARE.account,
+        category: SPLIT_SHARE.category,
+        subcategory: SPLIT_SHARE.subcategory,
+      });
+    }
+
     await this.prisma.journalEntry.createMany({
       data: [
+        ...debits,
         {
           transactionId: transaction.id,
-          type: 'DEBIT',
-          account: classification.debit_account,
-          category: classification.category,
-          subcategory: classification.subcategory,
-        },
-        {
-          transactionId: transaction.id,
-          type: 'CREDIT',
+          type: 'CREDIT' as const,
           account: classification.credit_account,
           category: '',
           subcategory: '',
@@ -66,7 +88,10 @@ export class JournalEntryCacheService {
       ],
     });
 
-    this.logger.log(`Cached journal entries for transaction ${transaction.id}: debit=${classification.debit_account}, credit=${classification.credit_account}`);
+    this.logger.log(
+      `Cached journal entries for transaction ${transaction.id}: ` +
+      `debit=${debits.map((d) => d.account).join(' + ')}, credit=${classification.credit_account}`,
+    );
   }
 
   private classifyTransfer(transaction: Transaction): JournalClassification | null {
@@ -102,7 +127,7 @@ export class JournalEntryCacheService {
     }
 
     return this.llmService.classify(
-      transaction.description || 'No description',
+      stripSplitMarker(transaction.description || '') || 'No description',
       usdAmount,
       transaction.type,
       transaction.platform,
@@ -112,6 +137,7 @@ export class JournalEntryCacheService {
   async getCachedEntries(transactionId: number): Promise<JournalEntry[] | null> {
     const entries = await this.prisma.journalEntry.findMany({
       where: { transactionId },
+      orderBy: { id: 'asc' },
     });
     return entries.length > 0 ? entries : null;
   }

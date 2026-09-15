@@ -9,6 +9,7 @@ import { JournalEntryCacheService } from './journal-entry-cache.service';
 import { LedgerRowService } from './ledger-row.service';
 import { LedgerWriterService } from './ledger-writer.service';
 import { formatLedgerDate } from './ledger-date';
+import { SPLIT_SHARE, hasSplitMarker, stripSplitMarker } from './journal-entry.constants';
 
 @Injectable()
 export class JournalEntryService {
@@ -43,65 +44,65 @@ export class JournalEntryService {
       ? `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`
       : amount.toFixed(2);
 
-    // Try cache first, fallback to LLM
+    // Debits share the expense; the single credit carries the full amount. A
+    // description marked "+ Esther" splits it in two, so the row count varies.
     const cachedEntries = await this.cacheService.getCachedEntries(transaction.id);
-    let classification;
-    if (cachedEntries && cachedEntries.length === 2) {
-      const debitEntry = cachedEntries.find((e) => e.type === 'DEBIT');
-      const creditEntry = cachedEntries.find((e) => e.type === 'CREDIT');
-      if (debitEntry && creditEntry) {
-        classification = {
-          debit_account: debitEntry.account,
-          credit_account: creditEntry.account,
-          category: debitEntry.category,
-          subcategory: debitEntry.subcategory,
-        };
-        this.logger.log(`Using cached classification for transaction ${transaction.id}`);
-      }
-    }
-    if (!classification) {
+    const cachedDebits = cachedEntries?.filter((e) => e.type === 'DEBIT') ?? [];
+    const cachedCredit = cachedEntries?.find((e) => e.type === 'CREDIT');
+
+    let debits: { account: string; category: string; subcategory: string }[];
+    let creditAccount: string;
+
+    if (cachedDebits.length > 0 && cachedCredit) {
+      debits = cachedDebits;
+      creditAccount = cachedCredit.account;
+      this.logger.log(`Using cached classification for transaction ${transaction.id}`);
+    } else {
       this.logger.log(`No cache found, calling LLM for transaction ${transaction.id}`);
-      classification = await this.llmService.classify(
-        transaction.description || 'No description',
+      const description = transaction.description || '';
+      const classification = await this.llmService.classify(
+        stripSplitMarker(description) || 'No description',
         usdAmount,
         transaction.type,
         transaction.platform,
       );
+
+      debits = [{
+        account: classification.debit_account,
+        category: classification.category,
+        subcategory: classification.subcategory,
+      }];
+      if (hasSplitMarker(description)) {
+        debits.push({ ...SPLIT_SHARE });
+      }
+      creditAccount = classification.credit_account;
     }
 
     const dateFormatted = formatLedgerDate(transaction.date);
+    const creditRow = nextRow + debits.length;
 
-    // Row 1: Date | Description | Debe.1 | (empty) | Debe (=ref to Haber) | (empty) | Category | Subcategory | (empty) | (empty)
-    const row1 = [
-      dateFormatted,
-      transaction.description || '',
-      classification.debit_account,
+    // The first debit takes an equal share of the credit; the rest mirror it, so
+    // editing the credit in the sheet keeps every share in step.
+    const rows = debits.map((debit, index) => [
+      index === 0 ? dateFormatted : '',
+      index === 0 ? stripSplitMarker(transaction.description || '') : '',
+      debit.account,
       '',
-      `=G${nextRow + 1}`,
+      index === 0
+        ? (debits.length > 1 ? `=G${creditRow}/${debits.length}` : `=G${creditRow}`)
+        : `=F${nextRow}`,
       '',
-      classification.category,
-      classification.subcategory,
+      debit.category,
+      debit.subcategory,
       '',
       '',
-    ];
+    ]);
 
-    // Row 2: (empty) | (empty) | (empty) | Haber.1 | (empty) | Haber (actual value) | (empty) ...
-    const row2 = [
-      '',
-      '',
-      '',
-      classification.credit_account,
-      '',
-      debeValue,
-      '',
-      '',
-      '',
-      '',
-    ];
+    rows.push(['', '', '', creditAccount, '', debeValue, '', '', '', '']);
 
-    const range = `Libro!B${nextRow}:K${nextRow + 1}`;
+    const range = `Libro!B${nextRow}:K${nextRow + rows.length - 1}`;
     this.logger.log(`Inserting journal entry at ${range}`);
-    await this.ledgerWriter.writeEntry(range, [row1, row2]);
+    await this.ledgerWriter.writeEntry(range, rows);
     this.logger.log(`Journal entry inserted for transaction ${transaction.id}`);
   }
 

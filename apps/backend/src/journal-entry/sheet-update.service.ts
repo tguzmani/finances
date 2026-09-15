@@ -3,6 +3,7 @@ import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { containsAnyKeyword, equalsAnyKeyword } from './keyword-match';
+import { hasSplitMarker } from './journal-entry.constants';
 import { SHEET_UPDATE_RULES, SheetUpdateRule } from './sheet-update.rules';
 
 export interface SheetUpdateResult {
@@ -28,6 +29,14 @@ export class SheetUpdateService {
    */
   async trySheetUpdate(transaction: Transaction): Promise<SheetUpdateResult | null> {
     if (!transaction.description) return null;
+
+    // A split is only ever written by the full journal entry, so the marker has
+    // to beat the shortcut rules: matching one here would book the expense whole
+    // and carry "+ Esther" into the ledger as part of the description.
+    if (hasSplitMarker(transaction.description)) {
+      this.logger.log(`Skipping sheet update for split transaction ${transaction.id}`);
+      return null;
+    }
 
     const rule = this.findRule(transaction.description);
 

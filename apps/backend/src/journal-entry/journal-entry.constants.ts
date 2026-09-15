@@ -12,6 +12,37 @@ export const PLATFORM_TO_ACCOUNT: Record<string, string> = {
 };
 
 /**
+ * Writing "+ Esther" anywhere in a description splits the expense in half: the
+ * classified account takes one share and Esther's the other, against a single
+ * credit for the full amount.
+ *
+ * The marker never reaches the ledger — the sheet shows the description alone —
+ * and the classifier never sees it either, so "Te + Esther" is still classified
+ * as tea rather than as an Esther expense.
+ */
+const SPLIT_MARKER = /\s*\+\s*esther\b\s*/gi;
+
+export const SPLIT_SHARE = {
+  account: 'Gastos Esther',
+  category: 'Esther',
+  subcategory: 'Esther',
+};
+
+/** True when the description asks for the expense to be split. */
+export function hasSplitMarker(description: string): boolean {
+  SPLIT_MARKER.lastIndex = 0;
+  return SPLIT_MARKER.test(description);
+}
+
+/** The description as it should be classified and written, without the marker. */
+export function stripSplitMarker(description: string): string {
+  return description
+    .replace(SPLIT_MARKER, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Merchants that are always delivery expenses.
  * When a description matches one of these, the entry must be classified as
  * debit "Gastos delivery" / category "Comida" / subcategory "Delivery".

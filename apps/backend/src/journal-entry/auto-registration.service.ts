@@ -3,7 +3,7 @@ import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import { containsAllKeywords } from './keyword-match';
-import { PLATFORM_TO_ACCOUNT } from './journal-entry.constants';
+import { PLATFORM_TO_ACCOUNT, hasSplitMarker } from './journal-entry.constants';
 import { JournalEntryBuilder } from './journal-entry.builder';
 import { LedgerRowService } from './ledger-row.service';
 import { LedgerWriterService } from './ledger-writer.service';
@@ -35,6 +35,14 @@ export class AutoRegistrationService {
    */
   async tryAutoRegister(transaction: Transaction): Promise<AutoRegistrationResult | null> {
     if (!transaction.description) return null;
+
+    // A split is only ever written by the full journal entry, so the marker has
+    // to beat the shortcut rules: matching one here would book the expense whole
+    // and carry "+ Esther" into the ledger as part of the description.
+    if (hasSplitMarker(transaction.description)) {
+      this.logger.log(`Skipping auto-registration for split transaction ${transaction.id}`);
+      return null;
+    }
 
     const rule = this.findRule(transaction.description);
 
