@@ -18,9 +18,11 @@ import { Prisma, TransactionPlatform, PaymentMethod, Transaction, TransactionTyp
 
 export interface UpdateTransactionOptions {
   /**
-   * Skip the Banesco balance message for this update. The /register flow steps
+   * Skip the Banesco balance message for this write. The /register flow steps
    * through transactions one at a time and the sheet is edited by hand as it
-   * goes, so a balance after every step would be both noisy and stale.
+   * goes, so a balance after every step would be both noisy and stale. Flows
+   * that write a transaction several times in a row (create, describe,
+   * auto-register) stay silent and call `announceIfBanesco` once at the end.
    */
   silent?: boolean;
 }
@@ -54,7 +56,7 @@ export class TransactionsService {
     TransactionStatus.REJECTED,
   ];
 
-  private announceIfBanesco(transaction: Transaction): void {
+  announceIfBanesco(transaction: Transaction): void {
     if (!isBanescoPlatform(transaction.platform)) return;
     if (!TransactionsService.BALANCE_MOVING_STATUSES.includes(transaction.status)) return;
 
@@ -543,7 +545,7 @@ export class TransactionsService {
     description: string;
     method?: PaymentMethod;
     date?: Date;
-  }): Promise<Transaction> {
+  }, options: UpdateTransactionOptions = {}): Promise<Transaction> {
     // Generate unique transaction ID for manual entries
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
@@ -573,7 +575,9 @@ export class TransactionsService {
       },
     });
 
-    this.announceIfBanesco(transaction);
+    if (!options.silent) {
+      this.announceIfBanesco(transaction);
+    }
 
     // Fire-and-forget: pre-compute journal entry classification
     void this.journalEntryCache.classifyAndCache(transaction).catch((err) =>

@@ -684,11 +684,14 @@ export class TelegramTransactionsUpdate {
       const transactionId = ctx.session.currentTransactionId;
       const description = ctx.message.text;
 
-      // Update transaction with description and mark as REVIEWED
-      const updated = await this.transactionsService.update(transactionId, {
-        description,
-        status: TransactionStatus.REVIEWED,
-      });
+      // Update transaction with description and mark as REVIEWED. Silent because
+      // the balance is reported once, under the new name, by whichever branch
+      // below finishes the flow: the REGISTERED write or the plain save.
+      const updated = await this.transactionsService.update(
+        transactionId,
+        { description, status: TransactionStatus.REVIEWED },
+        { silent: true },
+      );
 
       // Try sheet cell update first (exact matches like "Neyda" need priority over LLM)
       try {
@@ -736,6 +739,7 @@ export class TelegramTransactionsUpdate {
       }
 
       await ctx.reply(`✅ Description saved: "${description}"`);
+      this.transactionsService.announceIfBanesco(updated);
 
       // Reset session flags
       ctx.session.waitingForDescription = false;
@@ -867,7 +871,9 @@ export class TelegramTransactionsUpdate {
 
       const description = billData.transactionId ? `Bill #${billData.transactionId}` : 'Bill purchase';
 
-      // Create transaction from bill data
+      // Create transaction from bill data. Silent so the balance is reported once,
+      // after the flow settles: by the REGISTERED write, at the end of this
+      // handler, or by the description step when there is no caption.
       const transaction = await this.transactionsService.createManualTransaction({
         type: TransactionType.EXPENSE,
         platform: TransactionPlatform.BANESCO,
@@ -876,7 +882,7 @@ export class TelegramTransactionsUpdate {
         description,
         method: PaymentMethod.DEBIT_CARD,
         date: billData.datetime,
-      });
+      }, { silent: true });
 
       // If caption was provided, use it as description
       if (billData.caption) {
@@ -915,6 +921,10 @@ export class TelegramTransactionsUpdate {
         } catch (err) {
           this.logger.error(`Auto-registration error for bill: ${err.message}`);
         }
+      }
+
+      if (billData.caption && !statusText) {
+        this.transactionsService.announceIfBanesco(updatedTransaction);
       }
 
       const usdSuffix = await this.formatVesUsdSuffix(billData.currency, billData.amount);

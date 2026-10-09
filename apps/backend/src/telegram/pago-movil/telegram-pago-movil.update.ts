@@ -154,7 +154,7 @@ export class TelegramPagoMovilUpdate {
         amount,
         description: this.buildDescription(data),
         method: PaymentMethod.PAGO_MOVIL,
-      });
+      }, { silent: true }); // The description step reports the balance under the real name
 
       ctx.session.pagoMovilData = undefined;
       ctx.session.currentTransactionId = transaction.id;
