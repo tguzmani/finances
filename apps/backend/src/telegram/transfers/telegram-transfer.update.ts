@@ -196,8 +196,8 @@ export class TelegramTransferUpdate {
     const summary = this.buildSummary(ctx);
     const ruleLine = rule ? `Rule: ${rule.name}\n` : '';
 
-    // A rule writes to a fixed cell and never stores the description, so
-    // renaming would have no effect on what gets saved
+    // A rule writes onto its own template row and never stores the description,
+    // so renaming would have no effect on what gets saved
     const actions = [{ text: '✅ Accept', callback_data: 'transfer_confirm' }];
     if (!rule) {
       actions.push({ text: '✏️ Name', callback_data: 'transfer_rename' });
@@ -244,14 +244,14 @@ export class TelegramTransferUpdate {
       const rule = this.transferService.findTransferRule(debitAccount, creditAccount);
 
       if (rule) {
-        await this.transferService.applyCellUpdate(rule, amount);
+        const cell = await this.transferService.applyCellUpdate(rule, amount);
         await ctx.reply(
           `✅ <b>Transfer Registered!</b>\n\n` +
             `Amount: $${amount.toFixed(2)}\n` +
             `From: ${creditAccount}\n` +
             `To: ${debitAccount}\n` +
             `Rule: ${rule.name}\n\n` +
-            `Cell ${rule.cell} updated in Google Sheets.`,
+            `Cell ${cell} updated in Google Sheets.`,
           { parse_mode: 'HTML' },
         );
       } else {
