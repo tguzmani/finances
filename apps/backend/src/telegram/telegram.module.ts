@@ -34,6 +34,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
 import { ExchangesModule } from '../exchanges/exchanges.module';
 import { AccountsModule } from '../accounts/accounts.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramExpensesService } from './expenses/telegram-expenses.service';
@@ -106,6 +107,7 @@ import * as https from 'https';
     ExchangesModule, // Para usar ExchangesService
     AccountsModule, // Para usar BinanceAccountService
     JournalEntryModule, // Para usar JournalEntryService
+    SubscriptionsModule, // Para usar SubscriptionsService
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
     EquityModule, // Para usar EquityService, EquityChartService
     DcaModule, // Para usar DcaPricesService

@@ -25,11 +25,12 @@ import { OneMetaEmailService } from './email/incomes/onemeta/onemeta-email.servi
 import { OneMetaParser } from './email/incomes/onemeta/onemeta.parser';
 import { CommonModule } from '../common/common.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { TransactionsSheetsService } from './transactions-sheets.service';
 import { TransactionSearchService } from './transaction-search.service';
 
 @Module({
-  imports: [CommonModule, JournalEntryModule],
+  imports: [CommonModule, JournalEntryModule, SubscriptionsModule],
   controllers: [TransactionsController],
   providers: [
     TransactionsService,

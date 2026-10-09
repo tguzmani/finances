@@ -9,6 +9,7 @@ import { ConvertResult, TransactionsBinanceConvertService } from './transactions
 import { JournalEntryCacheService } from '../journal-entry/journal-entry-cache.service';
 import { JournalEntryService } from '../journal-entry/journal-entry.service';
 import { SheetUpdateService } from '../journal-entry/sheet-update.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-status.dto';
 import { TransactionStatus, TransactionType } from './transaction.types';
@@ -37,6 +38,7 @@ export class TransactionsService {
     private readonly sheetUpdateService: SheetUpdateService,
     private readonly binanceConvert: TransactionsBinanceConvertService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly subscriptionsService: SubscriptionsService,
   ) { }
 
   /**
@@ -245,6 +247,26 @@ export class TransactionsService {
 
             // Try auto sheet update and mark as registered if matched
             if (created.description) {
+              // Subscriptions come first: they carry their own detail on the
+              // Suscripciones sheet, which the Libro's subscription line sums.
+              try {
+                const subscription = await this.subscriptionsService.tryRecordCharge(created);
+                if (subscription) {
+                  const registered = await this.prisma.transaction.update({
+                    where: { id: created.id },
+                    data: { status: TransactionStatus.REGISTERED },
+                  });
+                  autoRegistered.push(registered);
+                  this.logger.log(
+                    `Auto-registered transaction ${created.id} as subscription "${subscription.name}"` +
+                    `${subscription.added ? ' (added to the catalog)' : ''}`,
+                  );
+                  continue;
+                }
+              } catch (err) {
+                this.logger.error(`Subscription matching failed for transaction ${created.id}: ${err.message}`);
+              }
+
               try {
                 const sheetResult = await this.sheetUpdateService.trySheetUpdate(created);
                 if (sheetResult) {
