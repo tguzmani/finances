@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
 import { CompletedExchangesEvent } from '../../exchanges/events/completed-exchanges.event';
 import { ExchangesService } from '../../exchanges/exchanges.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
 import { ExchangeStatus } from '@prisma/client';
+import {
+  BANESCO_MOVEMENT_EVENT,
+  BanescoMovementEvent,
+} from '../../accounts/events/banesco-movement.event';
 
 @Injectable()
 export class ExchangeAutoRegistrationListener {
@@ -16,6 +20,7 @@ export class ExchangeAutoRegistrationListener {
     @InjectBot() private readonly bot: Telegraf,
     private readonly exchangesService: ExchangesService,
     private readonly journalEntryService: JournalEntryService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.chatId = process.env.TELEGRAM_ALLOWED_USERS?.split(',')[0] || '';
 
@@ -47,6 +52,13 @@ export class ExchangeAutoRegistrationListener {
       // 2. Register exchanges (mark REGISTERED + save rate in DB + update Google Sheets rate)
       await this.exchangesService.registerExchanges(exchangeIds, metrics.wavg);
       this.logger.log(`Registered ${exchangeIds.length} exchanges with rate ${metrics.wavg} VES/USD`);
+
+      // Only now is the ledger and the DB in agreement. Announced any earlier, the
+      // sale is in the sheet and still counted as a pending exchange, twice.
+      this.eventEmitter.emit(
+        BANESCO_MOVEMENT_EVENT,
+        new BanescoMovementEvent('Binance a Banesco'),
+      );
 
       // 3. Send Telegram notification
       if (this.chatId) {

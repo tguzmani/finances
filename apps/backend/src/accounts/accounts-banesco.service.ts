@@ -107,12 +107,11 @@ export class BanescoAccountService {
         }
       }
 
-      // Pending exchanges (not REGISTERED, REJECTED, CANCELLED, FAILED)
+      // Only finished trades that the ledger has not caught up with. A trade still
+      // PENDING or PROCESSING on Binance has not settled, so its VES may never land.
       const pendingExchanges = allExchanges.filter(e =>
-        e.status !== 'REGISTERED' &&
-        e.status !== 'REJECTED' &&
-        e.status !== 'CANCELLED' &&
-        e.status !== 'FAILED'
+        e.status === 'COMPLETED' ||
+        e.status === 'REVIEWED'
       );
 
       let exchangesNet = 0;
