@@ -14,25 +14,40 @@ export class TelegramConvertUpdate {
     private readonly baseHandler: TelegramBaseHandler,
   ) {}
 
+  /**
+   * "/convert 230 usd" converts straight away; "/convert" alone asks for the
+   * amount first. Either way the text goes to the LLM, so any format works.
+   */
   @Command('convert')
   @UseGuards(TelegramAuthGuard)
   async handleConvert(@Ctx() ctx: SessionContext) {
+    this.baseHandler.clearSession(ctx);
+
+    const inline = this.baseHandler.getCommandArgs(ctx);
+    if (inline) {
+      await this.convert(ctx, inline);
+      return;
+    }
+
     ctx.session.convertWaitingForInput = true;
-    await ctx.reply(
+    await this.baseHandler.askForReply(
+      ctx,
       'Enter amount and currency:\n' +
       '<i>Any format works: 100 USD, $18,68, 27.837,82 bs, 50 euros</i>',
-      { parse_mode: 'HTML' },
     );
   }
 
   async handleConvertInput(@Ctx() ctx: SessionContext) {
     if (!ctx.message || !('text' in ctx.message)) return;
 
-    try {
-      ctx.session.convertWaitingForInput = false;
+    ctx.session.convertWaitingForInput = false;
+    await this.convert(ctx, ctx.message.text);
+  }
 
+  private async convert(ctx: SessionContext, text: string): Promise<void> {
+    try {
       const result = await this.baseHandler.withTyping(ctx, () =>
-        this.convertService.handleConvert((ctx.message as { text: string }).text),
+        this.convertService.handleConvert(text),
       );
 
       const buttons: any[][] = [];

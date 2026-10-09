@@ -30,7 +30,7 @@ export class TelegramTransferUpdate {
   async handleTransfer(@Ctx() ctx: SessionContext) {
     this.baseHandler.clearSession(ctx);
 
-    const inline = this.getCommandArgs(ctx);
+    const inline = this.baseHandler.getCommandArgs(ctx);
 
     if (!inline) {
       ctx.session.transferState = 'waiting_input';
@@ -39,14 +39,6 @@ export class TelegramTransferUpdate {
     }
 
     await this.extractAndResume(ctx, inline);
-  }
-
-  /** Text typed after the command itself, as in "/transfer 200 de bofa a binance". */
-  private getCommandArgs(ctx: SessionContext): string | null {
-    if (!ctx.message || !('text' in ctx.message)) return null;
-
-    const args = ctx.message.text.replace(/^\/transfer(@\S+)?/i, '').trim();
-    return args.length > 0 ? args : null;
   }
 
   async handleTextInput(@Ctx() ctx: SessionContext) {

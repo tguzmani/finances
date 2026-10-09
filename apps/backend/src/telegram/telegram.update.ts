@@ -64,7 +64,7 @@ export class TelegramUpdate {
       '/expenses - View budget and expenses\n' +
       '/rates - View exchange rates and discounts\n' +
       '/transactions - View recent expenses\n' +
-      '/convert - Convert between currencies\n' +
+      '/convert [amount] - Convert between currencies (e.g. /convert 230 usd)\n' +
       '/equity - View equity (net worth) and chart\n' +
       '/dca_prices - Refresh DCA crypto prices from Binance\n' +
       '/exchanges - View recent exchanges\n' +

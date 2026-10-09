@@ -34,6 +34,17 @@ export class TelegramBaseHandler {
   }
 
   /**
+   * Text typed after the command itself, as in "/convert 230 usd" or
+   * "/transfer 200 de bofa a binance". Null when the command came alone.
+   */
+  getCommandArgs(ctx: SessionContext): string | null {
+    if (!ctx.message || !('text' in ctx.message)) return null;
+
+    const args = ctx.message.text.replace(/^\/\w+(@\S+)?/, '').trim();
+    return args.length > 0 ? args : null;
+  }
+
+  /**
    * Asks for a typed answer with Telegram's reply box already open.
    *
    * The answer arrives attached to the question, so the user can see what they
