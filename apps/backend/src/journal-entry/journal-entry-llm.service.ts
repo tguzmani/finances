@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OpenRouterService } from '../common/open-router.service';
-import { DELIVERY_MERCHANTS, JOURNAL_ACCOUNTS, JOURNAL_CATEGORIES } from './journal-entry.constants';
+import { ASSET_ACCOUNTS, DELIVERY_MERCHANTS, JOURNAL_ACCOUNTS, JOURNAL_CATEGORIES, LIABILITY_ACCOUNTS } from './journal-entry.constants';
 
 export interface JournalClassification {
   debit_account: string;
@@ -16,8 +16,8 @@ Rules:
 - For INCOME: credit_account should be an "Ingresos ..." account, debit_account should be the platform account
 - For TRANSFER: both debit_account and credit_account must be Asset or Liability accounts ONLY. No "Gastos" or "Ingresos" accounts allowed. category and subcategory must be empty strings.
 
-Asset accounts: Binance, Wallet, Banesco, Cash, Folionet, Inventario, Bofa, EVO25, Binance Portfolio, Por cobrar OneMeta, Por cobrar mixtos, Por cobrar Akivva, Por cobrar Esther
-Liability accounts: Por pagar Norma, Por pagar Esther, Bofa TDC
+Asset accounts: ${ASSET_ACCOUNTS.join(', ')}
+Liability accounts: ${LIABILITY_ACCOUNTS.join(', ')}
 
 Platform mapping:
 - BANESCO → "Banesco"

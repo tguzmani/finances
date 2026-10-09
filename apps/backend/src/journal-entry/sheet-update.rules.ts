@@ -45,11 +45,11 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     cells: [{ cell: 'G13' }, { cell: 'G17' }],
   },
   {
-    name: 'onemeta_income',
-    keywords: ['onemeta'],
+    name: 'devsignal_income',
+    keywords: ['devsignal', 'trybe'],
     exactMatch: false,
     sheet: 'Libro',
-    cells: [{ cell: 'F26' }, { cell: 'F30' }],
+    cells: [{ cell: 'F26' }],
   },
   {
     name: 'jardin',

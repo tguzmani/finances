@@ -1,4 +1,4 @@
-export { JOURNAL_ACCOUNTS } from '../accounts/account.constants';
+export { ASSET_ACCOUNTS, JOURNAL_ACCOUNTS, LIABILITY_ACCOUNTS } from '../accounts/account.constants';
 
 /** Ledger account name for Banesco, and the platform that maps onto it. */
 export const BANESCO_ACCOUNT = 'Banesco';
