@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
 import { SheetsRepository } from '../common/sheets.repository';
 import { ExchangeRateService } from '../exchanges/exchange-rate.service';
+import { LedgerRowService } from './ledger-row.service';
 import { containsAnyKeyword, equalsAnyKeyword } from './keyword-match';
 import { hasSplitMarker } from './journal-entry.constants';
 import { SHEET_UPDATE_RULES, SheetUpdateRule } from './sheet-update.rules';
@@ -19,6 +20,7 @@ export class SheetUpdateService {
   constructor(
     private readonly sheetsRepository: SheetsRepository,
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly ledgerRowService: LedgerRowService,
   ) {}
 
   /**
@@ -44,8 +46,7 @@ export class SheetUpdateService {
 
     const amount = Number(transaction.amount);
     const formulaFragment = await this.buildAmountFragment(transaction);
-    const cell = await this.findAvailableCell(rule);
-    const fullRange = `${rule.sheet}!${cell}`;
+    const fullRange = await this.findAvailableCell(rule);
 
     const formula = await this.buildAccumulatedFormula(fullRange, formulaFragment);
     this.logger.log(`Sheet update: accumulating ${formulaFragment} to ${fullRange} via rule "${rule.name}" → ${formula}`);
@@ -106,35 +107,45 @@ export class SheetUpdateService {
     return `=${fragment}`;
   }
 
+  /**
+   * First target whose cell is still empty, as an A1 range.
+   *
+   * Targets are resolved against the sheet every time, so a template whose rows
+   * shifted still gets written in the right place.
+   */
   private async findAvailableCell(rule: SheetUpdateRule): Promise<string> {
-    if (rule.cells.length === 1) {
-      return rule.cells[0].cell;
-    }
+    const occupied: string[] = [];
+    const missing: string[] = [];
 
-    // Multiple cells: find the first empty one
-    const cellValues: Record<string, string> = {};
-    for (const cellDef of rule.cells) {
-      const fullRange = `${rule.sheet}!${cellDef.cell}`;
-      const values = await this.sheetsRepository.getSheetValues(fullRange);
-      const cellValue = values?.[0]?.[0];
+    for (const target of rule.targets) {
+      const row = await this.ledgerRowService.findRowByDescription(rule.sheet, target.description);
 
-      const strValue = cellValue?.toString().trim() ?? '';
-      cellValues[cellDef.cell] = strValue;
-
-      const numericOnly = strValue.replace(/[^0-9.]/g, '');
-      const numValue = numericOnly ? Number(numericOnly) : 0;
-      if (!strValue || numValue === 0) {
-        return cellDef.cell;
+      if (!row) {
+        missing.push(target.description);
+        continue;
       }
+
+      const fullRange = `${rule.sheet}!${target.column}${row + (target.offset ?? 0)}`;
+      const values = await this.sheetsRepository.getSheetValues(fullRange);
+      const value = values?.[0]?.[0]?.toString().trim() ?? '';
+
+      const numeric = value.replace(/[^0-9.]/g, '');
+      if (!value || (numeric ? Number(numeric) : 0) === 0) {
+        return fullRange;
+      }
+
+      occupied.push(`${fullRange}="${value}"`);
     }
 
-    // All cells are occupied
-    const cellDetails = Object.entries(cellValues)
-      .map(([cell, val]) => `${cell}="${val}"`)
-      .join(', ');
-    this.logger.error(`All cells occupied for "${rule.name}": ${cellDetails}`);
+    if (occupied.length === 0) {
+      throw new Error(
+        `"${rule.name}" has no row to write to: ${missing.join(', ')} not found in ${rule.sheet}.`,
+      );
+    }
+
+    this.logger.error(`All cells occupied for "${rule.name}": ${occupied.join(', ')}`);
     throw new Error(
-      `All cells for "${rule.name}" are already filled (${cellDetails}). Please update manually.`,
+      `All cells for "${rule.name}" are already filled (${occupied.join(', ')}). Please update manually.`,
     );
   }
 }

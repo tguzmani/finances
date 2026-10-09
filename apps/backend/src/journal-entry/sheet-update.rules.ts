@@ -1,5 +1,15 @@
-export interface SheetUpdateCell {
-  cell: string;
+/** Where on the Libro a rule writes its amount. */
+export interface SheetUpdateTarget {
+  /**
+   * Block title in column C. The row is looked up by this text rather than
+   * stored as a number, because the monthly template moves rows around and a
+   * stale number writes the amount onto somebody else's entry.
+   */
+  description: string;
+  /** Column holding the amount: F for a Debe, G for a Haber. */
+  column: 'F' | 'G';
+  /** Rows below the block title where the amount sits. Defaults to 0. */
+  offset?: number;
 }
 
 export interface SheetUpdateRule {
@@ -7,7 +17,8 @@ export interface SheetUpdateRule {
   keywords: string[];
   exactMatch: boolean;
   sheet: string;
-  cells: SheetUpdateCell[];
+  /** Tried in order; the first one still empty takes the amount. */
+  targets: SheetUpdateTarget[];
 }
 
 /**
@@ -21,48 +32,54 @@ export const SHEET_UPDATE_RULES: SheetUpdateRule[] = [
     keywords: ['saldo'],
     exactMatch: false,
     sheet: 'Libro',
-    cells: [{ cell: 'F6' }],
+    targets: [{ description: 'Saldo', column: 'F' }],
   },
   {
     name: 'gym',
     keywords: ['gym'],
     exactMatch: true,
     sheet: 'Libro',
-    cells: [{ cell: 'F8' }],
+    targets: [{ description: 'Membresia Gimnasio', column: 'F' }],
   },
   {
     name: 'internet',
     keywords: ['internet'],
     exactMatch: false,
     sheet: 'Libro',
-    cells: [{ cell: 'F20' }],
+    targets: [{ description: 'Pago Internet', column: 'F' }],
   },
   {
     name: 'neyda',
     keywords: ['neyda'],
     exactMatch: true,
     sheet: 'Libro',
-    cells: [{ cell: 'G13' }, { cell: 'G17' }],
+    targets: [
+      { description: 'Pago 1/2 Neyda', column: 'G', offset: 3 },
+      { description: 'Pago 2/2 Neyda', column: 'G', offset: 3 },
+    ],
   },
   {
     name: 'devsignal_income',
     keywords: ['devsignal', 'trybe'],
     exactMatch: false,
     sheet: 'Libro',
-    cells: [{ cell: 'F26' }],
+    targets: [{ description: 'Pago 1/1 Trybe', column: 'F' }],
   },
   {
     name: 'jardin',
     keywords: ['jardin', 'jardín'],
     exactMatch: false,
     sheet: 'Libro',
-    cells: [{ cell: 'G25' }],
+    targets: [{ description: 'Recurrentes casa', column: 'G', offset: 3 }],
   },
   {
     name: 'codebay_income',
     keywords: ['codebay'],
     exactMatch: true,
     sheet: 'Libro',
-    cells: [{ cell: 'F28' }, { cell: 'F32' }],
+    targets: [
+      { description: 'Pago 1/2 Talkive', column: 'F' },
+      { description: 'Pago 2/2 Talkive', column: 'F' },
+    ],
   },
 ];

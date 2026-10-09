@@ -3,7 +3,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SheetsRepository } from '../../common/sheets.repository';
 import { BANESCO_MOVEMENT_EVENT, BanescoMovementEvent } from '../../accounts/events/banesco-movement.event';
 import { touchesBanesco } from '../../journal-entry/journal-entry.constants';
-import { fold } from '../../journal-entry/keyword-match';
 import { OpenRouterService } from '../../common/open-router.service';
 import { JournalEntryBuilder } from '../../journal-entry/journal-entry.builder';
 import { LedgerRowService } from '../../journal-entry/ledger-row.service';
@@ -88,7 +87,7 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
    * it. Writing to a guessed row would land the amount on someone else's entry.
    */
   async applyCellUpdate(rule: TransferRule, amount: number): Promise<string> {
-    const row = await this.findRuleRow(rule);
+    const row = await this.ledgerRowService.findRowByDescription(rule.sheet, rule.description);
 
     if (!row) {
       throw new Error(
@@ -100,21 +99,6 @@ Respond with ONLY the number if it matches, or "none" if it doesn't match any.`;
     this.logger.log(`Transfer rule "${rule.name}": writing ${amount} to ${fullRange}`);
     await this.sheetsRepository.updateSheetValues(fullRange, [[amount]]);
     return fullRange;
-  }
-
-  /**
-   * First row whose description matches. The template sits above the entries
-   * the bot appends, so the first hit is the template's own row even when a
-   * later entry happens to carry the same description.
-   */
-  private async findRuleRow(rule: TransferRule): Promise<number | null> {
-    const values = await this.sheetsRepository.getSheetValues(`${rule.sheet}!C1:C60`);
-    if (!values) return null;
-
-    const wanted = fold(rule.description);
-    const index = values.findIndex((cells) => fold(String(cells?.[0] ?? '')) === wanted);
-
-    return index === -1 ? null : index + 1;
   }
 
   async createJournalEntry(
