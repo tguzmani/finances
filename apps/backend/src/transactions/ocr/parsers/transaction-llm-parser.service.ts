@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OpenRouterService } from '../../../common/open-router.service';
 import { PaymentMethod } from '../../transaction.types';
+import { PagoMovilRecipientType } from '../../pago-movil-surcharge';
 
 export interface LlmParsedTransaction {
   datetime: string | null;
@@ -8,7 +9,7 @@ export interface LlmParsedTransaction {
   currency: 'VES' | 'USD' | null;
   transactionId: string | null;
   paymentMethod: PaymentMethod | null;
-  senderType: 'RIF' | 'cedula' | null;
+  senderType: PagoMovilRecipientType | null;
 }
 
 const SYSTEM_PROMPT = `You are a transaction parser. Extract transaction data from OCR text from Venezuelan receipts or payment screenshots.
@@ -47,9 +48,6 @@ If a field cannot be determined, use null.`;
 export class TransactionLlmParserService {
   private readonly logger = new Logger(TransactionLlmParserService.name);
 
-  private readonly RIF_SURCHARGE_MULTIPLIER = 1.015;      // 1.5%
-  private readonly CEDULA_SURCHARGE_MULTIPLIER = 1.003;   // 0.3%
-
   constructor(private readonly openRouter: OpenRouterService) {}
 
   async parseOcrText(ocrText: string, userCaption?: string): Promise<LlmParsedTransaction> {
@@ -86,17 +84,6 @@ export class TransactionLlmParserService {
         senderType: null,
       };
     }
-  }
-
-  applyPagoMovilSurcharge(amount: number, senderType: 'RIF' | 'cedula' | null): number {
-    if (senderType === 'RIF') {
-      this.logger.log(`RIF detected, applying ${(this.RIF_SURCHARGE_MULTIPLIER - 1) * 100}% surcharge`);
-      return amount * this.RIF_SURCHARGE_MULTIPLIER;
-    }
-
-    // Default to cedula surcharge
-    this.logger.log(`Applying cédula surcharge (${(this.CEDULA_SURCHARGE_MULTIPLIER - 1) * 100}%)`);
-    return amount * this.CEDULA_SURCHARGE_MULTIPLIER;
   }
 
   parseDateTime(datetimeStr: string | null): Date | null {

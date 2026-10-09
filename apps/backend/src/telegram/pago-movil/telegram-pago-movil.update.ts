@@ -8,6 +8,7 @@ import { PagoMovilData } from '../../transactions/ocr/parsers/pago-movil-llm-par
 import { TransactionsService } from '../../transactions/transactions.service';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { PaymentMethod, TransactionPlatform, TransactionType } from '../../transactions/transaction.types';
+import { applyPagoMovilSurcharge, recipientTypeFromIdDocument } from '../../transactions/pago-movil-surcharge';
 import axios from 'axios';
 import * as https from 'https';
 
@@ -128,6 +129,7 @@ export class TelegramPagoMovilUpdate {
   /**
    * Books the parsed payment as a Banesco expense, the same as a Pago Móvil
    * photo would, using the data already on screen instead of a receipt. The
+   * bank's commission is added by recipient type, as the photo flow does. The
    * description is asked for afterwards, which is what puts the transaction
    * through auto-registration.
    */
@@ -143,11 +145,13 @@ export class TelegramPagoMovilUpdate {
       await ctx.answerCbQuery();
       await this.baseHandler.removeButtons(ctx);
 
+      const amount = applyPagoMovilSurcharge(data.amount, recipientTypeFromIdDocument(data.idDocument));
+
       const transaction = await this.transactionsService.createManualTransaction({
         type: TransactionType.EXPENSE,
         platform: TransactionPlatform.BANESCO,
         currency: 'VES',
-        amount: data.amount,
+        amount,
         description: this.buildDescription(data),
         method: PaymentMethod.PAGO_MOVIL,
       });
@@ -159,7 +163,7 @@ export class TelegramPagoMovilUpdate {
 
       await ctx.reply(
         `✅ <b>Transaction Created!</b>\n\n` +
-        `💸 Amount: VES ${data.amount.toFixed(2)}\n` +
+        `💸 Amount: VES ${amount.toFixed(2)}\n` +
         `Account: Banesco\n` +
         `Method: Pago Móvil\n` +
         `Status: Reviewed (ready to register)`,

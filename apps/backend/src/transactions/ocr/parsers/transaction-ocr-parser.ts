@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GoogleVisionOcrService } from '../../../common/google-vision-ocr.service';
 import { TransactionLlmParserService } from './transaction-llm-parser.service';
 import { PaymentMethod } from '../../transaction.types';
+import { applyPagoMovilSurcharge } from '../../pago-movil-surcharge';
 
 export interface TransactionData {
   datetime: Date | null;
@@ -61,7 +62,7 @@ export class TransactionOcrParser {
     // Apply surcharge for Pago Móvil transactions
     let amount = llmResult.amount;
     if (llmResult.paymentMethod === PaymentMethod.PAGO_MOVIL && amount !== null) {
-      amount = this.llmParser.applyPagoMovilSurcharge(amount, llmResult.senderType);
+      amount = applyPagoMovilSurcharge(amount, llmResult.senderType);
     }
 
     this.logger.log(
