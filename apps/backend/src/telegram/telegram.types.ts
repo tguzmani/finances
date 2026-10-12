@@ -93,6 +93,16 @@ export interface ReviewSession {
   transferDebitAccount?: string;
   transferCreditAccount?: string;
   transferDescription?: string;
+  // Bookkeeping: the note a /done or /checkin question is waiting for. Only a
+  // reply to that exact question counts, so an expense typed meanwhile stays
+  // a freeform entry.
+  bookkeepingReply?: {
+    kind: 'closing_note' | 'check_in_note';
+    id: number;
+    promptMessageId: number;
+    /** The message carrying the Skip button, stripped once the note arrives. */
+    skipMessageId?: number;
+  };
 }
 
 export interface SessionContext extends Context {
@@ -115,6 +125,8 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'add_transaction', description: 'Add a transaction with the wizard' },
   { command: 'transfer', description: 'Register a transfer between accounts' },
   { command: 'pago_movil', description: 'Parse Pago Móvil payment data' },
+  { command: 'done', description: 'Close the day: the ledger is up to date' },
+  { command: 'checkin', description: 'Are all your expenses registered?' },
   { command: 'settings', description: 'Update settings' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },

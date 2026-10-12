@@ -18,6 +18,7 @@ import { TelegramSettingsUpdate } from '../settings/telegram-settings.update';
 import { TelegramConvertUpdate } from '../exchanges/convert/telegram-convert.update';
 import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from '../pago-movil/telegram-pago-movil.update';
+import { TelegramBookkeepingUpdate } from '../bookkeeping/telegram-bookkeeping.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { B2StorageService } from '../../common/b2-storage.service';
 import { JournalEntryService } from '../../journal-entry/journal-entry.service';
@@ -53,6 +54,7 @@ export class TelegramTransactionsUpdate {
     private readonly transferUpdate: TelegramTransferUpdate,
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
     private readonly googleSheetConfigService: GoogleSheetConfigService,
+    private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
   ) { }
 
   @Command('transactions')
@@ -553,6 +555,13 @@ export class TelegramTransactionsUpdate {
   async handleText(@Ctx() ctx: SessionContext) {
     // Type guard for text messages
     if (!('text' in ctx.message)) {
+      return;
+    }
+
+    // A reply to a /done or /checkin note question. Matched by the message it
+    // replies to, so it never swallows text meant for anything else.
+    if (this.bookkeepingUpdate.isAwaitedReply(ctx)) {
+      await this.bookkeepingUpdate.handleReply(ctx);
       return;
     }
 

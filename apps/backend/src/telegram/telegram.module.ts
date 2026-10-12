@@ -55,6 +55,11 @@ import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramEquityService } from './equity/telegram-equity.service';
 import { TelegramEquityPresenter } from './equity/telegram-equity.presenter';
 import { TelegramEquityScheduler } from './equity/telegram-equity.scheduler';
+import { BookkeepingModule } from '../bookkeeping/bookkeeping.module';
+import { TelegramBookkeepingUpdate } from './bookkeeping/telegram-bookkeeping.update';
+import { TelegramBookkeepingService } from './bookkeeping/telegram-bookkeeping.service';
+import { TelegramBookkeepingPresenter } from './bookkeeping/telegram-bookkeeping.presenter';
+import { TelegramBookkeepingScheduler } from './bookkeeping/telegram-bookkeeping.scheduler';
 import * as https from 'https';
 
 @Module({
@@ -111,12 +116,17 @@ import * as https from 'https';
     ExpensesModule, // Para usar ExpensesSheetsService, ExpensesChartService
     EquityModule, // Para usar EquityService, EquityChartService
     DcaModule, // Para usar DcaPricesService
+    BookkeepingModule,
     CommonModule, // Para usar DateParserService
     GoogleSheetConfigModule, // Para usar GoogleSheetConfigService
   ],
   providers: [
     TelegramUpdate,
     TelegramService,
+    TelegramBookkeepingUpdate,
+    TelegramBookkeepingService,
+    TelegramBookkeepingPresenter,
+    TelegramBookkeepingScheduler,
     TelegramAuthGuard,
     TelegramBotInit,
     TelegramExchangesService,

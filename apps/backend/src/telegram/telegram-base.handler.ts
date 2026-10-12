@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Message } from 'telegraf/types';
 import { SessionContext } from './telegram.types';
 
 @Injectable()
@@ -48,10 +49,12 @@ export class TelegramBaseHandler {
    * Asks for a typed answer with Telegram's reply box already open.
    *
    * The answer arrives attached to the question, so the user can see what they
-   * are answering, and the keyboard is up without them reaching for it.
+   * are answering, and the keyboard is up without them reaching for it. The
+   * sent question is returned so a flow can tell a reply to it apart from any
+   * other text.
    */
-  async askForReply(ctx: SessionContext, question: string): Promise<void> {
-    await ctx.reply(question, {
+  async askForReply(ctx: SessionContext, question: string): Promise<Message.TextMessage> {
+    return ctx.reply(question, {
       parse_mode: 'HTML',
       reply_markup: { force_reply: true },
     });

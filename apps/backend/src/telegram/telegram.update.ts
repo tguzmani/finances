@@ -13,6 +13,7 @@ import { TelegramAccountsUpdate } from './accounts/telegram-accounts.update';
 import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
+import { TelegramBookkeepingUpdate } from './bookkeeping/telegram-bookkeeping.update';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
@@ -37,6 +38,7 @@ export class TelegramUpdate {
     private readonly settingsUpdate: TelegramSettingsUpdate,
     private readonly transferUpdate: TelegramTransferUpdate,
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
+    private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
   ) { }
 
   @Command('start')
@@ -73,10 +75,24 @@ export class TelegramUpdate {
       '/add_transaction - Add a transaction with the wizard (or just describe it in any message)\n' +
       '/transfer - Register a transfer between accounts (describe it in one message)\n' +
       '/pago_movil - Parse Pago Móvil payment data\n' +
+      '/done - Close the day once the ledger is up to date (saves every balance)\n' +
+      '/checkin - Are all your expenses registered? (also sent every night at 9 PM)\n' +
       '/settings - Update settings\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
     );
+  }
+
+  @Command('done')
+  @UseGuards(TelegramAuthGuard)
+  async handleDone(@Ctx() ctx: SessionContext) {
+    await this.bookkeepingUpdate.handleDone(ctx);
+  }
+
+  @Command('checkin')
+  @UseGuards(TelegramAuthGuard)
+  async handleCheckIn(@Ctx() ctx: SessionContext) {
+    await this.bookkeepingUpdate.handleCheckIn(ctx);
   }
 
   @Command('add_transaction')

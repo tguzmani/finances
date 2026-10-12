@@ -164,3 +164,76 @@ model JournalEntry {
 
   @@map("journal_entries")
 }
+
+/// A /done: the moment the ledger is up to date, with a snapshot of every balance.
+model Closing {
+  id           Int              @id @default(autoincrement())
+  closedAt     DateTime         @default(now()) @map("closed_at")
+  outcome      ClosingOutcome?
+  note         String?
+  exchangeRate Decimal?         @map("exchange_rate") @db.Decimal(10, 2)
+  answeredAt   DateTime?        @map("answered_at")
+  balances     ClosingBalance[]
+  checkIns     CheckIn[]
+
+  @@index([closedAt])
+  @@map("closings")
+}
+
+/// One account as it stood at a closing. `account` is a plain string so a new
+/// account needs no migration.
+model ClosingBalance {
+  id                   Int      @id @default(autoincrement())
+  closingId            Int      @map("closing_id")
+  closing              Closing  @relation(fields: [closingId], references: [id], onDelete: Cascade)
+  account              String   @db.VarChar(32)
+  currency             String   @db.VarChar(10)
+  sheetBalance         Decimal  @map("sheet_balance") @db.Decimal(14, 2)
+  estimatedBalance     Decimal  @map("estimated_balance") @db.Decimal(14, 2)
+  actualBalance        Decimal? @map("actual_balance") @db.Decimal(14, 2)
+  pendingTxCount       Int      @default(0) @map("pending_tx_count")
+  pendingExchangeCount Int      @default(0) @map("pending_exchange_count")
+
+  @@index([closingId])
+  @@map("closing_balances")
+}
+
+enum ClosingOutcome {
+  ALL_GOOD
+  SOME_ISSUES
+  BAD
+}
+
+/// The nightly "is everything registered?" question, answered or not.
+model CheckIn {
+  id                Int                @id @default(autoincrement())
+  sentAt            DateTime           @default(now()) @map("sent_at")
+  trigger           CheckInTrigger
+  banescoTrackedVes Decimal?           @map("banesco_tracked_ves") @db.Decimal(14, 2)
+  upToDate          Boolean?           @map("up_to_date")
+  initiative        CheckInInitiative?
+  missReason        CheckInMissReason? @map("miss_reason")
+  note              String?
+  closingId         Int?               @map("closing_id")
+  closing           Closing?           @relation(fields: [closingId], references: [id], onDelete: SetNull)
+  answeredAt        DateTime?          @map("answered_at")
+
+  @@index([sentAt])
+  @@map("check_ins")
+}
+
+enum CheckInTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+enum CheckInInitiative {
+  OWN
+  REMINDER
+}
+
+enum CheckInMissReason {
+  FORGOT
+  COMPLEX_TRANSACTION
+  OTHER
+}
