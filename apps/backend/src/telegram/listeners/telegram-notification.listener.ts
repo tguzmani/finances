@@ -42,7 +42,8 @@ export class TelegramNotificationListener {
         // Format message with transaction details
         const message = this.transactionsPresenter.formatForNotification(transaction, exchangeRate);
 
-        // Add inline keyboard with Name and Reject buttons
+        // A detected movement is read as an expense by default, but it may be
+        // money going to another of your own accounts
         const keyboard = {
           inline_keyboard: [
             [
@@ -53,6 +54,12 @@ export class TelegramNotificationListener {
               {
                 text: '❌ Reject',
                 callback_data: `notification_tx_reject_${transaction.id}`
+              }
+            ],
+            [
+              {
+                text: '🔄 Store a Transfer',
+                callback_data: `notification_tx_transfer_${transaction.id}`
               }
             ]
           ]

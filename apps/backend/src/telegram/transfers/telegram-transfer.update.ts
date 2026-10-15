@@ -5,6 +5,8 @@ import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramTransferService } from './telegram-transfer.service';
 import { TransferDraft, TransferExtractionService } from './transfer-extraction.service';
+import { TransactionsService } from '../../transactions/transactions.service';
+import { TransactionStatus } from '../../transactions/transaction.types';
 
 const PROMPT =
   '🔄 <b>Transfer</b>\n\n' +
@@ -20,6 +22,7 @@ export class TelegramTransferUpdate {
     private readonly transferService: TelegramTransferService,
     private readonly extractionService: TransferExtractionService,
     private readonly baseHandler: TelegramBaseHandler,
+    private readonly transactionsService: TransactionsService,
   ) {}
 
   /**
@@ -39,6 +42,32 @@ export class TelegramTransferUpdate {
     }
 
     await this.extractAndResume(ctx, inline);
+  }
+
+  /**
+   * Starts the flow with what a detected transaction already told us.
+   *
+   * The movement is on record: its amount, and the account it left or reached.
+   * Only the other side is unknown, so there is nothing for the extraction LLM
+   * to read and the flow opens straight on the missing account.
+   */
+  async startFromTransaction(
+    ctx: SessionContext,
+    known: {
+      transactionId: number;
+      amount: number;
+      debitAccount?: string;
+      creditAccount?: string;
+    },
+  ) {
+    this.baseHandler.clearSession(ctx);
+
+    ctx.session.transferTransactionId = known.transactionId;
+    ctx.session.transferAmount = known.amount;
+    if (known.debitAccount) ctx.session.transferDebitAccount = known.debitAccount;
+    if (known.creditAccount) ctx.session.transferCreditAccount = known.creditAccount;
+
+    await this.resumeAtFirstMissingField(ctx);
   }
 
   async handleTextInput(@Ctx() ctx: SessionContext) {
@@ -247,7 +276,10 @@ export class TelegramTransferUpdate {
           { parse_mode: 'HTML' },
         );
       } else {
-        const description = ctx.session.transferDescription!;
+        // A transfer started from a detected transaction never ran the
+        // extraction, so it has no description unless the Name button was used
+        const description =
+          ctx.session.transferDescription || `Traspaso a ${debitAccount}`;
         await this.transferService.createJournalEntry(
           amount,
           debitAccount,
@@ -265,11 +297,31 @@ export class TelegramTransferUpdate {
         );
       }
 
+      await this.closeSourceTransaction(ctx);
       this.baseHandler.clearSession(ctx);
     } catch (error) {
       this.logger.error(`Error registering transfer: ${error.message}`);
       await ctx.reply('Error registering transfer. Please try again with /transfer.');
       this.baseHandler.clearSession(ctx);
+    }
+  }
+
+  /**
+   * Marks the transaction the transfer came from as registered. The movement is
+   * in the ledger as a transfer, so leaving it pending would invite booking it a
+   * second time as an expense.
+   */
+  private async closeSourceTransaction(ctx: SessionContext) {
+    const transactionId = ctx.session.transferTransactionId;
+    if (!transactionId) return;
+
+    try {
+      await this.transactionsService.update(transactionId, {
+        status: TransactionStatus.REGISTERED,
+      });
+      this.logger.log(`Closed transaction ${transactionId} as a transfer`);
+    } catch (error) {
+      this.logger.error(`Could not close transaction ${transactionId}: ${error.message}`);
     }
   }
 

@@ -93,6 +93,8 @@ export interface ReviewSession {
   transferDebitAccount?: string;
   transferCreditAccount?: string;
   transferDescription?: string;
+  /** Set when the transfer started from a detected transaction, to close it after. */
+  transferTransactionId?: number;
   // Bookkeeping: the note a /done or /checkin question is waiting for. Only a
   // reply to that exact question counts, so an expense typed meanwhile stays
   // a freeform entry.

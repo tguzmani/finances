@@ -1,5 +1,6 @@
 import { Update, Ctx, Command, Action, On } from 'nestjs-telegraf';
 import { DESCRIPTION_PROMPT } from './telegram-transactions.presenter';
+import { PLATFORM_TO_ACCOUNT } from '../../journal-entry/journal-entry.constants';
 import { Markup } from 'telegraf';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
@@ -359,6 +360,76 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error handling notification name: ${error.message}`);
       await ctx.answerCbQuery('Error');
     }
+  }
+
+  /**
+   * Books a detected movement as a transfer between the user's own accounts
+   * rather than as an expense.
+   *
+   * The transaction already carries the amount and the account it moved
+   * through, so the flow opens on the one thing left to say: the account on the
+   * other side.
+   */
+  @Action(/^notification_tx_transfer_(\d+)$/)
+  @UseGuards(TelegramAuthGuard)
+  async handleNotificationTransfer(@Ctx() ctx: SessionContext) {
+    try {
+      if (!('data' in ctx.callbackQuery)) {
+        await ctx.answerCbQuery('Invalid callback');
+        return;
+      }
+
+      const match = ctx.callbackQuery.data.match(/^notification_tx_transfer_(\d+)$/);
+      const transactionId = parseInt(match[1], 10);
+
+      await ctx.answerCbQuery();
+
+      const transaction = await this.transactionsService.findOne(transactionId);
+      if (!transaction) {
+        await ctx.editMessageText('❌ Transaction not found', { parse_mode: 'HTML' });
+        return;
+      }
+
+      const account = PLATFORM_TO_ACCOUNT[transaction.platform];
+      if (!account) {
+        await ctx.reply(`No ledger account maps to ${transaction.platform}.`);
+        return;
+      }
+
+      const amount = await this.toUsd(transaction);
+      if (!amount) {
+        await ctx.reply('No exchange rate available to convert this amount to USD.');
+        return;
+      }
+
+      await this.baseHandler.removeButtons(ctx);
+
+      // Money leaving an account is credited from it; money arriving is debited to it
+      const side = transaction.type === TransactionType.INCOME
+        ? { debitAccount: account }
+        : { creditAccount: account };
+
+      await this.transferUpdate.startFromTransaction(ctx, {
+        transactionId,
+        amount,
+        ...side,
+      });
+    } catch (error) {
+      this.logger.error(`Error starting transfer from notification: ${error.message}`);
+      await ctx.answerCbQuery('Error');
+    }
+  }
+
+  /** Ledger amounts are USD, so a bolivar movement converts at the internal rate. */
+  private async toUsd(transaction: { amount: any; currency: string }): Promise<number | null> {
+    const amount = Number(transaction.amount);
+
+    if (transaction.currency !== 'VES') return amount;
+
+    const latestRate = await this.exchangeRateService.findLatest();
+    const rate = latestRate ? Number(latestRate.value) : 0;
+
+    return rate ? amount / rate : null;
   }
 
   @Action(/^notification_tx_reject_(\d+)$/)
