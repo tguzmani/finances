@@ -61,6 +61,17 @@ export class TelegramTransactionsService {
     }
   }
 
+  /** Search results for /find, with the USD equivalent where it applies. */
+  async formatFoundTransactions(
+    transactions: Transaction[],
+    askedAmount?: number,
+  ): Promise<string> {
+    const latestRate = await this.exchangeRateService.findLatest().catch(() => null);
+    const exchangeRate = latestRate ? Number(latestRate.value) : undefined;
+
+    return this.presenter.formatFoundList(transactions, { askedAmount, exchangeRate });
+  }
+
   async formatTransactionForReview(transaction: Transaction): Promise<string> {
     try {
       const latestRate = await this.exchangeRateService.findLatest();

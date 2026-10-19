@@ -27,6 +27,12 @@ export interface UpdateTransactionOptions {
   silent?: boolean;
 }
 
+/** How many hits a search reports. */
+const SEARCH_RESULT_LIMIT = 10;
+
+/** How many hits an amount window is read before ranking them by closeness. */
+const AMOUNT_SEARCH_WINDOW_LIMIT = 100;
+
 @Injectable()
 export class TransactionsService {
   private readonly logger = new Logger(TransactionsService.name);
@@ -135,10 +141,30 @@ export class TransactionsService {
       where.method = criteria.method as PaymentMethod;
     }
 
+    // With a single amount asked for, the nearest hits are the answer, and
+    // they can be of any age: the ten most recent inside the window would
+    // happily drop the one that matches to the cent. The window is read wide
+    // and then ranked by how close each hit is.
+    if (criteria.askedAmount != null) {
+      const inWindow = await this.prisma.transaction.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        take: AMOUNT_SEARCH_WINDOW_LIMIT,
+      });
+
+      const asked = criteria.askedAmount;
+      return inWindow
+        .sort(
+          (a, b) =>
+            Math.abs(Number(a.amount) - asked) - Math.abs(Number(b.amount) - asked),
+        )
+        .slice(0, SEARCH_RESULT_LIMIT);
+    }
+
     return this.prisma.transaction.findMany({
       where,
       orderBy: { date: 'desc' },
-      take: 10,
+      take: SEARCH_RESULT_LIMIT,
     });
   }
 

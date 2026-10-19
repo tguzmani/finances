@@ -18,6 +18,7 @@ import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from './pago-movil/telegram-pago-movil.update';
+import { TelegramReconcileUpdate } from './reconcile/telegram-reconcile.update';
 
 @Update()
 export class TelegramUpdate {
@@ -38,6 +39,7 @@ export class TelegramUpdate {
     private readonly settingsUpdate: TelegramSettingsUpdate,
     private readonly transferUpdate: TelegramTransferUpdate,
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
+    private readonly reconcileUpdate: TelegramReconcileUpdate,
     private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
   ) { }
 
@@ -71,6 +73,8 @@ export class TelegramUpdate {
       '/dca_prices - Refresh DCA crypto prices from Binance\n' +
       '/exchanges - View recent exchanges\n' +
       '/review - Review pending transactions\n' +
+      '/find [query] - Check whether a transaction is on record (e.g. /find 6080)\n' +
+      '/reconcile - Send a statement screenshot and see what is missing\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add a transaction with the wizard (or just describe it in any message)\n' +
       '/transfer - Register a transfer between accounts (describe it in one message)\n' +
@@ -221,6 +225,18 @@ export class TelegramUpdate {
     } catch (error) {
       await ctx.reply('Error starting review process.');
     }
+  }
+
+  @Command('find')
+  @UseGuards(TelegramAuthGuard)
+  async handleFind(@Ctx() ctx: SessionContext) {
+    await this.transactionsUpdate.handleFind(ctx);
+  }
+
+  @Command('reconcile')
+  @UseGuards(TelegramAuthGuard)
+  async handleReconcile(@Ctx() ctx: SessionContext) {
+    await this.reconcileUpdate.handleReconcile(ctx);
   }
 
   @Command('review_one')

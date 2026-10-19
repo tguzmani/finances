@@ -28,6 +28,10 @@ export interface ReviewSession {
   reviewOneMode?: 'selecting' | 'waiting_for_tx_id' | 'waiting_for_ex_id' | 'waiting_for_tx_search';
   reviewOneType?: 'transaction' | 'exchange';
   reviewSingleItem?: boolean; // True when reviewing a single item via /review_one
+  /** Set by /find, which reports on every status instead of only what is pending. */
+  findAnyStatus?: boolean;
+  /** Set by /reconcile, so the next photo is read as a bank statement. */
+  reconcileWaiting?: boolean;
   // Go Back functionality
   transactionReviewHistory?: number[];
   exchangeReviewHistory?: number[];
@@ -123,6 +127,8 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'exchanges', description: 'View recent exchanges' },
   { command: 'review', description: 'Review pending items' },
   { command: 'review_one', description: 'Review specific item by ID' },
+  { command: 'find', description: 'Check whether a transaction is on record' },
+  { command: 'reconcile', description: 'Check a bank statement against the bot' },
   { command: 'register', description: 'Register reviewed items' },
   { command: 'add_transaction', description: 'Add a transaction with the wizard' },
   { command: 'transfer', description: 'Register a transfer between accounts' },

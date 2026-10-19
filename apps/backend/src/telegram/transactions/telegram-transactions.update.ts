@@ -10,7 +10,11 @@ import { SessionContext } from '../telegram.types';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { TransactionStatus, TransactionType, TransactionPlatform, PaymentMethod } from '../../transactions/transaction.types';
 import { TransactionOcrParser } from '../../transactions/ocr/parsers/transaction-ocr-parser';
-import { TransactionSearchService } from '../../transactions/transaction-search.service';
+import {
+  AMOUNT_TOLERANCE,
+  TransactionSearchCriteria,
+  TransactionSearchService,
+} from '../../transactions/transaction-search.service';
 import { TelegramBaseHandler } from '../telegram-base.handler';
 import { TelegramExchangesUpdate } from '../exchanges/telegram-exchanges.update';
 import { TelegramManualTransactionUpdate } from './telegram-manual-transaction.update';
@@ -19,6 +23,7 @@ import { TelegramSettingsUpdate } from '../settings/telegram-settings.update';
 import { TelegramConvertUpdate } from '../exchanges/convert/telegram-convert.update';
 import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from '../pago-movil/telegram-pago-movil.update';
+import { TelegramReconcileUpdate } from '../reconcile/telegram-reconcile.update';
 import { TelegramBookkeepingUpdate } from '../bookkeeping/telegram-bookkeeping.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { B2StorageService } from '../../common/b2-storage.service';
@@ -56,6 +61,7 @@ export class TelegramTransactionsUpdate {
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
     private readonly googleSheetConfigService: GoogleSheetConfigService,
     private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
+    private readonly reconcileUpdate: TelegramReconcileUpdate,
   ) { }
 
   @Command('transactions')
@@ -633,6 +639,12 @@ export class TelegramTransactionsUpdate {
     // replies to, so it never swallows text meant for anything else.
     if (this.bookkeepingUpdate.isAwaitedReply(ctx)) {
       await this.bookkeepingUpdate.handleReply(ctx);
+      return;
+    }
+
+    // A statement pasted as text instead of photographed
+    if (ctx.session.reconcileWaiting) {
+      await this.reconcileUpdate.handleTextInput(ctx);
       return;
     }
 
@@ -1565,25 +1577,67 @@ export class TelegramTransactionsUpdate {
     }
   }
 
+  /**
+   * `/find` answers whether a transaction is on record, whatever became of it.
+   *
+   * Unlike the search behind /review_one, which only offers what is still
+   * pending, this one looks at every status: a purchase that was already
+   * registered is still a purchase the user has, and "no transactions found"
+   * would be the wrong answer about it.
+   */
+  async handleFind(@Ctx() ctx: SessionContext) {
+    this.baseHandler.clearSession(ctx);
+    ctx.session.findAnyStatus = true;
+
+    const inline = this.baseHandler.getCommandArgs(ctx);
+
+    if (inline) {
+      await this.searchAndReport(ctx, inline);
+      return;
+    }
+
+    ctx.session.reviewOneMode = 'waiting_for_tx_search';
+    ctx.session.reviewOneType = 'transaction';
+    await this.baseHandler.askForReply(
+      ctx,
+      '🔍 <b>Find a transaction</b>\n\n<i>An amount, a name, a date, an account — or just ask: tengo alguna transacción por 6080?</i>',
+    );
+  }
+
   private async handleTransactionSearch(ctx: SessionContext) {
     if (!('text' in ctx.message)) return;
 
+    await this.searchAndReport(ctx, ctx.message.text.trim());
+  }
+
+  private async searchAndReport(ctx: SessionContext, searchText: string) {
+    const findMode = ctx.session.findAnyStatus === true;
+
     try {
-      const searchText = ctx.message.text.trim();
+      const criteria = await this.baseHandler.withTyping(ctx, () =>
+        this.transactionSearchService.parseSearchQuery(searchText),
+      );
 
-      await ctx.reply('🔍 Searching...');
+      if (!findMode) {
+        // /review_one acts on what is still pending, so closed items stay out
+        criteria.statusIn = [TransactionStatus.NEW, TransactionStatus.REVIEWED];
+      }
 
-      // Parse search query with LLM
-      const criteria = await this.transactionSearchService.parseSearchQuery(searchText);
-
-      // Only search NEW and REVIEWED transactions for /review_one
-      criteria.statusIn = [TransactionStatus.NEW, TransactionStatus.REVIEWED];
-
-      // Search transactions
       const results = await this.transactionsService.searchTransactions(criteria);
 
       if (results.length === 0) {
-        await ctx.reply('❌ No transactions found. Try a different search.');
+        await ctx.reply(
+          findMode
+            ? `🔍 Nothing found.\n\n${this.describeSearch(criteria)}`
+            : '❌ No transactions found. Try a different search.',
+          { parse_mode: 'HTML' },
+        );
+        return;
+      }
+
+      // /find reports; it does not open anything, so a lone hit is still a report
+      if (findMode) {
+        await this.reportFindResults(ctx, results, criteria);
         return;
       }
 
@@ -1594,13 +1648,7 @@ export class TelegramTransactionsUpdate {
       }
 
       // Multiple results - show buttons
-      const buttons = results.map(tx => {
-        const amount = Number(tx.amount).toFixed(2);
-        const desc = tx.description || 'No description';
-        const maxLen = 40;
-        const truncated = desc.length > maxLen ? desc.substring(0, maxLen) + '...' : desc;
-        return [Markup.button.callback(`${truncated} - ${amount} ${tx.currency}`, `search_tx_${tx.id}`)];
-      });
+      const buttons = results.map(tx => this.buildSearchResultButton(tx));
 
       buttons.push([Markup.button.callback('❌ Cancel', 'search_tx_cancel')]);
 
@@ -1612,6 +1660,81 @@ export class TelegramTransactionsUpdate {
       this.logger.error(`Error searching transactions: ${error.message}`);
       await ctx.reply('❌ Error searching. Please try again.');
     }
+  }
+
+  /**
+   * The hits, with a way into the ones still open.
+   *
+   * A registered or rejected transaction gets no button: its row is already in
+   * the ledger, and renaming or rejecting it from here would leave the sheet
+   * saying something the database no longer does.
+   */
+  private async reportFindResults(
+    ctx: SessionContext,
+    results: Transaction[],
+    criteria: TransactionSearchCriteria,
+  ) {
+    ctx.session.reviewOneMode = undefined;
+
+    const message = await this.telegramService.transactions.formatFoundTransactions(
+      results,
+      criteria.askedAmount,
+    );
+
+    const pending = results.filter(
+      (tx) => tx.status === TransactionStatus.NEW || tx.status === TransactionStatus.REVIEWED,
+    );
+
+    if (pending.length === 0) {
+      await ctx.reply(message, { parse_mode: 'HTML' });
+      return;
+    }
+
+    const buttons = pending.map((tx) => this.buildSearchResultButton(tx, '✏️ '));
+
+    await ctx.reply(message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard(buttons),
+    });
+  }
+
+  private buildSearchResultButton(transaction: Transaction, prefix = '') {
+    const amount = Number(transaction.amount).toFixed(2);
+    const desc = transaction.description || 'No description';
+    const maxLen = 40;
+    const truncated = desc.length > maxLen ? desc.substring(0, maxLen) + '...' : desc;
+
+    return [
+      Markup.button.callback(
+        `${prefix}${truncated} - ${amount} ${transaction.currency}`,
+        `search_tx_${transaction.id}`,
+      ),
+    ];
+  }
+
+  /** What was actually looked for, so an empty answer can be trusted. */
+  private describeSearch(criteria: TransactionSearchCriteria): string {
+    const parts: string[] = [];
+
+    if (criteria.askedAmount) {
+      parts.push(
+        `Amount: <b>${criteria.askedAmount.toFixed(2)}</b> ±${AMOUNT_TOLERANCE * 100}% ` +
+        `(${criteria.amountMin!.toFixed(2)} – ${criteria.amountMax!.toFixed(2)})`,
+      );
+    } else if (criteria.amountMin != null || criteria.amountMax != null) {
+      parts.push(
+        `Amount: ${criteria.amountMin?.toFixed(2) ?? 'any'} – ${criteria.amountMax?.toFixed(2) ?? 'any'}`,
+      );
+    }
+
+    if (criteria.description) parts.push(`Description: ${criteria.description}`);
+    if (criteria.platform) parts.push(`Account: ${criteria.platform}`);
+    if (criteria.method) parts.push(`Method: ${criteria.method}`);
+    if (criteria.dateFrom || criteria.dateTo) {
+      parts.push(`Date: ${criteria.dateFrom ?? 'any'} – ${criteria.dateTo ?? 'any'}`);
+    }
+
+    return parts.length > 0 ? `<i>Searched for:</i>\n${parts.join('\n')}` : '';
   }
 
   private async showTransactionForReviewOne(ctx: SessionContext, transaction: Transaction) {
