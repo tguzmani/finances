@@ -34,7 +34,7 @@ export class SheetUpdateService {
 
     // A split is only ever written by the full journal entry, so the marker has
     // to beat the shortcut rules: matching one here would book the expense whole
-    // and carry "+ Esther" into the ledger as part of the description.
+    // and carry the marker into the ledger as part of the description.
     if (hasSplitMarker(transaction.description)) {
       this.logger.log(`Skipping sheet update for split transaction ${transaction.id}`);
       return null;

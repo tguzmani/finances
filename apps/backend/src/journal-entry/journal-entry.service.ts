@@ -7,7 +7,7 @@ import { JournalEntryCacheService } from './journal-entry-cache.service';
 import { LedgerRowService } from './ledger-row.service';
 import { LedgerWriterService } from './ledger-writer.service';
 import { formatLedgerDate } from './ledger-date';
-import { SPLIT_SHARE, hasSplitMarker, stripSplitMarker } from './journal-entry.constants';
+import { readSplit, stripSplitMarker } from './journal-entry.constants';
 
 @Injectable()
 export class JournalEntryService {
@@ -37,12 +37,28 @@ export class JournalEntryService {
     }
 
     const usdAmount = isVes ? amount / exchangeRate : amount;
-    const debeValue = isVes
-      ? `=${amount.toFixed(2)}/${exchangeRate.toFixed(2)}`
-      : amount.toFixed(2);
+
+    // Every figure reaches the sheet in USD. A VES one is written as the
+    // division, so the rate it was booked at stays visible in the cell.
+    const inSheetCurrency = (value: number) =>
+      isVes ? `=${value.toFixed(2)}/${exchangeRate.toFixed(2)}` : value.toFixed(2);
+
+    const debeValue = inSheetCurrency(amount);
+
+    const split = readSplit(transaction.description || '');
+    const namedShare = split ? split.classifiedAmount ?? split.shareAmount : null;
+
+    // A named share above what was spent would leave the other row negative, so
+    // the entry is refused instead of written. Checked before the classifier
+    // runs, since nothing about it can be salvaged.
+    if (namedShare != null && namedShare > amount) {
+      throw new Error(
+        `Split of ${namedShare.toFixed(2)} ${transaction.currency} is more than the ${amount.toFixed(2)} spent`,
+      );
+    }
 
     // Debits share the expense; the single credit carries the full amount. A
-    // description marked "+ Esther" splits it in two, so the row count varies.
+    // split marker adds a second debit, so the row count varies.
     const cachedEntries = await this.cacheService.getCachedEntries(transaction.id);
     const cachedDebits = cachedEntries?.filter((e) => e.type === 'DEBIT') ?? [];
     const cachedCredit = cachedEntries?.find((e) => e.type === 'CREDIT');
@@ -69,25 +85,47 @@ export class JournalEntryService {
         category: classification.category,
         subcategory: classification.subcategory,
       }];
-      if (hasSplitMarker(description)) {
-        debits.push({ ...SPLIT_SHARE });
+      if (split) {
+        debits.push({ ...split.share });
       }
       creditAccount = classification.credit_account;
     }
 
     const dateFormatted = formatLedgerDate(transaction.date);
+    const shareRow = nextRow + 1;
     const creditRow = nextRow + debits.length;
 
-    // The first debit takes an equal share of the credit; the rest mirror it, so
-    // editing the credit in the sheet keeps every share in step.
+    // The side the marker named takes exactly that figure and the other takes
+    // what the credit has left; unnamed, the two are halves. Every row is
+    // written against the credit or against its sibling, so editing the credit
+    // in the sheet keeps the shares in step with it.
+    const isSplit = debits.length > 1;
+    const classifiedAmount = isSplit ? split?.classifiedAmount ?? null : null;
+    const shareAmount = isSplit ? split?.shareAmount ?? null : null;
+
+    let firstDebe: string;
+    let shareDebe: string;
+
+    if (!isSplit) {
+      firstDebe = `=G${creditRow}`;
+      shareDebe = '';
+    } else if (classifiedAmount != null) {
+      firstDebe = inSheetCurrency(classifiedAmount);
+      shareDebe = `=G${creditRow}-F${nextRow}`;
+    } else if (shareAmount != null) {
+      firstDebe = `=G${creditRow}-F${shareRow}`;
+      shareDebe = inSheetCurrency(shareAmount);
+    } else {
+      firstDebe = `=G${creditRow}/${debits.length}`;
+      shareDebe = `=F${nextRow}`;
+    }
+
     const rows = debits.map((debit, index) => [
       index === 0 ? dateFormatted : '',
       index === 0 ? stripSplitMarker(transaction.description || '') : '',
       debit.account,
       '',
-      index === 0
-        ? (debits.length > 1 ? `=G${creditRow}/${debits.length}` : `=G${creditRow}`)
-        : `=F${nextRow}`,
+      index === 0 ? firstDebe : shareDebe,
       '',
       debit.category,
       debit.subcategory,

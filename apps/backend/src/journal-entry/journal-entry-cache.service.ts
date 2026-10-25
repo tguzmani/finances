@@ -6,8 +6,7 @@ import { ExchangeRateService } from '../exchanges/exchange-rate.service';
 import {
   JOURNAL_ACCOUNTS,
   PLATFORM_TO_ACCOUNT,
-  SPLIT_SHARE,
-  hasSplitMarker,
+  readSplit,
   stripSplitMarker,
 } from './journal-entry.constants';
 
@@ -53,8 +52,8 @@ export class JournalEntryCacheService {
     });
 
     // Debits first, in the order they are written to the ledger, then the
-    // single credit for the full amount. A split adds one more debit; each
-    // debit takes an equal share.
+    // single credit for the full amount. A split adds one more debit. How much
+    // each one takes is settled when the rows are written, not here.
     const debits = [
       {
         transactionId: transaction.id,
@@ -65,13 +64,14 @@ export class JournalEntryCacheService {
       },
     ];
 
-    if (hasSplitMarker(transaction.description)) {
+    const split = readSplit(transaction.description);
+    if (split) {
       debits.push({
         transactionId: transaction.id,
         type: 'DEBIT' as const,
-        account: SPLIT_SHARE.account,
-        category: SPLIT_SHARE.category,
-        subcategory: SPLIT_SHARE.subcategory,
+        account: split.share.account,
+        category: split.share.category,
+        subcategory: split.share.subcategory,
       });
     }
 

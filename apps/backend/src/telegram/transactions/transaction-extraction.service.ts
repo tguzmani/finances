@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { OpenRouterService } from '../../common/open-router.service';
+import { SPLIT_TARGETS } from '../../journal-entry/journal-entry.constants';
 
 const TransactionDraftSchema = z.object({
   type: z.enum(['INCOME', 'EXPENSE']).nullable(),
@@ -32,6 +33,10 @@ Currency-to-platform inference rules (apply when platform is not explicitly stat
 - If amount is in USDT, platform MUST be BINANCE and currency USDT.
 - If amount is in USD/dollars and no account specified, leave platform null.
 
+Split markers (${SPLIT_TARGETS.map((t) => `"+ ${t}"`).join(', ')}):
+- These say the expense is to be split, so they are part of the description and MUST be copied verbatim, never summarized away.
+- A figure in parentheses next to the "+" says how much that side takes. Keep it, with its parentheses, exactly where it sits — dropping it silently halves the split.
+
 Platform-implied currency (apply when currency is not explicitly stated):
 - BANESCO → VES
 - BINANCE → USDT
@@ -49,6 +54,12 @@ Output: {"type":"EXPENSE","platform":"BANK_OF_AMERICA","method":null,"currency":
 
 Input: "recibí pago"
 Output: {"type":"INCOME","platform":null,"method":null,"currency":null,"amount":null,"description":"pago","date":null}
+
+Input: "Gaste 265.15 USD de Binance a Amazon (123.95) + Bofa"
+Output: {"type":"EXPENSE","platform":"BINANCE","method":null,"currency":"USDT","amount":265.15,"description":"Amazon (123.95) + Bofa","date":null}
+
+Input: "mercado 92673.94 bs + Esther"
+Output: {"type":"EXPENSE","platform":"BANESCO","method":null,"currency":"VES","amount":92673.94,"description":"mercado + Esther","date":null}
 `;
 
 @Injectable()
