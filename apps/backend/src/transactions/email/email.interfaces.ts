@@ -33,6 +33,12 @@ export interface BankEmailConfig {
   /** One address, or several when the sender notifies from more than one. */
   sender: string | string[];
   subjectPatterns: string[];
+  /**
+   * Read the HTML part instead of the plain-text one. For senders whose
+   * plain-text alternative drops the figures the parser needs (Thera lays the
+   * amount out in an HTML table and leaves it out of the text part entirely).
+   */
+  readHtml?: boolean;
 }
 
 export interface IBankEmailService {

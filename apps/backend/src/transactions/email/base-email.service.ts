@@ -105,7 +105,10 @@ export abstract class BaseEmailService {
       return null;
     }
 
-    const body = parsed.text || this.stripHtml(parsed.html || '');
+    const html = parsed.html ? this.stripHtml(parsed.html) : '';
+    const body = config.readHtml
+      ? html || parsed.text || ''
+      : parsed.text || html;
     const date = parsed.date || new Date();
 
     return {

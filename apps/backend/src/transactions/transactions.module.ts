@@ -21,6 +21,8 @@ import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
 import { RenderEmailService } from './email/subscriptions/render/render-email.service';
 import { RenderParser } from './email/subscriptions/render/render.parser';
+import { TheraEmailService } from './email/incomes/thera/thera-email.service';
+import { TheraParser } from './email/incomes/thera/thera.parser';
 import { CommonModule } from '../common/common.module';
 import { JournalEntryModule } from '../journal-entry/journal-entry.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
@@ -58,6 +60,9 @@ import { TransactionSearchService } from './transaction-search.service';
     RenderEmailService,
     RenderParser,
 
+    TheraEmailService,
+    TheraParser,
+
 
     // OCR - LLM-based parsing
     TransactionOcrParser,
@@ -83,11 +88,13 @@ export class TransactionsModule {
     private readonly googlePlayService: GooglePlayEmailService,
     private readonly anthropicService: AnthropicEmailService,
     private readonly renderService: RenderEmailService,
+    private readonly theraService: TheraEmailService,
   ) {
     this.registry.register(this.banescoService);
     this.registry.register(this.bofaService);
     this.registry.register(this.googlePlayService);
     this.registry.register(this.anthropicService);
     this.registry.register(this.renderService);
+    this.registry.register(this.theraService);
   }
 }
