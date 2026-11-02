@@ -1570,11 +1570,21 @@ export class TelegramTransactionsUpdate {
   async handleSearchCancel(@Ctx() ctx: SessionContext) {
     try {
       await ctx.answerCbQuery('Cancelled');
+      await this.baseHandler.removeButtons(ctx);
       this.baseHandler.clearSession(ctx);
       await ctx.reply('🚫 Search cancelled.');
     } catch (error) {
       await ctx.answerCbQuery('Error');
     }
+  }
+
+  /**
+   * The way out of the search. The flow stays open after every answer so one
+   * question can follow another, which leaves typed text belonging to the
+   * search until this button says otherwise.
+   */
+  private exitSearchButton() {
+    return [Markup.button.callback('🚪 Exit search', 'search_tx_cancel')];
   }
 
   /**
@@ -1589,6 +1599,11 @@ export class TelegramTransactionsUpdate {
     this.baseHandler.clearSession(ctx);
     ctx.session.findAnyStatus = true;
 
+    // The flow stays open until "Exit search", so one question can follow
+    // another without typing /find again
+    ctx.session.reviewOneMode = 'waiting_for_tx_search';
+    ctx.session.reviewOneType = 'transaction';
+
     const inline = this.baseHandler.getCommandArgs(ctx);
 
     if (inline) {
@@ -1596,8 +1611,6 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
-    ctx.session.reviewOneMode = 'waiting_for_tx_search';
-    ctx.session.reviewOneType = 'transaction';
     await this.baseHandler.askForReply(
       ctx,
       '🔍 <b>Find a transaction</b>\n\n<i>An amount, a name, a date, an account — or just ask: tengo alguna transacción por 6080?</i>',
@@ -1630,7 +1643,10 @@ export class TelegramTransactionsUpdate {
           findMode
             ? `🔍 Nothing found.\n\n${this.describeSearch(criteria)}`
             : '❌ No transactions found. Try a different search.',
-          { parse_mode: 'HTML' },
+          {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([this.exitSearchButton()]),
+          },
         );
         return;
       }
@@ -1650,7 +1666,7 @@ export class TelegramTransactionsUpdate {
       // Multiple results - show buttons
       const buttons = results.map(tx => this.buildSearchResultButton(tx));
 
-      buttons.push([Markup.button.callback('❌ Cancel', 'search_tx_cancel')]);
+      buttons.push(this.exitSearchButton());
 
       await ctx.reply(
         `🔍 Found ${results.length} transaction(s):`,
@@ -1658,7 +1674,9 @@ export class TelegramTransactionsUpdate {
       );
     } catch (error) {
       this.logger.error(`Error searching transactions: ${error.message}`);
-      await ctx.reply('❌ Error searching. Please try again.');
+      await ctx.reply('❌ Error searching. Please try again.', {
+        ...Markup.inlineKeyboard([this.exitSearchButton()]),
+      });
     }
   }
 
@@ -1674,8 +1692,6 @@ export class TelegramTransactionsUpdate {
     results: Transaction[],
     criteria: TransactionSearchCriteria,
   ) {
-    ctx.session.reviewOneMode = undefined;
-
     const message = await this.telegramService.transactions.formatFoundTransactions(
       results,
       criteria.askedAmount,
@@ -1685,12 +1701,8 @@ export class TelegramTransactionsUpdate {
       (tx) => tx.status === TransactionStatus.NEW || tx.status === TransactionStatus.REVIEWED,
     );
 
-    if (pending.length === 0) {
-      await ctx.reply(message, { parse_mode: 'HTML' });
-      return;
-    }
-
     const buttons = pending.map((tx) => this.buildSearchResultButton(tx, '✏️ '));
+    buttons.push(this.exitSearchButton());
 
     await ctx.reply(message, {
       parse_mode: 'HTML',

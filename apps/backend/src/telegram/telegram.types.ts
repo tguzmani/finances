@@ -30,7 +30,7 @@ export interface ReviewSession {
   reviewSingleItem?: boolean; // True when reviewing a single item via /review_one
   /** Set by /find, which reports on every status instead of only what is pending. */
   findAnyStatus?: boolean;
-  /** Set by /reconcile, so the next photo is read as a bank statement. */
+  /** Set by /reconcile, so pasted text is read as a bank statement until the user exits. */
   reconcileWaiting?: boolean;
   // Go Back functionality
   transactionReviewHistory?: number[];
