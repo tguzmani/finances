@@ -21,6 +21,8 @@ import { AnthropicEmailService } from './email/subscriptions/anthropic/anthropic
 import { AnthropicParser } from './email/subscriptions/anthropic/anthropic.parser';
 import { RenderEmailService } from './email/subscriptions/render/render-email.service';
 import { RenderParser } from './email/subscriptions/render/render.parser';
+import { BinanceCardEmailService } from './email/banks/binance-card/binance-card-email.service';
+import { BinanceCardParser } from './email/banks/binance-card/binance-card.parser';
 import { TheraEmailService } from './email/incomes/thera/thera-email.service';
 import { TheraParser } from './email/incomes/thera/thera.parser';
 import { CommonModule } from '../common/common.module';
@@ -49,6 +51,9 @@ import { TransactionSearchService } from './transaction-search.service';
 
     BofaEmailService,
     BofaParser,
+
+    BinanceCardEmailService,
+    BinanceCardParser,
 
     GooglePlayEmailService,
     GooglePlayParser,
@@ -85,6 +90,7 @@ export class TransactionsModule {
     private readonly registry: EmailServiceRegistry,
     private readonly banescoService: BanescoEmailService,
     private readonly bofaService: BofaEmailService,
+    private readonly binanceCardService: BinanceCardEmailService,
     private readonly googlePlayService: GooglePlayEmailService,
     private readonly anthropicService: AnthropicEmailService,
     private readonly renderService: RenderEmailService,
@@ -92,6 +98,7 @@ export class TransactionsModule {
   ) {
     this.registry.register(this.banescoService);
     this.registry.register(this.bofaService);
+    this.registry.register(this.binanceCardService);
     this.registry.register(this.googlePlayService);
     this.registry.register(this.anthropicService);
     this.registry.register(this.renderService);
