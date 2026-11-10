@@ -5,10 +5,12 @@ import { SheetsRepository } from '../common/sheets.repository';
 export class AccountsSheetsService {
   private readonly logger = new Logger(AccountsSheetsService.name);
   private readonly BINANCE_STABLECOIN_BALANCE_CELL = 'Cuentas!J4';
-  private readonly BANESCO_BALANCE_VES_CELL = 'Cuentas!O26';
+  /** Column N labels this one "Bs"; the rate sits one row above it. */
+  private readonly BANESCO_BALANCE_VES_CELL = 'Cuentas!O27';
   private readonly WALLET_BALANCE_CELL = 'Cuentas!J5';
   private readonly CASH_BOX_BALANCE_CELL = 'Cuentas!J7';
-  private readonly BOFA_CREDIT_CARD_BALANCE_CELL = 'Cuentas!K20';
+  /** The "Bofa TDC" row, under the Pasivo block. */
+  private readonly BOFA_CREDIT_CARD_BALANCE_CELL = 'Cuentas!K21';
 
   constructor(private readonly sheetsRepository: SheetsRepository) { }
 
