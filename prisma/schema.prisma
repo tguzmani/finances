@@ -22,6 +22,10 @@ model Transaction {
   ocrText        String?              @map("ocr_text")
   platform       TransactionPlatform
   method         PaymentMethod?
+  /// Set when the amount came from memory instead of a receipt, so it can be refined later.
+  isEstimate     Boolean              @default(false) @map("is_estimate")
+  /// The sentence the entry was recalled from, kept so the figure can be traced back.
+  sourceNote     String?              @map("source_note")
   journalEntries JournalEntry[]
 
   @@map("transactions")
@@ -236,4 +240,27 @@ enum CheckInMissReason {
   FORGOT
   COMPLEX_TRANSACTION
   OTHER
+}
+
+/// A bug told to the bot in passing, kept so it is still there when there is
+/// time to fix it. The text is stored as typed; nothing parses it.
+model BugReport {
+  id         Int             @id @default(autoincrement())
+  reportedAt DateTime        @default(now()) @map("reported_at")
+  text       String
+  status     BugReportStatus @default(OPEN)
+  /// What the fix was, written when the row is closed. It is what the bot reports back.
+  resolution String?
+  resolvedAt DateTime?       @map("resolved_at")
+  /// When the resolution was announced in the chat, so it is announced once.
+  notifiedAt DateTime?       @map("notified_at")
+
+  @@index([status])
+  @@map("bug_reports")
+}
+
+enum BugReportStatus {
+  OPEN
+  FIXED
+  WONT_FIX
 }

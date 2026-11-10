@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Transaction } from '@prisma/client';
+import {
+  methodLabel,
+  platformLabel,
+  typeIcon,
+  typeLabel,
+} from '../../transactions/transaction-labels';
 
 /** Asked whenever a transaction needs a name before it can be registered. */
 export const DESCRIPTION_PROMPT = '✏️ Please type a description for this transaction:';
@@ -244,42 +250,18 @@ export class TelegramTransactionsPresenter {
   }
 
   private getPlatformLabel(platform: string): string {
-    const labels: Record<string, string> = {
-      'BANESCO': 'Banesco',
-      'BANK_OF_AMERICA': 'Bank of America',
-      'BINANCE': 'Binance',
-      'WALLET': 'Wallet',
-      'CASH_BOX': 'Cash Box',
-    };
-    return labels[platform] || platform;
+    return platformLabel(platform);
   }
 
   private getMethodLabel(method: string): string {
-    const labels: Record<string, string> = {
-      'DEBIT_CARD': 'Debit Card',
-      'PAGO_MOVIL': 'Pago Móvil',
-      'ZELLE': 'Zelle',
-      'CREDIT_CARD': 'Credit Card',
-      'BINANCE_PAY': 'Binance Pay',
-      'DEPOSIT': 'Deposit',
-      'WITHDRAWAL': 'Withdrawal',
-    };
-    return labels[method] || method;
+    return methodLabel(method);
   }
 
   private getTypeIcon(type: string): string {
-    const icons: Record<string, string> = {
-      'EXPENSE': '💸',
-      'INCOME': '💰',
-    };
-    return icons[type] || '💵';
+    return typeIcon(type);
   }
 
   private getTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-      'EXPENSE': 'Expense',
-      'INCOME': 'Income',
-    };
-    return labels[type] || type;
+    return typeLabel(type);
   }
 }

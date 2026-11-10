@@ -538,6 +538,21 @@ export class TransactionsService {
     }
   }
 
+  /**
+   * What a platform's method is when the user never said. Cash accounts have no
+   * method to choose from, and every other account is used with its card far
+   * more often than anything else — the other methods arrive through their own
+   * flows (Pago Móvil photos, transfers), which always state the method.
+   */
+  getDefaultPaymentMethod(platform: TransactionPlatform): PaymentMethod | undefined {
+    if (platform === TransactionPlatform.CASH_BOX || platform === TransactionPlatform.WALLET) {
+      return PaymentMethod.CASH;
+    }
+
+    const available = this.getAvailablePaymentMethods(platform);
+    return available.includes(PaymentMethod.DEBIT_CARD) ? PaymentMethod.DEBIT_CARD : undefined;
+  }
+
   async getUnregisteredExpenditure(): Promise<{ currency: string; net: number }[]> {
     const transactions = await this.prisma.transaction.findMany({
       where: {
@@ -571,6 +586,10 @@ export class TransactionsService {
     description: string;
     method?: PaymentMethod;
     date?: Date;
+    /** The amount came from memory, not from a receipt. */
+    isEstimate?: boolean;
+    /** The sentence it was recalled from, kept so the figure can be traced back. */
+    sourceNote?: string;
   }, options: UpdateTransactionOptions = {}): Promise<Transaction> {
     // Generate unique transaction ID for manual entries
     const timestamp = Date.now();
@@ -581,11 +600,7 @@ export class TransactionsService {
     // Dates are always stored in UTC; display conversion to America/Caracas happens at presentation layer
     const transactionDate = data.date ?? new Date();
 
-    // Determine payment method: CASH for CASH_BOX and WALLET platforms
-    let paymentMethod = data.method;
-    if (!paymentMethod && (data.platform === TransactionPlatform.CASH_BOX || data.platform === TransactionPlatform.WALLET)) {
-      paymentMethod = PaymentMethod.CASH;
-    }
+    const paymentMethod = data.method ?? this.getDefaultPaymentMethod(data.platform);
 
     const transaction = await this.prisma.transaction.create({
       data: {
@@ -597,6 +612,8 @@ export class TransactionsService {
         method: paymentMethod || null,
         type: data.type,
         description: data.description,
+        isEstimate: data.isEstimate ?? false,
+        sourceNote: data.sourceNote ?? null,
         status: TransactionStatus.REVIEWED, // Manual entries go to REVIEWED status
       },
     });

@@ -14,6 +14,8 @@ import { TelegramExpensesUpdate } from './expenses/telegram-expenses.update';
 import { TelegramBaseHandler } from './telegram-base.handler';
 import { TelegramConvertUpdate } from './exchanges/convert/telegram-convert.update';
 import { TelegramBookkeepingUpdate } from './bookkeeping/telegram-bookkeeping.update';
+import { TelegramRecallUpdate } from './recall/telegram-recall.update';
+import { TelegramBugsUpdate } from './bugs/telegram-bugs.update';
 import { TelegramEquityUpdate } from './equity/telegram-equity.update';
 import { TelegramSettingsUpdate } from './settings/telegram-settings.update';
 import { TelegramTransferUpdate } from './transfers/telegram-transfer.update';
@@ -41,6 +43,8 @@ export class TelegramUpdate {
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
     private readonly reconcileUpdate: TelegramReconcileUpdate,
     private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
+    private readonly recallUpdate: TelegramRecallUpdate,
+    private readonly bugsUpdate: TelegramBugsUpdate,
   ) { }
 
   @Command('start')
@@ -77,10 +81,13 @@ export class TelegramUpdate {
       '/reconcile - Send a statement screenshot and see what is missing\n' +
       '/register - Register reviewed items\n' +
       '/add_transaction - Add a transaction with the wizard (or just describe it in any message)\n' +
+      '/recall - Register transactions you forgot, several in one message from memory\n' +
       '/transfer - Register a transfer between accounts (describe it in one message)\n' +
       '/pago_movil - Parse Pago Móvil payment data\n' +
       '/done - Close the day once the ledger is up to date (saves every balance)\n' +
       '/checkin - Are all your expenses registered? (also sent every night at 9 PM)\n' +
+      '/bug [description] - Report a bug so it is not forgotten\n' +
+      '/bugs - List the bugs still open\n' +
       '/settings - Update settings\n' +
       '/sync - Sync data from Banesco, BofA and Binance\n' +
       '/help - Show this help'
@@ -97,6 +104,24 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleCheckIn(@Ctx() ctx: SessionContext) {
     await this.bookkeepingUpdate.handleCheckIn(ctx);
+  }
+
+  @Command('recall')
+  @UseGuards(TelegramAuthGuard)
+  async handleRecall(@Ctx() ctx: SessionContext) {
+    await this.recallUpdate.handleRecall(ctx);
+  }
+
+  @Command('bug')
+  @UseGuards(TelegramAuthGuard)
+  async handleBug(@Ctx() ctx: SessionContext) {
+    await this.bugsUpdate.handleBug(ctx);
+  }
+
+  @Command('bugs')
+  @UseGuards(TelegramAuthGuard)
+  async handleBugs(@Ctx() ctx: SessionContext) {
+    await this.bugsUpdate.handleBugs(ctx);
   }
 
   @Command('add_transaction')

@@ -9,6 +9,12 @@ import { DateParserService } from '../../common/date-parser.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TransactionPlatform } from '../../transactions/transaction.types';
 import { TransactionExtractionService, TransactionDraft } from './transaction-extraction.service';
+import {
+  methodLabel,
+  platformLabel,
+  typeIcon,
+  typeLabel,
+} from '../../transactions/transaction-labels';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TransactionManualCreatedEvent } from '../../transactions/events/transaction-manual-created.event';
 
@@ -139,15 +145,14 @@ export class TelegramManualTransactionUpdate {
       ctx.session.manualTransactionCurrency = draft.currency;
     }
     if (ctx.session.manualTransactionPlatform) {
-      const allowed = this.transactionsService.getAvailablePaymentMethods(
-        ctx.session.manualTransactionPlatform as TransactionPlatform,
-      );
+      const platform = ctx.session.manualTransactionPlatform as TransactionPlatform;
+      const allowed = this.transactionsService.getAvailablePaymentMethods(platform);
       if (draft.method && allowed.includes(draft.method as any)) {
         ctx.session.manualTransactionMethod = draft.method;
-      } else if (!draft.method && allowed.includes('DEBIT_CARD' as any)) {
-        // Default to DEBIT_CARD when not stated — other methods (Pago Móvil, Electronic Transfer)
-        // are handled via the photo flow, so manual entries are almost always card purchases.
-        ctx.session.manualTransactionMethod = 'DEBIT_CARD';
+      } else if (!draft.method) {
+        // Nothing stated: the account's usual method, so the wizard has no reason to ask
+        ctx.session.manualTransactionMethod =
+          this.transactionsService.getDefaultPaymentMethod(platform);
       }
     }
     if (draft.amount) ctx.session.manualTransactionAmount = draft.amount;
@@ -489,10 +494,9 @@ export class TelegramManualTransactionUpdate {
     const amount = Number(transaction.amount);
     const usdEquivalent = internalRate ? ` (USD ${(amount / internalRate).toFixed(2)})` : '';
 
-    const typeIcons: Record<string, string> = { 'INCOME': '💰', 'EXPENSE': '💸' };
-    const typeIcon = typeIcons[transaction.type] || '💸';
-    const platformLabel = this.getPlatformLabel(transaction.platform);
-    const methodLabel = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
+    const icon = typeIcon(transaction.type);
+    const platform = this.getPlatformLabel(transaction.platform);
+    const method = transaction.method ? this.getMethodLabel(transaction.method) : 'N/A';
     const dateStr = new Date(transaction.date).toLocaleString('en-US', {
       timeZone: 'America/Caracas',
       year: 'numeric',
@@ -504,10 +508,10 @@ export class TelegramManualTransactionUpdate {
 
     const successMessage =
       `✅ <b>Transaction Created!</b>\n\n` +
-      `${typeIcon} <b>${description}</b>\n\n` +
+      `${icon} <b>${description}</b>\n\n` +
       `Amount: ${transaction.currency} ${amount.toFixed(2)}${usdEquivalent}\n` +
-      `Account: ${platformLabel}\n` +
-      `Method: ${methodLabel}\n` +
+      `Account: ${platform}\n` +
+      `Method: ${method}\n` +
       `Date: ${dateStr}\n` +
       `Status: Reviewed (ready to register)`;
 
@@ -551,11 +555,8 @@ export class TelegramManualTransactionUpdate {
     const parts: string[] = [];
 
     if (ctx.session.manualTransactionType) {
-      const typeLabels: Record<string, string> = {
-        'INCOME': '💰 Income',
-        'EXPENSE': '💸 Expense',
-      };
-      parts.push(`Type: ${typeLabels[ctx.session.manualTransactionType] || ctx.session.manualTransactionType}`);
+      const type = ctx.session.manualTransactionType;
+      parts.push(`Type: ${typeIcon(type)} ${typeLabel(type)}`);
     }
 
     if (ctx.session.manualTransactionPlatform) {
@@ -586,27 +587,10 @@ export class TelegramManualTransactionUpdate {
   }
 
   private getPlatformLabel(platform: string): string {
-    const labels: Record<string, string> = {
-      'BANESCO': 'Banesco',
-      'BANK_OF_AMERICA': 'Bank of America',
-      'BINANCE': 'Binance',
-      'WALLET': 'Wallet',
-      'CASH_BOX': 'Cash Box',
-    };
-    return labels[platform] || platform;
+    return platformLabel(platform);
   }
 
   private getMethodLabel(method: string): string {
-    const labels: Record<string, string> = {
-      'DEBIT_CARD': 'Debit Card',
-      'PAGO_MOVIL': 'Pago Móvil',
-      'ELECTRONIC_TRANSFER': 'Electronic Transfer',
-      'ZELLE': 'Zelle',
-      'CREDIT_CARD': 'Credit Card',
-      'BINANCE_PAY': 'Binance Pay',
-      'DEPOSIT': 'Deposit',
-      'WITHDRAWAL': 'Withdrawal',
-    };
-    return labels[method] || method;
+    return methodLabel(method);
   }
 }

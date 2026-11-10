@@ -1,6 +1,7 @@
 import { Context } from 'telegraf';
 import { PaymentMethod } from '../transactions/transaction.types';
 import { PagoMovilData } from '../transactions/ocr/parsers/pago-movil-llm-parser.service';
+import { RecalledDraft } from './recall/recall-extraction.service';
 
 export interface StatusResponse {
   newBanescoTransactions: number;
@@ -10,6 +11,23 @@ export interface StatusResponse {
 export interface BotCommand {
   command: string;
   description: string;
+}
+
+/**
+ * A recollection being confirmed entry by entry. It lives in memory like every
+ * other flow, so a restart drops the queue and the recollection is sent again.
+ */
+export interface RecallSession {
+  /** The /recall question, so only its reply is read as a recollection. */
+  waitingPromptMessageId?: number;
+  /** The question asking for a corrected amount for the entry on screen. */
+  amountPromptMessageId?: number;
+  /** The sentence the entries came from, stored with each saved transaction. */
+  sourceText?: string;
+  drafts?: RecalledDraft[];
+  index?: number;
+  saved?: number;
+  skipped?: number;
 }
 
 export interface ReviewSession {
@@ -102,6 +120,10 @@ export interface ReviewSession {
   // Bookkeeping: the note a /done or /checkin question is waiting for. Only a
   // reply to that exact question counts, so an expense typed meanwhile stays
   // a freeform entry.
+  // Recall: several forgotten transactions remembered in one message
+  recall?: RecallSession;
+  /** The /bug question. Reports carry figures, so only its reply is filed. */
+  bugReportReply?: { promptMessageId: number };
   bookkeepingReply?: {
     kind: 'closing_note' | 'check_in_note';
     id: number;
@@ -131,10 +153,13 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'reconcile', description: 'Check a bank statement against the bot' },
   { command: 'register', description: 'Register reviewed items' },
   { command: 'add_transaction', description: 'Add a transaction with the wizard' },
+  { command: 'recall', description: 'Register transactions you forgot, from memory' },
   { command: 'transfer', description: 'Register a transfer between accounts' },
   { command: 'pago_movil', description: 'Parse Pago Móvil payment data' },
   { command: 'done', description: 'Close the day: the ledger is up to date' },
   { command: 'checkin', description: 'Are all your expenses registered?' },
+  { command: 'bug', description: 'Report a bug so it is not forgotten' },
+  { command: 'bugs', description: 'List the bugs still open' },
   { command: 'settings', description: 'Update settings' },
   { command: 'sync', description: 'Sync data from sources' },
   { command: 'help', description: 'Show help' },

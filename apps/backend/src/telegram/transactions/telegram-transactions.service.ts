@@ -4,6 +4,12 @@ import { TransactionsService } from '../../transactions/transactions.service';
 import { ExchangeRateService } from '../../exchanges/exchange-rate.service';
 import { TelegramTransactionsPresenter } from './telegram-transactions.presenter';
 import { TransactionStatus, TransactionType } from '../../transactions/transaction.types';
+import {
+  methodLabel,
+  platformLabel,
+  typeIcon,
+  typeLabel,
+} from '../../transactions/transaction-labels';
 
 @Injectable()
 export class TelegramTransactionsService {
@@ -177,31 +183,10 @@ export class TelegramTransactionsService {
       amountText = `USD ${amount}`;
     }
 
-    // Type icon and label
-    const typeIcons: Record<string, string> = { 'EXPENSE': '💸', 'INCOME': '💰' };
-    const typeLabels: Record<string, string> = { 'EXPENSE': 'Expense', 'INCOME': 'Income' };
-    const typeIcon = typeIcons[transaction.type] || '💵';
-    const typeLabel = typeLabels[transaction.type] || transaction.type;
-
-    // Platform and method labels
-    const platformLabels: Record<string, string> = {
-      'BANESCO': 'Banesco',
-      'BANK_OF_AMERICA': 'Bank of America',
-      'BINANCE': 'Binance',
-      'WALLET': 'Wallet',
-      'CASH_BOX': 'Cash Box',
-    };
-    const methodLabels: Record<string, string> = {
-      'DEBIT_CARD': 'Debit Card',
-      'PAGO_MOVIL': 'Pago Móvil',
-      'ZELLE': 'Zelle',
-      'CREDIT_CARD': 'Credit Card',
-      'BINANCE_PAY': 'Binance Pay',
-      'DEPOSIT': 'Deposit',
-      'WITHDRAWAL': 'Withdrawal',
-    };
-    const platformLabel = platformLabels[transaction.platform] || transaction.platform;
-    const methodLabel = transaction.method ? methodLabels[transaction.method] || transaction.method : null;
+    const icon = typeIcon(transaction.type);
+    const type = typeLabel(transaction.type);
+    const platform = platformLabel(transaction.platform);
+    const method = transaction.method ? methodLabel(transaction.method) : null;
 
     // Status icon and label
     const statusIcons: Record<string, string> = {
@@ -221,12 +206,12 @@ export class TelegramTransactionsService {
 
     return (
       `ID: ${transaction.id}\n` +
-      `<b>${typeIcon} ${transaction.description || 'Transaction'}</b>\n\n` +
+      `<b>${icon} ${transaction.description || 'Transaction'}</b>\n\n` +
       `${date}\n` +
       `Time: ${time}\n\n` +
       amountText + `\n\n` +
-      `Type: ${typeIcon} ${typeLabel}\n` +
-      `Platform: ${platformLabel}${methodLabel ? ` (${methodLabel})` : ''}\n` +
+      `Type: ${icon} ${type}\n` +
+      `Platform: ${platform}${method ? ` (${method})` : ''}\n` +
       `Status: ${statusIcon} ${statusLabel}`
     );
   }
