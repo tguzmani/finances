@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
+import { setTimeout as delay } from 'node:timers/promises';
 import { z, ZodType } from 'zod';
 
 export interface OpenRouterMessage {
@@ -38,6 +39,7 @@ export interface OpenRouterCredits {
 
 /** A response that came back fine over HTTP but cannot be used: truncated, unparseable or off-schema */
 class UnusableResponseError extends Error {}
+class RateLimitedResponseError extends Error {}
 
 @Injectable()
 export class OpenRouterService {
@@ -116,7 +118,7 @@ export class OpenRouterService {
   async chatStructured<T>(
     messages: OpenRouterMessage[],
     schema: ZodType<T>,
-    options: OpenRouterOptions & { schemaName?: string } = {},
+    options: OpenRouterOptions & { schemaName?: string; rateLimitRetryDelayMs?: number } = {},
   ): Promise<T> {
     if (!this.apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is not set');
@@ -142,6 +144,13 @@ export class OpenRouterService {
           maxTokens: options.maxTokens ?? 500,
         });
       } catch (error) {
+        const retryDelay = options.rateLimitRetryDelayMs;
+        if (error instanceof RateLimitedResponseError && retryDelay && attempt < this.STRUCTURED_ATTEMPTS) {
+          this.logger.warn(`OpenRouter rate limited (attempt ${attempt}/${this.STRUCTURED_ATTEMPTS})`);
+          await delay(retryDelay * attempt);
+          continue;
+        }
+
         if (!(error instanceof UnusableResponseError)) {
           throw error;
         }
@@ -233,9 +242,9 @@ export class OpenRouterService {
         this.logger.error(
           `OpenRouter API error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
         );
-        throw new Error(
-          `OpenRouter API error: ${error.response?.data?.error?.message || error.message}`,
-        );
+        const message = `OpenRouter API error: ${error.response?.data?.error?.message || error.message}`;
+        if (error.response?.status === 429) throw new RateLimitedResponseError(message);
+        throw new Error(message);
       }
       throw error;
     }

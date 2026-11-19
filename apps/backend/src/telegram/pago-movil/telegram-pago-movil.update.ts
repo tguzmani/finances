@@ -51,10 +51,10 @@ export class TelegramPagoMovilUpdate {
       const photo = ctx.message.photo[ctx.message.photo.length - 1];
       const caption = 'caption' in ctx.message ? ctx.message.caption : undefined;
 
-      await ctx.reply('📸 Processing image...');
-
-      const imageBuffer = await this.downloadImage(photo.file_id, ctx);
-      const data = await this.pagoMovilService.parseFromImage(imageBuffer, caption);
+      const data = await this.baseHandler.withTyping(ctx, async () => {
+        const imageBuffer = await this.downloadImage(photo.file_id, ctx);
+        return this.pagoMovilService.parseFromImage(imageBuffer, caption);
+      });
 
       await this.sendResult(ctx, data);
     } catch (error) {
@@ -68,12 +68,14 @@ export class TelegramPagoMovilUpdate {
 
   async handleTextInput(ctx: SessionContext): Promise<void> {
     if (!('text' in ctx.message)) return;
+    const { text } = ctx.message;
 
     await this.dismissPromptMessage(ctx);
 
     try {
-      await ctx.reply('🔍 Parsing payment data...');
-      const data = await this.pagoMovilService.parseFromText(ctx.message.text);
+      const data = await this.baseHandler.withTyping(ctx, () =>
+        this.pagoMovilService.parseFromText(text),
+      );
       await this.sendResult(ctx, data);
     } catch (error) {
       this.logger.error(`Pago Móvil text handling failed: ${error?.message}`);

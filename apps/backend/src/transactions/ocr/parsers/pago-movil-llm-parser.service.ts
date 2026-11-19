@@ -1,15 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { z } from 'zod';
 import { OpenRouterService } from '../../../common/open-router.service';
 import { formatBankList } from '../../../common/venezuelan-banks';
 import { AMOUNT_FORMAT_RULES } from '../../../common/amount-format.rules';
 
-export interface PagoMovilData {
-  bankCode: string | null;
-  bankName: string | null;
-  amount: number | null;
-  phone: string | null;
-  idDocument: string | null;
-}
+const pagoMovilSchema = z.object({
+  bankCode: z.string().nullable(),
+  bankName: z.string().nullable(),
+  amount: z.number().nullable(),
+  phone: z.string().nullable(),
+  idDocument: z.string().nullable(),
+});
+
+export type PagoMovilData = z.infer<typeof pagoMovilSchema>;
 
 const SYSTEM_PROMPT = `You are a Pago Móvil data parser. Extract payment transfer data from text (which may come from OCR or user input).
 
@@ -61,33 +64,19 @@ export class PagoMovilLlmParserService {
   async parse(text: string, additionalContext?: string): Promise<PagoMovilData> {
     this.logger.log('Parsing pago móvil data with LLM...');
 
-    try {
-      let userMessage = `Text to parse:\n"""\n${text}\n"""`;
+    let userMessage = `Text to parse:\n"""\n${text}\n"""`;
 
-      if (additionalContext) {
-        userMessage += `\n\nAdditional context:\n"""\n${additionalContext}\n"""`;
-      }
-
-      const result = await this.openRouter.chatJson<PagoMovilData>(
-        [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userMessage },
-        ],
-        { temperature: 0.1, maxTokens: 300 },
-      );
-
-      this.logger.log(`LLM parsed pago móvil data: ${JSON.stringify(result)}`);
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Pago Móvil LLM parsing failed: ${error.message}`);
-      return {
-        bankCode: null,
-        bankName: null,
-        amount: null,
-        phone: null,
-        idDocument: null,
-      };
+    if (additionalContext) {
+      userMessage += `\n\nAdditional context:\n"""\n${additionalContext}\n"""`;
     }
+
+    return this.openRouter.chatStructured(
+      [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
+      pagoMovilSchema,
+      { temperature: 0.1, maxTokens: 300, schemaName: 'pago_movil', rateLimitRetryDelayMs: 5000 },
+    );
   }
 }
