@@ -64,9 +64,6 @@ import { BugReportsModule } from '../bug-reports/bug-reports.module';
 import { TelegramBugsUpdate } from './bugs/telegram-bugs.update';
 import { TelegramBugsPresenter } from './bugs/telegram-bugs.presenter';
 import { TelegramBugsNotifier } from './bugs/telegram-bugs.notifier';
-import { TelegramRecallUpdate } from './recall/telegram-recall.update';
-import { TelegramRecallPresenter } from './recall/telegram-recall.presenter';
-import { RecallExtractionService } from './recall/recall-extraction.service';
 import { TelegramBookkeepingUpdate } from './bookkeeping/telegram-bookkeeping.update';
 import { TelegramBookkeepingService } from './bookkeeping/telegram-bookkeeping.service';
 import { TelegramBookkeepingPresenter } from './bookkeeping/telegram-bookkeeping.presenter';
@@ -142,9 +139,6 @@ import * as https from 'https';
     TelegramBugsUpdate,
     TelegramBugsPresenter,
     TelegramBugsNotifier,
-    TelegramRecallUpdate,
-    TelegramRecallPresenter,
-    RecallExtractionService,
     TelegramAuthGuard,
     TelegramBotInit,
     TelegramExchangesService,

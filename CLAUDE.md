@@ -19,7 +19,6 @@
 ## Ubiquitous Language
 
 - **Freeform entry** — plain text sent to the bot without invoking a command. The LLM reads it and drafts a transaction from it (`handleManualFreeform`). This is the bot's default action: anything typed that is not a command and that no active flow is waiting for lands here.
-- **Recalled entry** — a transaction remembered days later and registered through `/recall`, which reads several of them out of one message (`RecallExtractionService`). An amount the user hedged is stored with `isEstimate` set and the original sentence in `sourceNote`, so the figure is in the ledger today and still traceable when the receipt turns up. Money a split target handed back for one of those purchases is that purchase's split marker, never an entry of its own.
 - **Command flow** — anything started with a `/command` that then waits for input (`/convert`, `/transfer`, `/pago_movil`, `/add_transaction`). While a command flow is waiting, its session flag routes the next message to it and freeform entry does not run.
 
 Session state lives in memory, so a restart drops any command flow that was mid-way and the next message is read as a freeform entry. Re-invoking the command is the recovery; nothing persists it on purpose.

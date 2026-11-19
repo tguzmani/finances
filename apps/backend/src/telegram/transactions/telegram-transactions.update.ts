@@ -25,7 +25,6 @@ import { TelegramTransferUpdate } from '../transfers/telegram-transfer.update';
 import { TelegramPagoMovilUpdate } from '../pago-movil/telegram-pago-movil.update';
 import { TelegramReconcileUpdate } from '../reconcile/telegram-reconcile.update';
 import { TelegramBookkeepingUpdate } from '../bookkeeping/telegram-bookkeeping.update';
-import { TelegramRecallUpdate } from '../recall/telegram-recall.update';
 import { TelegramBugsUpdate } from '../bugs/telegram-bugs.update';
 import { DateParserService } from '../../common/date-parser.service';
 import { B2StorageService } from '../../common/b2-storage.service';
@@ -63,7 +62,6 @@ export class TelegramTransactionsUpdate {
     private readonly pagoMovilUpdate: TelegramPagoMovilUpdate,
     private readonly googleSheetConfigService: GoogleSheetConfigService,
     private readonly bookkeepingUpdate: TelegramBookkeepingUpdate,
-    private readonly recallUpdate: TelegramRecallUpdate,
     private readonly bugsUpdate: TelegramBugsUpdate,
     private readonly reconcileUpdate: TelegramReconcileUpdate,
   ) { }
@@ -650,12 +648,6 @@ export class TelegramTransactionsUpdate {
     // they are matched by the question they answer and nothing else.
     if (this.bugsUpdate.isAwaitedReply(ctx)) {
       await this.bugsUpdate.handleReply(ctx);
-      return;
-    }
-
-    // A recollection, or a corrected amount for the entry on screen
-    if (this.recallUpdate.isAwaitedReply(ctx)) {
-      await this.recallUpdate.handleReply(ctx);
       return;
     }
 

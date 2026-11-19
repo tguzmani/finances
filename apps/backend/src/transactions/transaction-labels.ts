@@ -1,7 +1,6 @@
 /**
  * How a transaction's enums are written for the user. Every flow that shows a
- * transaction reads them from here, so a name is spelled the same in the wizard,
- * in a recalled entry and in the review list.
+ * transaction reads them from here, so the wizard and review list use the same labels.
  */
 
 const PLATFORM_LABELS: Record<string, string> = {

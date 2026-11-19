@@ -3,8 +3,7 @@ import { SPLIT_TARGETS } from '../../journal-entry/journal-entry.constants';
 
 /**
  * The shape every LLM-drafted transaction comes back in, and the prompt text
- * that describes it. One message and a recalled batch read the same fields by
- * the same rules, so they live here instead of in each extraction service.
+ * that describes it.
  */
 export const TransactionDraftSchema = z.object({
   type: z.enum(['INCOME', 'EXPENSE']).nullable(),
