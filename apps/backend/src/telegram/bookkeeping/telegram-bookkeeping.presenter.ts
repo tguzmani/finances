@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InlineKeyboardMarkup } from 'telegraf/types';
-import { ClosingWithBalances, OpenedCheckIn } from '../../bookkeeping/bookkeeping.service';
-import { TelegramAccountsPresenter } from '../accounts/telegram-accounts.presenter';
+import { ClosingWithBalances } from '../../bookkeeping/bookkeeping.service';
 
 const ACCOUNT_LABELS: Record<string, string> = {
   BANESCO: '🏦 Banesco',
@@ -13,55 +12,6 @@ const ACCOUNT_LABELS: Record<string, string> = {
 
 @Injectable()
 export class TelegramBookkeepingPresenter {
-  constructor(private readonly accountsPresenter: TelegramAccountsPresenter) {}
-
-  formatCheckIn({ banesco, lastClosing }: OpenedCheckIn): string {
-    const lastClosingText = lastClosing
-      ? this.formatDateTime(lastClosing.closedAt)
-      : 'never';
-
-    return (
-      '🌙 <b>Daily check-in</b>\n\n' +
-      this.accountsPresenter.formatBanescoBalance(banesco) + '\n\n' +
-      `📒 Last closing: ${lastClosingText}\n\n` +
-      'Are all your expenses registered? Is Banesco up to date?'
-    );
-  }
-
-  checkInKeyboard(checkInId: number): InlineKeyboardMarkup {
-    return {
-      inline_keyboard: [[
-        { text: 'Yes', callback_data: `ci_ans:${checkInId}:yes` },
-        { text: 'No', callback_data: `ci_ans:${checkInId}:no` },
-      ]],
-    };
-  }
-
-  initiativeKeyboard(checkInId: number): InlineKeyboardMarkup {
-    return {
-      inline_keyboard: [[
-        { text: 'On my own', callback_data: `ci_ini:${checkInId}:OWN` },
-        { text: 'The reminder', callback_data: `ci_ini:${checkInId}:REMINDER` },
-      ]],
-    };
-  }
-
-  missReasonKeyboard(checkInId: number): InlineKeyboardMarkup {
-    return {
-      inline_keyboard: [
-        [{ text: 'Forgot about it', callback_data: `ci_miss:${checkInId}:FORGOT` }],
-        [{ text: 'Complex transaction', callback_data: `ci_miss:${checkInId}:COMPLEX_TRANSACTION` }],
-        [{ text: 'Other', callback_data: `ci_miss:${checkInId}:OTHER` }],
-      ],
-    };
-  }
-
-  closeNowKeyboard(checkInId: number): InlineKeyboardMarkup {
-    return {
-      inline_keyboard: [[{ text: '📒 Close now', callback_data: `ci_close:${checkInId}` }]],
-    };
-  }
-
   /** The balances a closing just saved, as estimated, flagging what is still pending. */
   formatClosing(closing: ClosingWithBalances): string {
     const lines = closing.balances.map((balance) => {
@@ -92,16 +42,5 @@ export class TelegramBookkeepingPresenter {
     return {
       inline_keyboard: [[{ text: '⏭ Skip', callback_data: `cl_skip:${closingId}` }]],
     };
-  }
-
-  private formatDateTime(date: Date): string {
-    return date.toLocaleString('en-US', {
-      timeZone: 'America/Caracas',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
   }
 }

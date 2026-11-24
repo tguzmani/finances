@@ -82,7 +82,6 @@ export class TelegramUpdate {
       '/transfer - Register a transfer between accounts (describe it in one message)\n' +
       '/pago_movil - Parse Pago Móvil payment data\n' +
       '/done - Close the day once the ledger is up to date (saves every balance)\n' +
-      '/checkin - Are all your expenses registered? (also sent every night at 9 PM)\n' +
       '/bug [description] - Report a bug so it is not forgotten\n' +
       '/bugs - List the bugs still open\n' +
       '/settings - Update settings\n' +
@@ -95,12 +94,6 @@ export class TelegramUpdate {
   @UseGuards(TelegramAuthGuard)
   async handleDone(@Ctx() ctx: SessionContext) {
     await this.bookkeepingUpdate.handleDone(ctx);
-  }
-
-  @Command('checkin')
-  @UseGuards(TelegramAuthGuard)
-  async handleCheckIn(@Ctx() ctx: SessionContext) {
-    await this.bookkeepingUpdate.handleCheckIn(ctx);
   }
 
   @Command('bug')

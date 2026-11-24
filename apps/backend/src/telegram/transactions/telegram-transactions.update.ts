@@ -637,7 +637,7 @@ export class TelegramTransactionsUpdate {
       return;
     }
 
-    // A reply to a /done or /checkin note question. Matched by the message it
+    // A reply to a /done note question. Matched by the message it
     // replies to, so it never swallows text meant for anything else.
     if (this.bookkeepingUpdate.isAwaitedReply(ctx)) {
       await this.bookkeepingUpdate.handleReply(ctx);

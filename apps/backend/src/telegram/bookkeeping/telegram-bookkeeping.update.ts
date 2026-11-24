@@ -1,6 +1,6 @@
 import { Logger, UseGuards } from '@nestjs/common';
 import { Action, Ctx, Update } from 'nestjs-telegraf';
-import { CheckInInitiative, CheckInMissReason, CheckInTrigger, ClosingOutcome } from '@prisma/client';
+import { ClosingOutcome } from '@prisma/client';
 import { TelegramAuthGuard } from '../guards/telegram-auth.guard';
 import { SessionContext } from '../telegram.types';
 import { TelegramBaseHandler } from '../telegram-base.handler';
@@ -8,11 +8,6 @@ import { BookkeepingService } from '../../bookkeeping/bookkeeping.service';
 import { TelegramBookkeepingService } from './telegram-bookkeeping.service';
 import { TelegramBookkeepingPresenter } from './telegram-bookkeeping.presenter';
 
-/**
- * /done closes the day once the ledger is up to date; /checkin (also sent every
- * night) asks whether it is. Every button carries the row id, so a tap still
- * lands after a restart. Only the typed notes depend on the session.
- */
 @Update()
 export class TelegramBookkeepingUpdate {
   private readonly logger = new Logger(TelegramBookkeepingUpdate.name);
@@ -27,85 +22,6 @@ export class TelegramBookkeepingUpdate {
   async handleDone(ctx: SessionContext): Promise<void> {
     this.baseHandler.clearSession(ctx);
     await this.startClosing(ctx);
-  }
-
-  async handleCheckIn(ctx: SessionContext): Promise<void> {
-    this.baseHandler.clearSession(ctx);
-
-    try {
-      const { text, keyboard } = await this.baseHandler.withTyping(ctx, () =>
-        this.telegramBookkeepingService.openCheckIn(CheckInTrigger.MANUAL),
-      );
-      await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
-    } catch (error) {
-      this.logger.error(`Check-in failed: ${error.message}`);
-      await ctx.reply('❌ Error opening the check-in. Please try again.');
-    }
-  }
-
-  @Action(/^ci_ans:(\d+):(yes|no)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleCheckInAnswer(@Ctx() ctx: SessionContext) {
-    const [checkInId, answer] = this.callbackArgs(ctx);
-    await this.decide(ctx, async () => {
-      if (answer === 'no') {
-        await this.bookkeepingService.answerCheckIn(checkInId, false);
-        await ctx.reply('What got in the way?', {
-          reply_markup: this.presenter.missReasonKeyboard(checkInId),
-        });
-        return;
-      }
-
-      const { closedToday } = await this.bookkeepingService.answerCheckIn(checkInId, true);
-      if (closedToday) {
-        await ctx.reply('👍 Already closed today, on your own.');
-        return;
-      }
-
-      await ctx.reply('Did you do it on your own, or did this reminder push you?', {
-        reply_markup: this.presenter.initiativeKeyboard(checkInId),
-      });
-    });
-  }
-
-  @Action(/^ci_ini:(\d+):(OWN|REMINDER)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleInitiative(@Ctx() ctx: SessionContext) {
-    const [checkInId, initiative] = this.callbackArgs(ctx);
-    await this.decide(ctx, async () => {
-      await this.bookkeepingService.setCheckInInitiative(checkInId, initiative as CheckInInitiative);
-      await ctx.reply('Close the day now? It saves a snapshot of every balance.', {
-        reply_markup: this.presenter.closeNowKeyboard(checkInId),
-      });
-    });
-  }
-
-  @Action(/^ci_miss:(\d+):(FORGOT|COMPLEX_TRANSACTION|OTHER)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleMissReason(@Ctx() ctx: SessionContext) {
-    const [checkInId, reason] = this.callbackArgs(ctx);
-    await this.decide(ctx, async () => {
-      await this.bookkeepingService.setCheckInMissReason(checkInId, reason as CheckInMissReason);
-
-      if (reason !== CheckInMissReason.OTHER) {
-        await ctx.reply('📝 Noted.');
-        return;
-      }
-
-      const prompt = await this.baseHandler.askForReply(ctx, '✏️ What happened?');
-      ctx.session.bookkeepingReply = {
-        kind: 'check_in_note',
-        id: checkInId,
-        promptMessageId: prompt.message_id,
-      };
-    });
-  }
-
-  @Action(/^ci_close:(\d+)$/)
-  @UseGuards(TelegramAuthGuard)
-  async handleCloseNow(@Ctx() ctx: SessionContext) {
-    const [checkInId] = this.callbackArgs(ctx);
-    await this.decide(ctx, () => this.startClosing(ctx, checkInId));
   }
 
   @Action(/^cl_out:(\d+):(ALL_GOOD|SOME_ISSUES|BAD)$/)
@@ -123,7 +39,6 @@ export class TelegramBookkeepingUpdate {
 
       const prompt = await this.baseHandler.askForReply(ctx, '✏️ Why? Reply here, or tap Skip.');
       ctx.session.bookkeepingReply = {
-        kind: 'closing_note',
         id: closingId,
         promptMessageId: prompt.message_id,
         skipMessageId: ctx.callbackQuery?.message?.message_id,
@@ -159,12 +74,6 @@ export class TelegramBookkeepingUpdate {
     ctx.session.bookkeepingReply = undefined;
 
     try {
-      if (awaited.kind === 'check_in_note') {
-        await this.bookkeepingService.setCheckInNote(awaited.id, note);
-        await ctx.reply('📝 Noted.');
-        return;
-      }
-
       await this.bookkeepingService.setClosingNote(awaited.id, note);
       if (awaited.skipMessageId && ctx.chat) {
         await ctx.telegram
@@ -178,15 +87,11 @@ export class TelegramBookkeepingUpdate {
     }
   }
 
-  private async startClosing(ctx: SessionContext, checkInId?: number): Promise<void> {
+  private async startClosing(ctx: SessionContext): Promise<void> {
     try {
-      const { closing, text, keyboard } = await this.baseHandler.withTyping(ctx, () =>
+      const { text, keyboard } = await this.baseHandler.withTyping(ctx, () =>
         this.telegramBookkeepingService.close(),
       );
-
-      if (checkInId) {
-        await this.bookkeepingService.linkCheckInToClosing(checkInId, closing.id);
-      }
 
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     } catch (error) {

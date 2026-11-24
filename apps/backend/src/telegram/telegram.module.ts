@@ -67,7 +67,6 @@ import { TelegramBugsNotifier } from './bugs/telegram-bugs.notifier';
 import { TelegramBookkeepingUpdate } from './bookkeeping/telegram-bookkeeping.update';
 import { TelegramBookkeepingService } from './bookkeeping/telegram-bookkeeping.service';
 import { TelegramBookkeepingPresenter } from './bookkeeping/telegram-bookkeeping.presenter';
-import { TelegramBookkeepingScheduler } from './bookkeeping/telegram-bookkeeping.scheduler';
 import * as https from 'https';
 
 @Module({
@@ -135,7 +134,6 @@ import * as https from 'https';
     TelegramBookkeepingUpdate,
     TelegramBookkeepingService,
     TelegramBookkeepingPresenter,
-    TelegramBookkeepingScheduler,
     TelegramBugsUpdate,
     TelegramBugsPresenter,
     TelegramBugsNotifier,

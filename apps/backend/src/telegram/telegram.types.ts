@@ -99,13 +99,12 @@ export interface ReviewSession {
   transferDescription?: string;
   /** Set when the transfer started from a detected transaction, to close it after. */
   transferTransactionId?: number;
-  // Bookkeeping: the note a /done or /checkin question is waiting for. Only a
-  // reply to that exact question counts, so an expense typed meanwhile stays
-  // a freeform entry.
   /** The /bug question. Reports carry figures, so only its reply is filed. */
   bugReportReply?: { promptMessageId: number };
+  // Bookkeeping: the note a /done question is waiting for. Only a
+  // reply to that exact question counts, so an expense typed meanwhile stays
+  // a freeform entry.
   bookkeepingReply?: {
-    kind: 'closing_note' | 'check_in_note';
     id: number;
     promptMessageId: number;
     /** The message carrying the Skip button, stripped once the note arrives. */
@@ -136,7 +135,6 @@ export const BOT_COMMANDS: BotCommand[] = [
   { command: 'transfer', description: 'Register a transfer between accounts' },
   { command: 'pago_movil', description: 'Parse Pago Móvil payment data' },
   { command: 'done', description: 'Close the day: the ledger is up to date' },
-  { command: 'checkin', description: 'Are all your expenses registered?' },
   { command: 'bug', description: 'Report a bug so it is not forgotten' },
   { command: 'bugs', description: 'List the bugs still open' },
   { command: 'settings', description: 'Update settings' },
