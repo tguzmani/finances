@@ -41,13 +41,16 @@ export interface OpenRouterCredits {
 class UnusableResponseError extends Error {}
 class RateLimitedResponseError extends Error {}
 
+const DEFAULT_OPENROUTER_MODEL = 'google/gemini-3.1-flash-lite';
+
 @Injectable()
 export class OpenRouterService {
   private readonly logger = new Logger(OpenRouterService.name);
   private readonly API_BASE = 'https://openrouter.ai/api/v1';
   private readonly API_URL = `${this.API_BASE}/chat/completions`;
   private readonly CREDITS_URL = `${this.API_BASE}/credits`;
-  private readonly DEFAULT_MODEL = 'google/gemini-2.5-flash-lite';
+  private readonly model =
+    process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
   private readonly LOW_BALANCE_THRESHOLD = 1.5; // USD
   private readonly STRUCTURED_ATTEMPTS = 3;
   private readonly apiKey: string | undefined;
@@ -67,7 +70,7 @@ export class OpenRouterService {
       throw new Error('OPENROUTER_API_KEY environment variable is not set');
     }
 
-    const model = options.model || this.DEFAULT_MODEL;
+    const model = options.model || this.model;
 
     try {
       this.logger.log(`Sending request to OpenRouter with model: ${model}`);
@@ -124,7 +127,7 @@ export class OpenRouterService {
       throw new Error('OPENROUTER_API_KEY environment variable is not set');
     }
 
-    const model = options.model || this.DEFAULT_MODEL;
+    const model = options.model || this.model;
     const schemaName = options.schemaName || 'response';
     const jsonSchema = z.toJSONSchema(schema, { target: 'draft-7' });
     delete (jsonSchema as any).$schema;
