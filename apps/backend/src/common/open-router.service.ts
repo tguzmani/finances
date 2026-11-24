@@ -107,12 +107,7 @@ export class OpenRouterService {
       return content;
     } catch (error) {
       if (error instanceof AxiosError) {
-        this.logger.error(
-          `OpenRouter API error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
-        );
-        throw new Error(
-          `OpenRouter API error: ${error.response?.data?.error?.message || error.message}`,
-        );
+        throw this.toApiError(error);
       }
       throw error;
     }
@@ -242,15 +237,22 @@ export class OpenRouterService {
       return result.data;
     } catch (error) {
       if (error instanceof AxiosError) {
-        this.logger.error(
-          `OpenRouter API error: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
-        );
-        const message = `OpenRouter API error: ${error.response?.data?.error?.message || error.message}`;
-        if (error.response?.status === 429) throw new RateLimitedResponseError(message);
-        throw new Error(message);
+        throw this.toApiError(error);
       }
       throw error;
     }
+  }
+
+  private toApiError(error: AxiosError<{ error?: { message?: string } }>): Error {
+    const status = error.response?.status;
+    const detail = error.response?.data?.error?.message || error.message;
+    const prefix = status ? `OpenRouter HTTP ${status}` : 'OpenRouter request failed';
+    const message = status === 429
+      ? `${prefix} (rate limited): ${detail}`
+      : `${prefix}: ${detail}`;
+
+    this.logger.error(message);
+    return status === 429 ? new RateLimitedResponseError(message) : new Error(message);
   }
 
   async chatJson<T>(

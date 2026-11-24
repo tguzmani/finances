@@ -113,9 +113,10 @@ export class TelegramManualTransactionUpdate {
     try {
       draft = await this.baseHandler.withTyping(ctx, () => this.extractionService.extract(text));
     } catch (error) {
-      this.logger.error(`Extraction failed: ${error.message}`);
+      const reason = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Extraction failed: ${reason}`);
       await ctx.reply(
-        '⚠️ Could not understand your message. Please try again or tap the wizard button.',
+        `⚠️ Transaction extraction failed: ${reason.slice(0, 3000)}\n\nPlease try again or tap the wizard button.`,
         {
           reply_markup: {
             inline_keyboard: [
