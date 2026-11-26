@@ -24,10 +24,18 @@ export class ExchangesBcvService {
     EUR: '.from-blue-50.to-indigo-50 .text-3xl.font-bold.text-slate-800.mb-2',
   };
 
-  private parseBcvValue(text: string): number | null {
-    const cleaned = text.replace(',', '.').trim();
-    const value = parseFloat(cleaned);
-    return isNaN(value) ? null : value;
+  private parseRate(normalized: string, currency: Currency): number | null {
+    const value = Number(normalized);
+    if (!Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+
+    // Apply the EUR minimum at the same precision used by the rate history.
+    if (currency === 'EUR' && Math.round(value * 100) / 100 <= 1000) {
+      return null;
+    }
+
+    return value;
   }
 
   private async fetchFromBcv(currency: Currency): Promise<number | null> {
@@ -52,7 +60,10 @@ export class ExchangesBcvService {
       return null;
     }
 
-    const value = this.parseBcvValue(elementText);
+    // BCV uses dots for thousands and a comma for the decimal fraction.
+    const value = /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(elementText)
+      ? this.parseRate(elementText.replace(/\./g, '').replace(',', '.'), currency)
+      : null;
     if (value === null) {
       this.logger.error(`Failed to parse ${currency} exchange rate from BCV: ${elementText}`);
     }
@@ -77,16 +88,13 @@ export class ExchangesBcvService {
       return null;
     }
 
-    // Element text is like "501.73 Bs/EUR" — extract the number
-    const match = elementText.match(/[\d.,]+/);
-    if (!match) {
-      this.logger.error(`Failed to parse ${currency} exchange rate from fallback: ${elementText}`);
-      return null;
-    }
-
-    const value = this.parseBcvValue(match[0]);
+    // Monitor de Divisas uses a decimal dot and appends the currency unit.
+    const match = elementText.match(/^(\d+(?:\.\d+)?)(?:\s+Bs\/(USD|EUR))?$/);
+    const value = match && (!match[2] || match[2] === currency)
+      ? this.parseRate(match[1], currency)
+      : null;
     if (value === null) {
-      this.logger.error(`Failed to parse ${currency} exchange rate from fallback: ${match[0]}`);
+      this.logger.error(`Failed to parse ${currency} exchange rate from fallback: ${elementText}`);
     }
     return value;
   }
